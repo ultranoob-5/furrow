@@ -120,7 +120,7 @@ namespace
 
         String value = rtdb.to<String>();
 
-        if (value == "start" || value == "stop" || value == "restart" || value == "shutdown" || value == "update")
+        if (value == "start" || value == "stop" || value == "restart" || value == "shutdown" || value == "update" || value == "factory_reset")
             pendingCommand = value;
     }
 
@@ -158,6 +158,24 @@ namespace
             // the board or pressing its EN/reset button - there is no
             // remote way to turn it back on from here.
             esp_deep_sleep_start();
+        }
+
+        if (pendingCommand == "factory_reset")
+        {
+            Logger::warn(TAG, "Remote command: FACTORY RESET - clearing all stored config, restarting into setup mode");
+
+            AppStorage::factoryReset();
+
+            // Same reasoning as restart/shutdown: clear the command
+            // first. Unlike shutdown, this device WILL come back up
+            // and start broadcasting its own Furrow-Setup-XXXX WiFi
+            // network again immediately after rebooting - it's not
+            // gone, just unreachable via Firebase until someone
+            // physically re-provisions it through the captive portal.
+            database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
+
+            delay(1000);
+            ESP.restart();
         }
 
         if (pendingCommand == "update")
