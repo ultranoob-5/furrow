@@ -32,6 +32,22 @@ Calls the Firebase CLI directly (`firebase deploy`), authenticated
 non-interactively via a service account - see SETUP.md step 9 for the
 one-time setup.
 
+## [0.2.0] - 2026-08-11
+
+### Added
+- Remote factory reset: new `factory_reset` command (same channel as
+  restart/shutdown/update) clears WiFi credentials, device name,
+  owner email, and WhatsApp config all at once - `AppStorage::factoryReset()`
+- Dashboard control for it, with a type-the-device-name confirmation
+  rather than a plain OK/Cancel dialog, given how much more
+  consequential this is than Restart - whoever reconnects and
+  reprovisions the device next becomes its new owner
+- Unlike Shutdown (deliberately never exposed - needs a physical
+  power-cycle to recover), Factory Reset stays reachable in person:
+  the device comes back up and immediately starts broadcasting its
+  own `Furrow-Setup-XXXX` network again, just unreachable via
+  Firebase until someone reconnects it locally
+
 ## [0.1.1] - 2026-08-11
 
 ### Fixed

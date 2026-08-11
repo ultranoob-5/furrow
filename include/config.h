@@ -14,7 +14,7 @@ namespace Config
     // Firmware version - bump this with every meaningful change.
     // MAJOR.MINOR.PATCH: PATCH for fixes, MINOR for new features
     // (backwards compatible), MAJOR reserved for a genuine 1.0 release.
-    constexpr const char* FIRMWARE_VERSION = "0.1.1";
+    constexpr const char* FIRMWARE_VERSION = "0.2.0";
 
     // WiFi credentials, device name, and owner email are NOT compiled
     // in anymore - see provisioning.h. They're set at runtime via the
