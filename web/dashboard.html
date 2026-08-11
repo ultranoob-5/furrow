@@ -689,6 +689,12 @@
     </div>
 
     <div class="danger-zone">
+      <div class="danger-label">Factory reset</div>
+      <p style="font-size:11px;color:var(--muted);margin:0 0 10px;">Clears WiFi, name, owner, and WhatsApp config. Device stays reachable locally - it starts broadcasting its own setup WiFi network again immediately, but goes offline from this dashboard until someone reconnects it in person.</p>
+      <button class="btn-danger" id="factoryResetBtn" disabled style="width:100%;">Factory Reset</button>
+    </div>
+
+    <div class="danger-zone">
       <div class="danger-label">Firmware update</div>
       <p style="font-size:11px;color:var(--muted);margin:0 0 10px;">Always installs the latest published release.</p>
       <button class="btn-danger" id="updateBtn" disabled style="width:100%;">Update Firmware</button>
@@ -787,6 +793,7 @@
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
   const restartBtn = document.getElementById('restartBtn');
+  const factoryResetBtn = document.getElementById('factoryResetBtn');
   const updateBtn = document.getElementById('updateBtn');
   const otaProgressBlock = document.getElementById('otaProgressBlock');
   const otaPhaseLabel = document.getElementById('otaPhaseLabel');
@@ -1060,6 +1067,7 @@
       stopBtn.disabled = true;
       restartBtn.disabled = true;
       updateBtn.disabled = true;
+      factoryResetBtn.disabled = true;
       return;
     }
 
@@ -1068,18 +1076,21 @@
       stopBtn.disabled = true;
       restartBtn.disabled = true;
       updateBtn.disabled = true;
+      factoryResetBtn.disabled = true;
       return;
     }
 
-    // Restart/Update are recovery tools - deliberately available
-    // whenever the device has ever reported any status at all, not
-    // just when it's currently confirmed online. A device stuck in a
-    // bad state (never reaching 'online') still needs a way to be
-    // recovered remotely rather than requiring a USB reflash every
-    // time - that's exactly the situation these two exist to fix.
+    // Restart/Update/Factory Reset are recovery tools - deliberately
+    // available whenever the device has ever reported any status at
+    // all, not just when it's currently confirmed online. A device
+    // stuck in a bad state (never reaching 'online') still needs a
+    // way to be recovered remotely rather than requiring a USB
+    // reflash every time - that's exactly the situation these exist
+    // to fix.
     const hasEverReported = !!(devices[selectedId] && devices[selectedId].status);
     restartBtn.disabled = !hasEverReported;
     updateBtn.disabled = !hasEverReported || otaInProgress;
+    factoryResetBtn.disabled = !hasEverReported;
 
     // Start/Stop stay strict - sending a motor command to a device we
     // aren't confident is actually listening right now carries more
@@ -1130,6 +1141,29 @@
       `window will be missed.`
     );
     if (ok) sendDeviceCommand('restart');
+  });
+
+  factoryResetBtn.addEventListener('click', () => {
+    const name = deviceLabelFor(selectedId, devices[selectedId]);
+    const typed = prompt(
+      `Factory reset "${name}"?\n\n` +
+      `This clears its WiFi, device name, owner email, and WhatsApp ` +
+      `config - everything, back to how it was freshly flashed. It ` +
+      `stays reachable in person (starts broadcasting its own setup ` +
+      `WiFi network again immediately), but goes offline from this ` +
+      `dashboard until someone physically reconnects and reprovisions ` +
+      `it. Whoever does that next becomes its new owner.\n\n` +
+      `Type the device's name (${name}) to confirm:`
+    );
+
+    if (typed === null) return; // cancelled
+
+    if (typed.trim() !== name) {
+      alert('Name didn\'t match - factory reset cancelled, nothing was sent.');
+      return;
+    }
+
+    sendDeviceCommand('factory_reset');
   });
 
   // Fixed - always installs whatever was published most recently, no
