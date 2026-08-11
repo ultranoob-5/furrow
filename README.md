@@ -115,8 +115,9 @@ Firebase - no app to install, works on desktop or phone.
 - **Motor-fault WhatsApp alerts.** The alert system exists (device
   health, OTA events); motor-specific alerts are blocked on real
   motor feedback landing first.
-- **Remote factory reset.** Exists locally (see `src/main.cpp` for
-  the WiFi-reconfigure procedure), not yet a dashboard command.
+- **Remote factory reset.** Implemented as a dashboard/remote command
+  (see CHANGELOG.md 0.2.0) - not yet verified on real hardware, so
+  still listed here until that's confirmed.
 
 ## Roadmap
 
