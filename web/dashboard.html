@@ -812,6 +812,28 @@
   let latestFirmwareVersion = null; // fetched once from GitHub, e.g. "0.3.0"
   let otaInProgress = false;
 
+  // Real semver comparison, not string inequality - a device running
+  // something NEWER than the latest release (e.g. a locally-flashed
+  // dev build) shouldn't show "update available", and naive string
+  // comparison gets double-digit versions wrong ("0.10.0" vs "0.2.0"
+  // as plain strings doesn't sort the way the numbers actually do).
+  // Returns true only if `latest` is genuinely greater than `current`.
+  function isNewerVersion(current, latest){
+    if (!current || !latest) return false;
+
+    const c = current.split('.').map(n => parseInt(n, 10) || 0);
+    const l = latest.split('.').map(n => parseInt(n, 10) || 0);
+
+    for (let i = 0; i < Math.max(c.length, l.length); i++) {
+      const cPart = c[i] || 0;
+      const lPart = l[i] || 0;
+      if (lPart > cPart) return true;
+      if (lPart < cPart) return false;
+    }
+
+    return false; // identical
+  }
+
   // One check per page load, not per device - every device runs the
   // same firmware, so there's only ever one "latest" to compare
   // against. GitHub's public API needs no auth for a public repo.
@@ -874,7 +896,7 @@
       const online = status === 'online';
       const running = data.motor && data.motor.state === 'RUNNING';
       const fw = data.status && data.status.firmware;
-      const outdated = latestFirmwareVersion && fw && fw !== latestFirmwareVersion;
+      const outdated = isNewerVersion(fw, latestFirmwareVersion);
 
       const chip = document.createElement('div');
       chip.className = 'chip' + (id === selectedId ? ' active' : '');
@@ -924,7 +946,7 @@
 
     rId.textContent = fwStatus.id || selectedId;
     rFw.textContent = fwStatus.firmware ?? '\u2014';
-    rFwBadge.style.display = (latestFirmwareVersion && fwStatus.firmware && fwStatus.firmware !== latestFirmwareVersion) ? 'inline-block' : 'none';
+    rFwBadge.style.display = isNewerVersion(fwStatus.firmware, latestFirmwareVersion) ? 'inline-block' : 'none';
 
     const connStatus = connectionStatus(selectedId);
     connLed.className = 'led ' + connStatus;

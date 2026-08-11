@@ -32,6 +32,16 @@ Calls the Firebase CLI directly (`firebase deploy`), authenticated
 non-interactively via a service account - see SETUP.md step 9 for the
 one-time setup.
 
+## Dashboard fix - real semver comparison for update badge - 2026-08-11
+
+Dashboard-only, no firmware code touched - no version bump. The
+"update available" badge used plain string inequality, which was
+wrong in two ways: it would fire even when a device was running
+something *newer* than the latest release (a locally-flashed dev
+build), and it broke on double-digit versions ("0.2.0" vs "0.10.0"
+compares wrong as strings). Replaced with a real per-component
+version comparison, tested against 7 cases before committing.
+
 ## [0.2.0] - 2026-08-11
 
 ### Added
