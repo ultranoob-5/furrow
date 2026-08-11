@@ -1,0 +1,69 @@
+name: Deploy Dashboard to Firebase Hosting
+
+# Deploys web/ to Firebase Hosting whenever it actually changes on
+# main - deliberately independent of the firmware release process
+# (.github/workflows/build-and-release.yml, triggered by version tags
+# instead). Dashboard changes don't get a firmware version bump (see
+# CHANGELOG.md's "Dashboard - PWA conversion" entry for why), so they
+# shouldn't wait on a tag to go live either - this deploys the moment
+# a real dashboard change lands on main.
+#
+# Calls the Firebase CLI directly (same "firebase deploy" you'd run
+# locally), rather than going through FirebaseExtended/action-hosting-
+# deploy - that wrapper added a layer of indirection with its own
+# internal pre-checks that were producing confusing errors unrelated
+# to the actual problem. This is simpler and easier to debug: what
+# runs here is exactly the one command that already works for you
+# locally, just with credentials supplied non-interactively instead
+# of your own already-logged-in Google account.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'firebase.json'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate firebase-config.js from repository secrets
+        run: |
+          cat > web/firebase-config.js << CONFIGEOF
+          const firebaseConfig = {
+            apiKey: "${{ secrets.FIREBASE_API_KEY }}",
+            authDomain: "${{ secrets.FIREBASE_PROJECT_ID }}.firebaseapp.com",
+            databaseURL: "${{ secrets.FIREBASE_DATABASE_URL }}",
+            projectId: "${{ secrets.FIREBASE_PROJECT_ID }}"
+          };
+          CONFIGEOF
+
+      - name: Generate .firebaserc from repository secret
+        run: |
+          cat > .firebaserc << RCEOF
+          {
+            "projects": {
+              "default": "${{ secrets.FIREBASE_PROJECT_ID }}"
+            }
+          }
+          RCEOF
+
+      - name: Write service account credentials
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$RUNNER_TEMP/firebase-service-account.json"
+
+      - name: firebase deploy
+        working-directory: .
+        run: npx firebase-tools deploy --only hosting --project "${{ secrets.FIREBASE_PROJECT_ID }}"
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+        # GOOGLE_APPLICATION_CREDENTIALS is the Google Cloud SDK's own
+        # standard mechanism for non-interactive service-account auth -
+        # the same credential already created for the old workflow
+        # (FIREBASE_SERVICE_ACCOUNT), just handed to the real CLI
+        # directly instead of through a wrapping action. Written to
+        # $RUNNER_TEMP, which only exists for this one job run and is
+        # destroyed with the runner afterward - never committed,
+        # never persisted anywhere.

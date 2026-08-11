@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Furrow - Motor Control</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#14161A">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Furrow">
+<!-- iOS only treats a site as installable/standalone if it was added to
+     the Home Screen via Safari's Share sheet - no code makes that
+     automatic, it's a manual step for the person using it. -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.3.0/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.3.0/firebase-auth-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.3.0/firebase-database-compat.min.js"></script>
+<script src="firebase-config.js"></script>
+<!-- Defines firebaseConfig - generated at deploy time from GitHub
+     Actions secrets, or copy web/firebase-config.example.js locally
+     for testing. Never committed. See SETUP.md. -->
+<style>
+  :root{
+    --bg: #14161A;
+    --panel: #1B1E23;
+    --panel-raised: #21252B;
+    --border: #2E333B;
+    --text: #ECE9E2;
+    --muted: #868C97;
+    --amber: #E8A33D;
+    --green: #49B675;
+    --green-dim: #2E5A41;
+    --red: #E15241;
+    --red-dim: #5A2E29;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body{
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #1d2027 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: var(--sans);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 60px;
+  }
+
+  .app-title{
+    width: 100%;
+    max-width: 480px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .app-title .dot{
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--amber);
+  }
+
+  /* ---- Overview strip ------------------------------------------------ */
+
+  .overview{
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-bottom: 16px;
+    scrollbar-width: thin;
+  }
+
+  .chip{
+    flex: 0 0 auto;
+    min-width: 148px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, transform 0.08s ease;
+  }
+
+  .chip:hover{ border-color: #3a4049; }
+  .chip:active{ transform: translateY(1px); }
+
+  .chip.active{
+    border-color: var(--amber);
+    box-shadow: 0 0 0 1px var(--amber) inset;
+  }
+
+  .chip-top{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .chip-name{
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chip-state{
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .chip-state.running{ color: var(--green); }
+
+  .chip-empty{
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    padding: 10px 2px;
+  }
+
+  /* ---- LED (shared) --------------------------------------------------- */
+
+  .led{
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.04);
+    flex-shrink: 0;
+  }
+
+  .led.online{
+    background: var(--green);
+    box-shadow: 0 0 8px 1px var(--green), 0 0 0 3px rgba(73,182,117,0.15);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+
+  .led.offline{
+    background: var(--red);
+    box-shadow: 0 0 8px 1px var(--red), 0 0 0 3px rgba(225,82,65,0.15);
+  }
+
+  .led.updating{
+    background: var(--amber);
+    box-shadow: 0 0 8px 1px var(--amber), 0 0 0 3px rgba(232,163,61,0.15);
+    animation: pulse 0.8s ease-in-out infinite;
+  }
+
+  .led.connecting{
+    background: var(--amber);
+    box-shadow: 0 0 8px 1px var(--amber), 0 0 0 3px rgba(232,163,61,0.15);
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes pulse{
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ---- Title row / rename -------------------------------------------- */
+
+  .device-title-row{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+  }
+
+  .rename-btn{
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 2px 4px;
+    border-radius: 6px;
+    line-height: 1;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+
+  .rename-btn:hover{
+    color: var(--amber);
+    background: rgba(232,163,61,0.1);
+  }
+
+  input.name-edit{
+    appearance: none;
+    background: var(--panel-raised);
+    border: 1px solid var(--amber);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    padding: 4px 8px;
+    border-radius: 6px;
+    width: 200px;
+    max-width: 60vw;
+  }
+
+  /* ---- Panel ------------------------------------------------------------ */
+
+  .panel{
+    width: 100%;
+    max-width: 480px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 30px 80px -30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03);
+    overflow: hidden;
+  }
+
+  .panel-header{
+    padding: 22px 24px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .device-name{
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .device-title{
+    font-size: 19px;
+    font-weight: 700;
+    margin-top: 2px;
+    letter-spacing: -0.01em;
+  }
+
+  .conn{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .status-block{
+    padding: 32px 24px 24px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    background:
+      repeating-linear-gradient(180deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+  }
+
+  .status-label{
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .status-value{
+    font-family: var(--mono);
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    transition: color 0.25s ease;
+  }
+
+  .status-value.running{ color: var(--green); text-shadow: 0 0 24px rgba(73,182,117,0.35); }
+  .status-value.off{ color: var(--muted); }
+  .status-value.pending{ color: var(--amber); text-shadow: 0 0 24px rgba(232,163,61,0.35); }
+
+  .status-sub{
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+
+  .controls{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    padding: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  button.btn{
+    appearance: none;
+    border: none;
+    cursor: pointer;
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #0e1210;
+    padding: 20px 0;
+    border-radius: 10px;
+    position: relative;
+    transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.15s ease;
+  }
+
+  button.btn:disabled{
+    cursor: not-allowed;
+    filter: grayscale(0.5) brightness(0.6);
+  }
+
+  button.btn.start{
+    background: linear-gradient(180deg, #5fd18a 0%, var(--green) 55%, #2c8a54 100%);
+    box-shadow:
+      0 4px 0 #1f6e42,
+      0 8px 16px -6px rgba(73,182,117,0.5);
+  }
+
+  button.btn.stop{
+    background: linear-gradient(180deg, #ef8375 0%, var(--red) 55%, #b23a2c 100%);
+    box-shadow:
+      0 4px 0 #7a2c22,
+      0 8px 16px -6px rgba(225,82,65,0.5);
+    color: #1c0d0a;
+  }
+
+  button.btn.start:not(:disabled):active{
+    transform: translateY(4px);
+    box-shadow: 0 0 0 #1f6e42, 0 4px 10px -6px rgba(73,182,117,0.5);
+  }
+
+  button.btn.stop:not(:disabled):active{
+    transform: translateY(4px);
+    box-shadow: 0 0 0 #7a2c22, 0 4px 10px -6px rgba(225,82,65,0.5);
+  }
+
+  .readout{
+    padding: 18px 24px 22px;
+  }
+
+  .readout-row{
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 7px 0;
+    font-family: var(--mono);
+    font-size: 12.5px;
+  }
+
+  .readout-row .k{
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 10.5px;
+  }
+
+  .readout-row .v{
+    color: var(--text);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ota-progress-track{
+    width: 100%;
+    height: 8px;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+
+  .ota-progress-fill{
+    height: 100%;
+    background: linear-gradient(90deg, var(--amber), #5fd18a);
+    border-radius: 5px 0 0 5px;
+    transition: width 0.3s ease;
+  }
+
+  .ota-progress-fill.failed{
+    background: var(--red);
+  }
+
+  .update-badge{
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #241804;
+    background: var(--amber);
+    padding: 3px 7px;
+    border-radius: 5px;
+  }
+
+  .signal-bars{
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 1.5px;
+    height: 10px;
+  }
+
+  .signal-bars span{
+    width: 3px;
+    background: var(--border);
+    border-radius: 1px;
+  }
+
+  .signal-bars span:nth-child(1){ height: 30%; }
+  .signal-bars span:nth-child(2){ height: 55%; }
+  .signal-bars span:nth-child(3){ height: 78%; }
+  .signal-bars span:nth-child(4){ height: 100%; }
+
+  .signal-bars span.on{ background: var(--green); }
+
+  .danger-zone{
+    padding: 16px 24px 4px;
+    border-top: 1px dashed var(--border);
+  }
+
+  .danger-label{
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .danger-buttons{
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .btn-danger{
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 12px;
+    padding: 10px 0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+
+  .btn-danger:hover:not(:disabled){
+    border-color: var(--amber);
+    color: var(--amber);
+    background: rgba(232,163,61,0.06);
+  }
+
+  .btn-danger:disabled{
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  .app-content{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+
+  .signin-gate{
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .signin-card{
+    width: 100%;
+    max-width: 360px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 32px 28px;
+    text-align: center;
+    box-shadow: 0 30px 80px -30px rgba(0,0,0,0.6);
+  }
+
+  .signin-copy{
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0 0 20px;
+  }
+
+  #signinForm{
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .signin-input{
+    appearance: none;
+    width: 100%;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    padding: 12px 14px;
+    border-radius: 8px;
+  }
+
+  .signin-input:focus{
+    outline: none;
+    border-color: var(--amber);
+  }
+
+  .signin-btn{
+    appearance: none;
+    width: 100%;
+    background: var(--amber);
+    color: #241804;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 0;
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    margin-top: 4px;
+    transition: filter 0.15s ease;
+  }
+
+  .signin-btn:hover{ filter: brightness(1.08); }
+  .signin-btn:disabled{ cursor: not-allowed; opacity: 0.6; }
+
+  .signin-error{
+    color: var(--red);
+    font-size: 12px;
+    font-family: var(--mono);
+    margin: 16px 0 0;
+    min-height: 14px;
+  }
+
+  .footer-note{
+    padding: 14px 24px 20px;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  .empty-state{
+    width: 100%;
+    max-width: 480px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 40px 24px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  @media (max-width: 420px){
+    .status-value{ font-size: 34px; }
+  }
+
+  .logout-btn{
+  width: calc(100% - 48px);
+  margin: 0 24px 24px;
+  padding: 16px 0;
+
+  background: transparent;
+  border: 1px solid var(--red);
+  color: var(--red);
+
+  border-radius: 10px;
+
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.logout-btn:hover{
+  background: rgba(225,82,65,0.08);
+}
+</style>
+</head>
+<body>
+
+  <div class="signin-gate" id="signinGate">
+    <div class="signin-card">
+      <div class="app-title" style="margin-bottom: 20px; justify-content: center;"><span class="dot"></span>Furrow</div>
+      <p class="signin-copy">Sign in to view and control your devices.</p>
+      <form id="signinForm">
+        <input type="email" id="signinEmail" class="signin-input" placeholder="Email" autocomplete="username" required>
+        <input type="password" id="signinPassword" class="signin-input" placeholder="Password" autocomplete="current-password" required>
+        <button type="submit" class="signin-btn" id="signinSubmitBtn">Sign in</button>
+      </form>
+      <p class="signin-error" id="signinError"></p>
+    </div>
+  </div>
+
+  <div class="app-content" id="appContent" style="display:none;">
+
+  <div class="app-title"><span class="dot"></span>Furrow</div>
+
+  <div class="overview" id="overview">
+    <div class="chip-empty">Loading devices&hellip;</div>
+  </div>
+
+  <div class="panel" id="panel" style="display:none;">
+    <div class="panel-header">
+      <div>
+        <div class="device-name" id="deviceLabel">Device</div>
+        <div class="device-title-row">
+          <div class="device-title" id="deviceTitle">&mdash;</div>
+          <button class="rename-btn" id="renameBtn" title="Rename device" aria-label="Rename device">&#9998;</button>
+        </div>
+      </div>
+      <div class="conn">
+        <span class="led" id="connLed"></span>
+        <span id="connLabel">connecting</span>
+      </div>
+    </div>
+
+    <div class="status-block">
+      <div class="status-label">Motor status</div>
+      <div class="status-value off" id="motorStatus">&mdash;</div>
+      <div class="status-sub" id="motorSub">waiting for data</div>
+    </div>
+
+    <div class="controls">
+      <button class="btn start" id="startBtn" disabled>Start</button>
+      <button class="btn stop" id="stopBtn" disabled>Stop</button>
+    </div>
+
+    <div class="readout">
+      <div class="readout-row"><span class="k">Device ID</span><span class="v" id="rId">&mdash;</span></div>
+      <div class="readout-row"><span class="k">Firmware</span><span class="v"><span id="rFw">&mdash;</span><span class="update-badge" id="rFwBadge" style="display:none;">Update available</span></span></div>
+      <div class="readout-row"><span class="k">Signal</span><span class="v" id="rRssi">
+        <span class="signal-bars" id="rRssiBars"><span></span><span></span><span></span><span></span></span>
+        <span id="rRssiText">&mdash;</span>
+      </span></div>
+      <div class="readout-row"><span class="k">Last online</span><span class="v" id="rLastOnline">&mdash;</span></div>
+    </div>
+
+    <div class="danger-zone">
+      <div class="danger-label">Device controls</div>
+      <p style="font-size:11px;color:var(--muted);margin:0 0 10px;">Reboots the device - back online in about 10-20 seconds.</p>
+      <div class="danger-buttons">
+        <button class="btn-danger" id="restartBtn" disabled style="width:100%;">Restart</button>
+      </div>
+    </div>
+
+    <div class="danger-zone">
+      <div class="danger-label">Firmware update</div>
+      <p style="font-size:11px;color:var(--muted);margin:0 0 10px;">Always installs the latest published release.</p>
+      <button class="btn-danger" id="updateBtn" disabled style="width:100%;">Update Firmware</button>
+      <div id="otaProgressBlock" style="display:none; margin-top:14px;">
+        <div style="display:flex; justify-content:space-between; font-family:var(--mono); font-size:11px; color:var(--muted); margin-bottom:6px;">
+          <span id="otaPhaseLabel">&mdash;</span>
+          <span id="otaPercentLabel">0%</span>
+        </div>
+        <div class="ota-progress-track">
+          <div class="ota-progress-fill" id="otaProgressFill" style="width:0%;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note">Furrow &middot; Agriculture IoT Platform</div>
+    <button class="logout-btn" id="logoutBtn">Logout</button>
+  </div>
+
+  <div class="empty-state" id="emptyState" style="display:none;">
+    No devices found under <code>/devices</code> yet.<br>
+    Power on a controller and wait a few seconds.
+  </div>
+
+  <div class="empty-state" id="noOwnedDevicesState" style="display:none;">
+    No devices are registered to your account yet.<br>
+    Ask whoever set this up to flash one with your email as the owner.
+  </div>
+
+  </div>
+
+<script>
+  // ---- Configuration -------------------------------------------------
+  // firebaseConfig is defined by the loaded firebase-config.js script
+
+  // ---- Firebase init ---------------------------------------------------
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.database();
+  const devicesRef = db.ref('devices');
+
+  let currentUserEmail = null;
+
+  // ---- Sign-in gate --------------------------------------------------
+  const signinGate = document.getElementById('signinGate');
+  const appContent = document.getElementById('appContent');
+  const signinForm = document.getElementById('signinForm');
+  const signinEmail = document.getElementById('signinEmail');
+  const signinPassword = document.getElementById('signinPassword');
+  const signinSubmitBtn = document.getElementById('signinSubmitBtn');
+  const signinError = document.getElementById('signinError');
+  const noOwnedDevicesEl = document.getElementById('noOwnedDevicesState');
+
+  signinForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    signinError.textContent = '';
+    signinSubmitBtn.disabled = true;
+
+    auth.signInWithEmailAndPassword(signinEmail.value.trim(), signinPassword.value)
+      .catch((err) => {
+        console.error('Sign-in failed', err);
+        signinError.textContent = 'Incorrect email or password.';
+      })
+      .finally(() => {
+        signinSubmitBtn.disabled = false;
+      });
+  });
+
+  auth.onAuthStateChanged((user) => {
+    if (!user) {
+      currentUserEmail = null;
+      signinGate.style.display = 'flex';
+      appContent.style.display = 'none';
+      return;
+    }
+
+    currentUserEmail = user.email;
+    signinGate.style.display = 'none';
+    appContent.style.display = 'flex';
+    authReady = true;
+    startDeviceListener();
+  });
+
+  // ---- DOM refs ----------------------------------------------------------
+  const overviewEl = document.getElementById('overview');
+  const panelEl = document.getElementById('panel');
+  const emptyStateEl = document.getElementById('emptyState');
+
+  const connLed = document.getElementById('connLed');
+  const connLabel = document.getElementById('connLabel');
+  const deviceTitle = document.getElementById('deviceTitle');
+  const deviceLabel = document.getElementById('deviceLabel');
+  const renameBtn = document.getElementById('renameBtn');
+  const motorStatus = document.getElementById('motorStatus');
+  const motorSub = document.getElementById('motorSub');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const restartBtn = document.getElementById('restartBtn');
+  const updateBtn = document.getElementById('updateBtn');
+  const otaProgressBlock = document.getElementById('otaProgressBlock');
+  const otaPhaseLabel = document.getElementById('otaPhaseLabel');
+  const otaPercentLabel = document.getElementById('otaPercentLabel');
+  const otaProgressFill = document.getElementById('otaProgressFill');
+  const rId = document.getElementById('rId');
+  const rFw = document.getElementById('rFw');
+  const rFwBadge = document.getElementById('rFwBadge');
+  const rLastOnline = document.getElementById('rLastOnline');
+  const rRssiText = document.getElementById('rRssiText');
+  const rRssiBars = document.getElementById('rRssiBars').children;
+  const logoutBtn = document.getElementById('logoutBtn');
+
+  // ---- State ------------------------------------------------------------
+  let devices = {};          // id -> { status, motor, command }
+  let latestFirmwareVersion = null; // fetched once from GitHub, e.g. "0.3.0"
+  let otaInProgress = false;
+
+  // One check per page load, not per device - every device runs the
+  // same firmware, so there's only ever one "latest" to compare
+  // against. GitHub's public API needs no auth for a public repo.
+  fetch('https://api.github.com/repos/ultranoob-5/furrow/releases/latest')
+    .then(r => r.json())
+    .then(data => {
+      if (!data || !data.tag_name) return;
+      latestFirmwareVersion = String(data.tag_name).replace(/^v/i, '');
+      renderOverview();
+      if (selectedId) renderDetail();
+    })
+    .catch((err) => console.error('Could not check latest firmware version', err));
+  let selectedId = null;
+  let pendingAction = null;   // "start" | "stop" | null
+  let authReady = false;
+
+  // status.lastSeen is a Firebase server-stamped timestamp (see cloud.cpp)
+  // - real, authoritative data, not something inferred from whether a
+  // browser happened to be open watching for a change. Heartbeat is
+  // every 10s. Graded rather than a binary jump:
+  //  - "online": heard from within the last one-and-a-bit heartbeats
+  //  - "updating": heartbeat is overdue but could just be network lag
+  //  - "offline": silent long enough to call it
+  function lastSeenAt(id){
+    const data = devices[id];
+    return (data && data.status && data.status.lastSeen) ? data.status.lastSeen : null;
+  }
+
+  function connectionStatus(id){
+    const seen = lastSeenAt(id);
+    if (!seen) return 'connecting';
+
+    const age = Date.now() - seen;
+
+    if (age <= 16000) return 'online';
+    if (age <= 40000) return 'updating';
+    return 'offline';
+  }
+
+  function deviceLabelFor(id, data){
+    if (data && data.displayName) return data.displayName;
+    if (data && data.status && data.status.name) return data.status.name;
+    return id;
+  }
+
+  // ---- Overview strip -----------------------------------------------------
+  function renderOverview(){
+    const ids = Object.keys(devices);
+
+    if (ids.length === 0){
+      overviewEl.innerHTML = '<div class="chip-empty">No devices yet\u2026</div>';
+      return;
+    }
+
+    overviewEl.innerHTML = '';
+
+    ids.forEach((id) => {
+      const data = devices[id] || {};
+      const status = connectionStatus(id);
+      const online = status === 'online';
+      const running = data.motor && data.motor.state === 'RUNNING';
+      const fw = data.status && data.status.firmware;
+      const outdated = latestFirmwareVersion && fw && fw !== latestFirmwareVersion;
+
+      const chip = document.createElement('div');
+      chip.className = 'chip' + (id === selectedId ? ' active' : '');
+      chip.innerHTML = `
+        <div class="chip-top">
+          <span class="led ${status}"></span>
+          <span class="chip-name">${deviceLabelFor(id, data)}</span>
+          ${outdated ? '<span class="update-badge" title="Update available" style="margin-left:auto;">Update</span>' : ''}
+        </div>
+        <div class="chip-state ${running ? 'running' : ''}">${running ? 'Running' : (online ? 'Idle' : status === 'updating' ? 'Updating' : status === 'connecting' ? 'Connecting' : 'Offline')}</div>
+      `;
+      chip.addEventListener('click', () => selectDevice(id));
+      overviewEl.appendChild(chip);
+    });
+  }
+
+  // ---- Selecting a device --------------------------------------------------
+  function selectDevice(id){
+    selectedId = id;
+    pendingAction = null;
+
+    panelEl.style.display = 'block';
+    emptyStateEl.style.display = 'none';
+
+    renderOverview();
+    renderDetail();
+  }
+
+  // ---- Detail panel --------------------------------------------------------
+  function formatDateTime(ts){
+    if (!ts) return '\u2014';
+    return new Date(ts).toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'medium'
+    });
+  }
+
+  function renderDetail(){
+    const data = devices[selectedId] || {};
+    const fwStatus = data.status || {};
+    const motor = data.motor || {};
+
+    renderOtaProgress(data.ota || {});
+
+    deviceTitle.textContent = deviceLabelFor(selectedId, data);
+    deviceLabel.textContent = selectedId;
+
+    rId.textContent = fwStatus.id || selectedId;
+    rFw.textContent = fwStatus.firmware ?? '\u2014';
+    rFwBadge.style.display = (latestFirmwareVersion && fwStatus.firmware && fwStatus.firmware !== latestFirmwareVersion) ? 'inline-block' : 'none';
+
+    const connStatus = connectionStatus(selectedId);
+    connLed.className = 'led ' + connStatus;
+    connLabel.textContent = connStatus;
+
+    // The last-written RSSI just sits in Firebase forever until the
+    // device writes again - nothing clears it when the device drops.
+    // Only trust and show it while we're confident the device is
+    // actually online right now, otherwise it's a stale, misleading
+    // number (e.g. "full signal" from minutes/hours ago).
+    const rssi = (connStatus === 'online' && typeof fwStatus.rssi === 'number') ? fwStatus.rssi : null;
+    rRssiText.textContent = rssi !== null ? `${rssi} dBm` : '\u2014';
+    renderSignalBars(rssi);
+
+    renderMotor(motor.state ?? null);
+
+    const seen = lastSeenAt(selectedId);
+    rLastOnline.textContent = formatDateTime(seen);
+  }
+
+  // RSSI roughly: > -60 great, -60 to -70 good, -70 to -80 weak, < -80 poor
+  function renderSignalBars(rssi){
+    const bars = Array.from(rRssiBars);
+    bars.forEach(b => b.classList.remove('on'));
+
+    if (rssi === null) return;
+
+    let count = 1;
+    if (rssi > -60) count = 4;
+    else if (rssi > -70) count = 3;
+    else if (rssi > -80) count = 2;
+
+    for (let i = 0; i < count; i++) bars[i].classList.add('on');
+  }
+
+  const OTA_PHASE_LABELS = {
+    downloading: 'Downloading & flashing\u2026',
+    restarting: 'Restarting into new firmware\u2026',
+    failed: 'Update failed'
+  };
+
+  function renderOtaProgress(ota){
+    const phase = ota.phase || 'idle';
+
+    if (phase === 'idle' || !phase) {
+      otaProgressBlock.style.display = 'none';
+      return;
+    }
+
+    otaProgressBlock.style.display = 'block';
+
+    const percent = typeof ota.percent === 'number' ? ota.percent : 0;
+
+    otaPhaseLabel.textContent = OTA_PHASE_LABELS[phase] || phase;
+    otaPercentLabel.textContent = `${percent}%`;
+    otaProgressFill.style.width = `${percent}%`;
+    otaProgressFill.classList.toggle('failed', phase === 'failed');
+
+    if (ota.message) {
+      otaPhaseLabel.textContent += ` \u2014 ${ota.message}`;
+    }
+
+    // Don't let a second update be queued on top of one already running -
+    // updateButtons() (called from renderMotor, right after this) is
+    // the single place that actually sets updateBtn.disabled, so it
+    // needs to know about this too rather than fighting over it here.
+    otaInProgress = (phase === 'downloading' || phase === 'restarting');
+  }
+
+  // ---- Rename ---------------------------------------------------------
+  function startRename(){
+    if (!selectedId) return;
+
+    const currentName = deviceTitle.textContent;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'name-edit';
+    input.value = currentName;
+    input.maxLength = 40;
+
+    deviceTitle.replaceWith(input);
+    renameBtn.style.display = 'none';
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      const newName = input.value.trim();
+      input.replaceWith(deviceTitle);
+      renameBtn.style.display = '';
+
+      if (newName && newName !== currentName && selectedId){
+        db.ref(`devices/${selectedId}/displayName`).set(newName).catch((err) => {
+          console.error('Failed to rename device', err);
+        });
+      }
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
+      if (e.key === 'Escape'){ input.value = currentName; input.blur(); }
+    });
+
+    input.addEventListener('blur', commit, { once: true });
+  }
+
+  renameBtn.addEventListener('click', startRename);
+
+  function renderMotor(state){
+    if (pendingAction) {
+      const wantsRunning = pendingAction === 'start';
+      const confirmed = (wantsRunning && state === 'RUNNING') || (!wantsRunning && state === 'OFF');
+      if (confirmed) pendingAction = null;
+    }
+
+    if (pendingAction) {
+      motorStatus.textContent = pendingAction === 'start' ? 'STARTING\u2026' : 'STOPPING\u2026';
+      motorStatus.className = 'status-value pending';
+      motorSub.textContent = 'command sent, waiting for device';
+      updateButtons(state);
+      return;
+    }
+
+    if (state === 'RUNNING') {
+      motorStatus.textContent = 'RUNNING';
+      motorStatus.className = 'status-value running';
+      motorSub.textContent = 'pump is on';
+    } else {
+      motorStatus.textContent = 'OFF';
+      motorStatus.className = 'status-value off';
+      motorSub.textContent = 'pump is idle';
+    }
+
+    updateButtons(state);
+  }
+
+  function updateButtons(state){
+    if (!authReady || !selectedId) {
+      startBtn.disabled = true;
+      stopBtn.disabled = true;
+      restartBtn.disabled = true;
+      updateBtn.disabled = true;
+      return;
+    }
+
+    if (pendingAction) {
+      startBtn.disabled = true;
+      stopBtn.disabled = true;
+      restartBtn.disabled = true;
+      updateBtn.disabled = true;
+      return;
+    }
+
+    // Restart/Update are recovery tools - deliberately available
+    // whenever the device has ever reported any status at all, not
+    // just when it's currently confirmed online. A device stuck in a
+    // bad state (never reaching 'online') still needs a way to be
+    // recovered remotely rather than requiring a USB reflash every
+    // time - that's exactly the situation these two exist to fix.
+    const hasEverReported = !!(devices[selectedId] && devices[selectedId].status);
+    restartBtn.disabled = !hasEverReported;
+    updateBtn.disabled = !hasEverReported || otaInProgress;
+
+    // Start/Stop stay strict - sending a motor command to a device we
+    // aren't confident is actually listening right now carries more
+    // real-world risk than a restart or update does.
+    if (connectionStatus(selectedId) !== 'online') {
+      startBtn.disabled = true;
+      stopBtn.disabled = true;
+      return;
+    }
+
+    startBtn.disabled = (state === 'RUNNING');
+    stopBtn.disabled = (state !== 'RUNNING');
+  }
+
+  function sendCommand(action){
+    if (!selectedId) return;
+
+    pendingAction = action;
+    renderMotor((devices[selectedId] && devices[selectedId].motor) ? devices[selectedId].motor.state : null);
+
+    db.ref(`devices/${selectedId}/command/action`).set(action).catch((err) => {
+      console.error('Failed to send command', err);
+      pendingAction = null;
+      renderDetail();
+    });
+  }
+
+  // Restart/shutdown bypass the pendingAction/"STARTING..." UI entirely -
+  // they're not motor commands, so there's nothing for renderMotor to
+  // confirm back. Just send-and-disable-until-next-heartbeat.
+  function sendDeviceCommand(action){
+    if (!selectedId) return;
+
+    db.ref(`devices/${selectedId}/command/action`).set(action).catch((err) => {
+      console.error(`Failed to send ${action} command`, err);
+    });
+  }
+
+  startBtn.addEventListener('click', () => sendCommand('start'));
+  stopBtn.addEventListener('click', () => sendCommand('stop'));
+
+  restartBtn.addEventListener('click', () => {
+    const name = deviceLabelFor(selectedId, devices[selectedId]);
+    const ok = confirm(
+      `Restart "${name}" now?\n\n` +
+      `It will disconnect and reboot - usually back online within ` +
+      `10-20 seconds. Any motor start/stop commands sent during that ` +
+      `window will be missed.`
+    );
+    if (ok) sendDeviceCommand('restart');
+  });
+
+  // Fixed - always installs whatever was published most recently, no
+  // editable field that could be mistyped.
+  const FIRMWARE_URL = 'https://github.com/ultranoob-5/furrow/releases/latest/download/firmware.bin';
+
+  updateBtn.addEventListener('click', () => {
+    const name = deviceLabelFor(selectedId, devices[selectedId]);
+    const ok = confirm(
+      `Update "${name}" firmware now?\n\n` +
+      `The device will download and flash the latest published release.\n\n` +
+      `This takes a minute or two. Do not power off the device during ` +
+      `this time - an interrupted update can leave it unable to boot. ` +
+      `If the download or flash fails for any reason, it stays on its ` +
+      `current firmware and keeps running normally.\n\n` +
+      `Are you sure?`
+    );
+
+    if (!ok) return;
+
+    updateBtn.disabled = true;
+
+    db.ref(`devices/${selectedId}/command/firmwareUrl`).set(FIRMWARE_URL)
+      .then(() => sendDeviceCommand('update'))
+      .catch((err) => {
+        console.error('Failed to set firmware URL', err);
+        updateBtn.disabled = false;
+      });
+  });
+
+  // ---- Start (called once, right after a successful sign-in) ---------
+  let deviceListenerStarted = false;
+
+  function startDeviceListener(){
+    if (deviceListenerStarted) return;
+    deviceListenerStarted = true;
+
+    let receivedFirstSnapshot = false;
+
+    // If we haven't heard from Firebase at all within a few seconds, the
+    // most common cause (for this specific app) is opening this file
+    // directly from disk (file://) instead of serving it over http(s) -
+    // Firebase's SDK is documented to behave unreliably under file://.
+    setTimeout(() => {
+      if (receivedFirstSnapshot) return;
+
+      const isFileProtocol = window.location.protocol === 'file:';
+
+      overviewEl.innerHTML = `<div class="chip-empty">
+        Still not connected after 8s.${isFileProtocol
+          ? ' You appear to have opened this file directly (file://) - try serving it with a local server instead (e.g. "python -m http.server" or VS Code\'s Live Server extension), then open it via http://localhost.'
+          : ' Check your internet connection and the Firebase database URL/rules.'}
+      </div>`;
+    }, 8000);
+
+    devicesRef.on('value', (snap) => {
+      receivedFirstSnapshot = true;
+
+      const allDevices = snap.val() || {};
+
+      // Only ever show/act on devices this signed-in user actually owns -
+      // every device publishes its own owner email as part of its status,
+      // set at flash time. Filtering client-side is just for a clean UI;
+      // the real enforcement is in the RTDB rules, which check the same
+      // field for every write regardless of what the dashboard displays.
+      const newDevices = {};
+      Object.keys(allDevices).forEach((id) => {
+        const ownerEmail = allDevices[id] && allDevices[id].status && allDevices[id].status.owner;
+        if (ownerEmail === currentUserEmail) newDevices[id] = allDevices[id];
+      });
+
+      devices = newDevices;
+
+      const ids = Object.keys(devices);
+
+      if (ids.length === 0){
+        panelEl.style.display = 'none';
+
+        // Distinguish "nothing exists yet at all" from "devices exist,
+        // just none are registered to you" - different next steps for
+        // the person looking at this screen.
+        if (Object.keys(allDevices).length === 0){
+          emptyStateEl.style.display = 'block';
+          noOwnedDevicesEl.style.display = 'none';
+        } else {
+          emptyStateEl.style.display = 'none';
+          noOwnedDevicesEl.style.display = 'block';
+        }
+
+        renderOverview();
+        return;
+      }
+
+      emptyStateEl.style.display = 'none';
+      noOwnedDevicesEl.style.display = 'none';
+
+      if (!selectedId || !devices[selectedId]) {
+        selectDevice(ids[0]);
+      } else {
+        renderOverview();
+        renderDetail();
+      }
+    }, (err) => {
+      console.error('devices listener error', err);
+      overviewEl.innerHTML = '<div class="chip-empty">Connection error</div>';
+    });
+  }
+
+  // ---- Freshness ticker (re-renders "last update" + flips stale devices offline)
+  setInterval(() => {
+    if (Object.keys(devices).length === 0) return;
+    renderOverview();
+    if (selectedId) renderDetail();
+  }, 1000);
+
+  logoutBtn.addEventListener('click', () => {
+
+  auth.signOut()
+    .then(() => {
+
+      devices = {};
+      selectedId = null;
+      deviceListenerStarted = false;
+
+      signinEmail.value = "";
+      signinPassword.value = "";
+
+      console.log("Logged out");
+
+    });
+  });
+
+  // ---- PWA: register the service worker (app shell caching only, see
+  // sw.js - this has no effect on live dashboard data or how it loads) --
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch((err) => {
+        console.error('Service worker registration failed', err);
+      });
+    });
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,15 @@
+.pio
+.vscode/
+
+# Real credentials live here locally only - never committed.
+# See include/secrets.example.h for the template.
+include/secrets.h
+
+# Same reasoning, for the dashboard's Firebase config.
+# See web/firebase-config.example.js for the template.
+web/firebase-config.js
+
+# Deployment-specific, not secret - but same reasoning: don't want the
+# original project's ID baked into what a fork silently keeps using.
+# See .firebaserc.example for the template.
+.firebaserc

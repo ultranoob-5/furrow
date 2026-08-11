@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="35%" r="75%">
+      <stop offset="0%" stop-color="#1d2027"/>
+      <stop offset="100%" stop-color="#14161A"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- Leaf silhouette -->
+  <g transform="translate(256,268)">
+    <path d="M0,-175
+             C 100,-140 165,-55 150,35
+             C 138,105 75,165 0,195
+             C -75,165 -138,105 -150,35
+             C -165,-55 -100,-140 0,-175 Z"
+          fill="#49B675"/>
+
+    <!-- Center vein (midrib), subtle -->
+    <path d="M0,-160 C 0,-60 0,80 0,185" stroke="#3a8a5a" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.5"/>
+
+    <!-- Stem -->
+    <rect x="-7" y="188" width="14" height="42" rx="6" fill="#3a8a5a"/>
+
+    <!-- Circuit-trace veins, amber, PCB-style right-angle traces with node dots -->
+    <g stroke="#E8A33D" stroke-width="7" fill="none" stroke-linecap="round">
+      <path d="M0,-130 L0,-40"/>
+      <path d="M0,-40 L-70,-40 L-70,10"/>
+      <path d="M0,-40 L70,-40 L70,10"/>
+      <path d="M0,-40 L0,60 L-45,60 L-45,110"/>
+      <path d="M0,60 L45,60 L45,110"/>
+    </g>
+    <g fill="#E8A33D">
+      <circle cx="0" cy="-130" r="9"/>
+      <circle cx="0" cy="-40" r="9"/>
+      <circle cx="-70" cy="-40" r="8"/>
+      <circle cx="70" cy="-40" r="8"/>
+      <circle cx="-70" cy="10" r="8"/>
+      <circle cx="70" cy="10" r="8"/>
+      <circle cx="0" cy="60" r="8"/>
+      <circle cx="-45" cy="60" r="8"/>
+      <circle cx="45" cy="60" r="8"/>
+      <circle cx="-45" cy="110" r="8"/>
+      <circle cx="45" cy="110" r="8"/>
+    </g>
+  </g>
+</svg>

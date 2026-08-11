@@ -1,0 +1,94 @@
+name: Build and Release Firmware
+
+# Runs automatically whenever a version tag (v0.3.0, v1.2.0, etc.) is
+# pushed - the exact moment described in CHANGELOG.md's "how to cut a
+# release" checklist. Builds the firmware with PlatformIO and attaches
+# the resulting .bin to a GitHub Release for that tag, creating the
+# release if it doesn't already exist.
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Explicit, not relying on the repo's default token permissions - newer
+# repos default GITHUB_TOKEN to read-only, which silently blocks
+# softprops/action-gh-release from creating the release (403: "Resource
+# not accessible by integration"). This is self-contained in the
+# workflow itself rather than a repo Settings toggle someone could
+# forget or accidentally reset later.
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate secrets.h from repository secrets
+        run: |
+          cat > include/secrets.h << EOF
+          #pragma once
+          namespace Config
+          {
+              constexpr const char* API_KEY = "${{ secrets.FIREBASE_API_KEY }}";
+              constexpr const char* DATABASE_URL = "${{ secrets.FIREBASE_DATABASE_URL }}";
+              constexpr const char* DEVICE_AUTH_EMAIL = "${{ secrets.DEVICE_AUTH_EMAIL }}";
+              constexpr const char* DEVICE_AUTH_PASSWORD = "${{ secrets.DEVICE_AUTH_PASSWORD }}";
+              constexpr const char* WHAPI_TOKEN = "${{ secrets.WHAPI_TOKEN }}";
+          }
+          EOF
+        # Never echo/print this file's contents anywhere in the log -
+        # GitHub Actions masks known secret values automatically, but
+        # there's no reason to tempt that by printing it regardless.
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            .pio
+          key: ${{ runner.os }}-pio-${{ hashFiles('platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-pio-
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      - name: Build firmware
+        run: pio run -e esp32dev
+
+      - name: Rename output for a stable, predictable asset name
+        run: cp .pio/build/esp32dev/firmware.bin firmware.bin
+
+      - name: Extract changelog section for this release
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v ver="## [$VERSION]" '
+            index($0, ver) == 1 { found=1; print; next }
+            found && (index($0, "## ") == 1 || index($0, "---") == 1) { exit }
+            found { print }
+          ' CHANGELOG.md > release_notes.md
+
+          if [ ! -s release_notes.md ]; then
+            echo "::warning::No CHANGELOG.md section found for version $VERSION - using a fallback release body. Add a '## [$VERSION]' entry to CHANGELOG.md next time before tagging."
+            echo "Release $VERSION (no matching CHANGELOG.md entry was found for this version)." > release_notes.md
+          fi
+
+          echo "--- Release notes for this build ---"
+          cat release_notes.md
+
+      - name: Create/update GitHub Release with firmware attached
+        uses: softprops/action-gh-release@v2
+        with:
+          files: firmware.bin
+          body_path: release_notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
