@@ -29,6 +29,14 @@ the main contactor coils directly - it only interfaces with the same
 low-voltage control loop a person would use by pressing the buttons
 themselves.
 
+**Tested working on both a DOL and a Star-Delta starter.** The
+star-to-delta transition timing is handled entirely by the existing
+starter hardware's own internal timer relay, exactly as it would be
+for a manual button press - the firmware never needs to know or care
+which starter type it's talking to, a direct consequence of only ever
+simulating the pushbuttons rather than driving any contactor logic
+itself.
+
 - **No rewiring of the starter panel.** It's a retrofit, not a
   replacement - manual operation at the panel keeps working exactly
   as before.
@@ -107,8 +115,6 @@ Firebase - no app to install, works on desktop or phone.
 - **Motor-fault WhatsApp alerts.** The alert system exists (device
   health, OTA events); motor-specific alerts are blocked on real
   motor feedback landing first.
-- **Second controller (Star-Delta unit)** hasn't been through the
-  same hardening pass as the first (DOL) controller yet.
 - **Remote factory reset.** Exists locally (see `src/main.cpp` for
   the WiFi-reconfigure procedure), not yet a dashboard command.
 

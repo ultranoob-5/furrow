@@ -11,6 +11,17 @@ grow additional modules (see README.md Roadmap) - if/when those get
 substantial enough to version independently, they'll likely get their
 own changelog rather than sharing this one.
 
+## Testing - confirmed working on both starter types - 2026-08-11
+
+No code change - a real-world testing milestone worth recording.
+Tested successfully on both a DOL and a Star-Delta starter. The
+star-to-delta transition timing is handled entirely by the existing
+starter hardware's own internal timer relay, the same as it would be
+for a manual button press - confirms the firmware genuinely never
+needs starter-type-specific logic, a direct consequence of the
+pushbutton-simulation design rather than something that needed
+separate testing/hardening per starter type.
+
 ## Dashboard deploy - automated via GitHub Actions - 2026-08-11
 
 Tooling-only change, no firmware code touched - no version bump, same
