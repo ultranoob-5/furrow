@@ -95,4 +95,15 @@ namespace AppStorage
 
         Logger::info(TAG, "WhatsApp notification recipient saved");
     }
+
+    void factoryReset()
+    {
+        prefs.remove(KEY_WIFI_SSID);
+        prefs.remove(KEY_WIFI_PASS);
+        prefs.remove(KEY_DEV_NAME);
+        prefs.remove(KEY_OWNER);
+        prefs.remove(KEY_WA_PHONE);
+
+        Logger::warn(TAG, "Factory reset - all stored config cleared");
+    }
 }

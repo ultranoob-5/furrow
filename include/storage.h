@@ -34,4 +34,13 @@ namespace AppStorage
     bool hasWhatsAppConfig();
     String whatsAppPhone();
     void setWhatsAppConfig(const String &phone);
+
+    // Wipes WiFi credentials, device name/owner, and WhatsApp config -
+    // everything, returning the device to the same state as a freshly
+    // flashed board. Unlike clearWifiCredentials() alone, this also
+    // clears device identity, since a real factory reset shouldn't
+    // leave a stale name/owner behind for whoever re-provisions it
+    // next (could be a different person entirely - re-purposing a
+    // device for someone else is exactly one real reason to use this).
+    void factoryReset();
 }
