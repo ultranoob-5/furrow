@@ -11,6 +11,42 @@ grow additional modules (see README.md Roadmap) - if/when those get
 substantial enough to version independently, they'll likely get their
 own changelog rather than sharing this one.
 
+## [1.1.0] - 2026-08-12
+
+### Added
+- WhatsApp alert for connectivity outages: if WiFi/Firebase drops and
+  reconnects after 30s or longer, sends "⚠️ [name] was offline for
+  Xs - just reconnected". Uses purely local tracking (the ESP32's own
+  clock, no network needed while counting) -
+  `Network::lastDisconnectDurationMs()`, read right after the
+  existing reconnect event fires. Only covers drops while the device
+  stays powered - see the next item for genuine power loss.
+- **Real power-loss WhatsApp alerts, including when the device is
+  fully off:** a Firebase Cloud Function (`functions/index.js`,
+  `powerWatchdog`) checks every device's `lastSeen` age once a
+  minute, independently of the device itself - the only way to catch
+  a device that's genuinely lost power and has no way to report its
+  own absence. Includes dedup (`powerAlertSent`, resets to `false`
+  automatically every heartbeat) so it doesn't re-fire every run for
+  the same outage.
+  - `Cloud::publishDevice()` now also publishes `whatsappPhone`
+    (per-device recipient) alongside the dedup flag
+  - **Requires the Blaze (pay-as-you-go) Firebase plan** - Cloud
+    Functions aren't available on the free Spark plan. See SETUP.md
+    step 8
+  - Tested the watchdog's decision logic against 5 scenarios (too
+    recent, genuinely stale, already-alerted dedup, missing phone,
+    never-reported) with mocked calls, plus a module-load smoke test,
+    before committing - see `functions/test.js`
+  - Originally built against GitHub Actions instead of Cloud
+    Functions; moved after Whapi.cloud rejected requests from GitHub's
+    shared runner IP pool with a 403 in production (confirmed via
+    logs that the decision logic itself was correct - only the send
+    was rejected). `.github/workflows/power-watchdog.yml` is kept as
+    a manual-only diagnostic tool now (`workflow_dispatch`, no
+    schedule), not part of the automated path - running both on a
+    schedule risked duplicate alerts for the same outage
+
 ## [1.0.0] - 2026-08-12
 
 First release under MAJOR version 1 - this repo's own semver

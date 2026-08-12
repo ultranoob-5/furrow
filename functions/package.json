@@ -1,0 +1,13 @@
+{
+  "name": "furrow-functions",
+  "description": "Power-loss watchdog - runs on Firebase Cloud Functions instead of GitHub Actions, so it detects device outages from Google's own infrastructure rather than shared CI runner IPs.",
+  "engines": {
+    "node": "24"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^14.2.0",
+    "firebase-functions": "^7.3.2"
+  },
+  "private": true
+}

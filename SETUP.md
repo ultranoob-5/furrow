@@ -161,6 +161,44 @@ in `secrets.h`/repository secrets as `WHAPI_TOKEN`. Each device's
 *recipient* phone number is set separately, in the provisioning portal
 (step 7) - the token is shared, the recipient is per-device.
 
+**Power-loss alerts specifically** (a device going fully silent for
+30s+, not just a WiFi hiccup) run as a Firebase Cloud Function -
+`functions/index.js`, the `powerWatchdog` scheduled function. It
+needs its own deploy step, and **requires your project to be on the
+Blaze (pay-as-you-go) pricing plan** - Cloud Functions aren't
+available on the free Spark plan at all. See
+[firebase.google.com/pricing](https://firebase.google.com/pricing)
+before upgrading; realistic usage here should stay within the
+no-cost quota, but Blaze still requires linking a real billing
+account regardless of what you end up owing.
+
+1. Upgrade to Blaze: Firebase Console → your project → gear icon →
+   Usage and billing → Details & settings → **Modify plan**
+2. From the repo root, set the Whapi token as a Cloud Functions
+   secret (separate from GitHub's secrets - this one needs to exist
+   on Google's side instead, since the function runs there):
+   ```
+   firebase functions:secrets:set WHAPI_TOKEN
+   ```
+   (paste the same token you used for `secrets.h`/`FIREBASE_API_KEY`
+   above when prompted)
+3. Install its dependencies (a separate `node_modules` from anything
+   else in this repo - `functions/` is its own self-contained project):
+   ```
+   cd functions
+   npm install
+   cd ..
+   ```
+4. Deploy: `firebase deploy --only functions`
+
+Runs on Firebase's own infrastructure, outside any device entirely -
+what actually lets it detect a device that's genuinely lost power and
+can't report its own absence. Checks every 1 minute (Cloud
+Scheduler's granularity, tighter than the ~5 minute practical minimum
+of the GitHub-Actions-based version this replaced -
+`.github/workflows/power-watchdog.yml` is kept around as a manual-only
+diagnostic tool now, not part of the automated path).
+
 ## 9. Set up automatic dashboard deploys (optional, one-time)
 
 Without this, you can still deploy manually (`firebase deploy`) - skip
@@ -211,6 +249,13 @@ step 4.
 
 ## Troubleshooting
 
+- **`Error: User code failed to load. Cannot determine backend
+  specification. Timeout after 10000`** during `firebase deploy
+  --only functions` - almost always means `functions/node_modules`
+  was never installed, so `require("firebase-functions/...")` fails
+  the moment Firebase tries to load and analyze the code, surfacing
+  as a generic timeout rather than a clear "module not found." Run
+  `npm install` inside `functions/` first (step 8), then redeploy.
 - **Dashboard deploy workflow fails with an auth or "no project active"
   error** - almost always one of: `FIREBASE_SERVICE_ACCOUNT` or
   `FIREBASE_PROJECT_ID` missing from Settings → Secrets and variables

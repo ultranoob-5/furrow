@@ -113,6 +113,16 @@ port, relay cables, and serial pins. ~1.2h print time.
 - Optional WhatsApp alerts (via [Whapi.cloud](https://whapi.cloud))
   for device/connectivity health events - opt-in per device, no
   effect on anything else if left unconfigured
+- Connectivity outages of 30s or longer get flagged with how long the
+  device was gone, the moment it reconnects (covers WiFi/network
+  drops while still powered)
+- **Real power-loss alerts**, including when the device is fully off:
+  a Firebase Cloud Function (`functions/index.js`) checks every
+  device's last-seen time independently of the device itself, so it
+  can catch a device that's genuinely lost power and has no way to
+  report its own absence. Requires the Blaze (pay-as-you-go) Firebase
+  plan - see SETUP.md step 8. Runs every 1 minute (Cloud Scheduler's
+  granularity), not by the 30s threshold itself
 
 **Release process**
 - Semantic versioning, documented in [CHANGELOG.md](CHANGELOG.md)
@@ -200,7 +210,8 @@ and the WhatsApp sender token - both live in `secrets.h`.
 ## Tech stack
 
 - **Firmware:** ESP32 (Arduino, PlatformIO), FirebaseClient (mobizt)
-- **Backend:** Firebase Realtime Database + Authentication (Email/Password)
+- **Backend:** Firebase Realtime Database + Authentication (Email/Password),
+  Cloud Functions (power-loss watchdog only, requires Blaze plan)
 - **Dashboard:** Vanilla JS + Firebase Web SDK, installable PWA
 - **CI/CD:** GitHub Actions - firmware release on tag push, dashboard
   deploy on `web/` push to `main`

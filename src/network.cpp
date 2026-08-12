@@ -12,6 +12,9 @@ namespace
     bool wasConnected = false;
     bool reconnectEvent = false;
 
+    unsigned long disconnectedAt = 0;
+    unsigned long lastDisconnectDuration = 0;
+
     constexpr const char *TAG = "Network";
     constexpr unsigned long CONNECT_TIMEOUT_MS = 15000;
 }
@@ -53,11 +56,15 @@ void Network::loop()
 
     if (connected && !wasConnected)
     {
-        Logger::info(TAG, "WiFi reconnected");
+        lastDisconnectDuration = (disconnectedAt > 0) ? (millis() - disconnectedAt) : 0;
+
+        Logger::info(TAG, "WiFi reconnected - was down for " + String(lastDisconnectDuration / 1000) + "s");
         reconnectEvent = true;
     }
     else if (!connected && wasConnected)
     {
+        disconnectedAt = millis();
+
         Logger::warn(TAG, "WiFi lost");
     }
 
@@ -89,6 +96,11 @@ bool Network::consumeReconnectEvent()
 
     reconnectEvent = false;
     return true;
+}
+
+unsigned long Network::lastDisconnectDurationMs()
+{
+    return lastDisconnectDuration;
 }
 
 String Network::ipAddress()

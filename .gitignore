@@ -17,3 +17,10 @@ web/firebase-config.js
 # original project's ID baked into what a fork silently keeps using.
 # See .firebaserc.example for the template.
 .firebaserc
+
+# Python bytecode cache from testing the power-watchdog script locally.
+__pycache__/
+
+# Cloud Functions dependencies - reinstalled from package.json/
+# package-lock.json (both committed), never the actual node_modules.
+functions/node_modules/

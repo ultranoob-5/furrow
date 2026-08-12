@@ -1,0 +1,33 @@
+name: Power-Loss Watchdog (manual diagnostic)
+
+# The automated job moved to Firebase Cloud Functions
+# (functions/index.js, powerWatchdog) - running both this AND the
+# Cloud Function on a schedule risks a real race condition, where
+# both read powerAlertSent=false before either writes it back true,
+# sending a duplicate alert for the same outage. This stays as a
+# manual-only diagnostic tool (e.g. to test against a different
+# network origin than Cloud Functions if a delivery issue ever needs
+# isolating again), not part of the automated path anymore.
+#
+# See .github/scripts/power_watchdog.py for the actual logic and
+# Cloud::publishDevice() in src/cloud.cpp for how the per-device
+# WhatsApp recipient gets published and how the dedup flag resets
+# automatically once a device is back.
+on:
+  workflow_dispatch: # manual only - trigger from the Actions tab
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run power watchdog
+        run: python3 .github/scripts/power_watchdog.py
+        env:
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          DEVICE_AUTH_EMAIL: ${{ secrets.DEVICE_AUTH_EMAIL }}
+          DEVICE_AUTH_PASSWORD: ${{ secrets.DEVICE_AUTH_PASSWORD }}
+          WHAPI_TOKEN: ${{ secrets.WHAPI_TOKEN }}

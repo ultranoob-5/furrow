@@ -21,6 +21,13 @@ public:
     // once per loop() and act on it immediately.
     static bool consumeReconnectEvent();
 
+    // Valid to read right after consumeReconnectEvent() returns true -
+    // how long the most recent disconnect lasted, in milliseconds. Only
+    // covers WiFi/network drops while the device stayed powered - a
+    // genuine power loss (device fully off) can't be measured this way,
+    // since nothing runs to track time while there's no power at all.
+    static unsigned long lastDisconnectDurationMs();
+
     // Returns ESP32 IP address
     static String ipAddress();
 

@@ -387,6 +387,14 @@ void Cloud::loop()
         Logger::info(TAG, "WiFi reconnected - restarting Firebase stream");
         streamStarted = false;
         lastHeartbeat = 0;
+
+        unsigned long downtimeMs = Network::lastDisconnectDurationMs();
+
+        if (downtimeMs >= 30000)
+        {
+            Notify::sendWhatsApp("\u26a0\ufe0f " + device.name() + " was offline for " +
+                                  String(downtimeMs / 1000) + "s - just reconnected");
+        }
     }
 
     if (!app.ready())
@@ -468,6 +476,28 @@ void Cloud::publishDevice()
     // rather than something only true if some browser happened to be
     // open and watching at the right moment to observe it.
     json += "\"lastSeen\":{\".sv\":\"timestamp\"}";
+
+    // Published (not just kept in local flash) specifically so the
+    // power-loss watchdog (.github/workflows/power-watchdog.yml) can
+    // know who to alert - it runs outside this device entirely and
+    // has no other way to read AppStorage. Same read exposure as the
+    // owner email above (this whole /devices tree is publicly
+    // readable per the RTDB rules) - only published if actually set,
+    // so a device with no WhatsApp config configured doesn't publish
+    // an empty string.
+    String waPhone = AppStorage::whatsAppPhone();
+    if (waPhone.length() > 0)
+    {
+        json += ",\"whatsappPhone\":\"" + waPhone + "\"";
+    }
+
+    // Resets the power-watchdog's dedup flag every single heartbeat
+    // this device is alive to send one - the watchdog only sets this
+    // true when it detects an outage, so as long as the device is
+    // reporting normally, this stays false without the device needing
+    // to know anything about the watchdog's own state.
+    json += ",\"powerAlertSent\":false";
+
     json += "}";
 
     database.set<object_t>(aClientMain, statusPath, object_t(json), processData, "publishDevice");
