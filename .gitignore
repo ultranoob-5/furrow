@@ -1,6 +1,10 @@
 .pio
 .vscode/
 
+# Firebase CLI's own local deploy cache - regenerated automatically,
+# machine-specific, nothing worth tracking here.
+.firebase/
+
 # Real credentials live here locally only - never committed.
 # See include/secrets.example.h for the template.
 include/secrets.h
