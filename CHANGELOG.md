@@ -11,6 +11,38 @@ grow additional modules (see README.md Roadmap) - if/when those get
 substantial enough to version independently, they'll likely get their
 own changelog rather than sharing this one.
 
+## [1.0.0] - 2026-08-12
+
+First release under MAJOR version 1 - this repo's own semver
+philosophy (see the top of this file) reserves that specifically for
+a genuine, production-ready milestone, not just "another version
+bump." What justifies it here: the core control loop (remote
+Start/Stop via relay-simulated pushbuttons) is now confirmed working
+on two different real starter types (DOL and Star-Delta, see the
+entry below), the whole provisioning/multi-device/OTA/alerting stack
+has been exercised for real, and - just as importantly - the scope
+going into this release was deliberately simplified rather than left
+sprawling.
+
+### Changed
+- **Scope simplification, not a limitation being discovered later:**
+  dropped the planned current-sensor-based motor feedback (no CT
+  clamp, no RMS current calculation) in favor of a much simpler
+  approach - sharing the ESP32's own low-voltage power supply with
+  the existing digital single-phasing preventer, so a preventer trip
+  reads as the device going silent. The dashboard's existing "No
+  Power" status (30s of silence, see the entry below) already covers
+  this; see README.md's "Not done yet" for the current wiring status
+  and Roadmap for where current-sensing may still land later,
+  deliberately deferred rather than abandoned.
+
+### Added
+- Documented ESP32-to-relay wiring (exact pins, active-LOW behavior)
+  directly in README.md, rather than only ever having lived in chat
+  history
+- Enclosure reference: a free, purpose-fit 3D-printable case for this
+  exact ESP32 + dual-relay pairing
+
 ## Testing - confirmed working on both starter types - 2026-08-11
 
 No code change - a real-world testing milestone worth recording.

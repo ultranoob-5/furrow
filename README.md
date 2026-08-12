@@ -48,6 +48,27 @@ itself.
 Control and monitoring happen through a web dashboard backed by
 Firebase - no app to install, works on desktop or phone.
 
+### Wiring: ESP32 → relay module
+
+| ESP32 pin | Relay module pin | Notes |
+|---|---|---|
+| GPIO26 | IN1 (Start channel) | Active-LOW - pulled LOW pulses the relay on |
+| GPIO27 | IN2 (Stop channel) | Active-LOW, same as above |
+| 5V | VCC | |
+| GND | GND | |
+
+The relay's Start/Stop channels wire into the starter panel's existing
+low-voltage control loop, in parallel with the physical pushbuttons -
+never into the main contactor coils or anything carrying 415-440V
+directly. See [A note on safety](#a-note-on-safety).
+
+### Enclosure
+
+[ESP32 (WROOM) + dual-channel relay module case](https://makerworld.com/en/models/681746-esp32-wroom-dual-channel-relay-module-case)
+by Tomek550 - free 3D-printable, fits this exact hardware pairing.
+Both boards mount with M3 screws, snap-on lid, cutouts for the USB-C
+port, relay cables, and serial pins. ~1.2h print time.
+
 ---
 
 ## Features
@@ -80,6 +101,10 @@ Firebase - no app to install, works on desktop or phone.
 - Live status with a server-authoritative "last seen" timestamp -
   accurate from the first page load, not dependent on a browser
   having been open to observe it
+- Graded connection state, including "No Power" after 30s of silence
+  (a real power-loss proxy, not just a generic offline label - see
+  [Not done yet](#not-done-yet) for how this ties to the power
+  supply wiring)
 - Device rename, inline
 - "Update available" badge when a device's firmware is behind the
   latest release
@@ -104,24 +129,30 @@ Firebase - no app to install, works on desktop or phone.
 
 ## Not done yet
 
-- **Real motor feedback.** Motor state is currently *command-based* -
-  assumed from the last relay pulse, not observed from real current
-  flow. A manual Start/Stop press at the physical panel isn't
-  reflected on the dashboard yet. A non-invasive current sensor
-  (SCT-013-010) is the planned fix.
-- **Phase-loss / incoming supply monitoring.** Simplified: instead of
-  new voltage-sensing hardware or tapping a spare fault contact, the
-  ESP32's own power supply is being wired through the existing
-  digital single-phasing preventer - if it trips, the ESP32 loses
-  power too. The dashboard already treats prolonged silence as "No
-  Power" for exactly this reason (see CHANGELOG.md), but the physical
-  wiring itself isn't done yet - still listed here until confirmed.
+- **Phase-loss / power monitoring - physical wiring pending.** The
+  ESP32's own power supply is being routed through the existing
+  digital single-phasing preventer, so a trip there cuts the ESP32's
+  power too - the dashboard already treats a device going silent for
+  30s as "No Power" for exactly this reason (not a WiFi hiccup). The
+  logic is done; the physical wiring isn't confirmed yet.
 - **Motor-fault WhatsApp alerts.** The alert system exists (device
-  health, OTA events); motor-specific alerts are blocked on real
-  motor feedback landing first.
+  health, OTA events, and "No Power" once the wiring above is
+  confirmed); alerts for the motor itself (started/stopped
+  unexpectedly) aren't planned for v1 - see below.
 - **Remote factory reset.** Implemented as a dashboard/remote command
   (see CHANGELOG.md 0.2.0) - not yet verified on real hardware, so
   still listed here until that's confirmed.
+
+**A deliberate v1 scope decision, not an oversight:** motor state is
+command-based (assumed from the last relay pulse), not read from real
+current flow - a manual Start/Stop press at the physical panel isn't
+reflected on the dashboard. A non-invasive current sensor was
+originally planned to close this gap; v1 intentionally ships without
+it in favor of a simpler, well-tested system. "No Power" detection
+(above) covers the failure mode that actually matters most for a farm
+pump - the supply going out entirely - without needing extra sensor
+hardware. Real current-based feedback may still happen later; see
+[Roadmap](#roadmap).
 
 ## Roadmap
 
@@ -129,6 +160,9 @@ Future modules under consideration, not started:
 - Well water level monitoring
 - Irrigation gate valve control
 - Flow rate sensing, energy/runtime tracking
+- Real motor feedback via a non-invasive current sensor - deliberately
+  dropped from v1 in favor of simplicity (see "Not done yet" above),
+  not ruled out permanently
 
 ---
 
@@ -177,8 +211,10 @@ and the WhatsApp sender token - both live in `secrets.h`.
 
 This project intentionally keeps the ESP32 away from anything above
 low voltage. Relay outputs simulate pushbuttons rather than switching
-contactor coils directly; sensing work stays non-invasive (clamp-on
-current sensors) or isolated. If you're adapting this for your own
-panel, treat anything touching mains voltage as electrician territory,
-not a wiring diagram to follow alone - this applies to every future
-module too, not just Motor Control.
+contactor coils directly, and power monitoring works by sharing the
+ESP32's own low-voltage supply with the existing digital
+single-phasing preventer, rather than adding new sensors or tapping
+into anything carrying mains voltage directly. If you're adapting
+this for your own panel, treat anything touching mains voltage as
+electrician territory, not a wiring diagram to follow alone - this
+applies to every future module too, not just Motor Control.
