@@ -109,9 +109,13 @@ Firebase - no app to install, works on desktop or phone.
   flow. A manual Start/Stop press at the physical panel isn't
   reflected on the dashboard yet. A non-invasive current sensor
   (SCT-013-010) is the planned fix.
-- **Phase-loss / incoming supply monitoring.** Likely via the existing
-  single-phasing preventer's spare fault contact, rather than adding
-  new voltage-sensing hardware.
+- **Phase-loss / incoming supply monitoring.** Simplified: instead of
+  new voltage-sensing hardware or tapping a spare fault contact, the
+  ESP32's own power supply is being wired through the existing
+  digital single-phasing preventer - if it trips, the ESP32 loses
+  power too. The dashboard already treats prolonged silence as "No
+  Power" for exactly this reason (see CHANGELOG.md), but the physical
+  wiring itself isn't done yet - still listed here until confirmed.
 - **Motor-fault WhatsApp alerts.** The alert system exists (device
   health, OTA events); motor-specific alerts are blocked on real
   motor feedback landing first.

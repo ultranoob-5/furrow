@@ -856,7 +856,13 @@
   // every 10s. Graded rather than a binary jump:
   //  - "online": heard from within the last one-and-a-bit heartbeats
   //  - "updating": heartbeat is overdue but could just be network lag
-  //  - "offline": silent long enough to call it
+  //  - "offline" (shown as "No Power"): the device's own power supply
+  //    is gated through the digital single-phasing preventer, so a
+  //    prolonged silence past 30s is a genuine proxy for "the
+  //    preventer cut power" (a real electrical event), not just a
+  //    dropped WiFi connection - the ESP32 can't report anything about
+  //    why it went dark if it's actually powered off, so this is
+  //    inferred from silence rather than anything the device sends.
   function lastSeenAt(id){
     const data = devices[id];
     return (data && data.status && data.status.lastSeen) ? data.status.lastSeen : null;
@@ -869,9 +875,20 @@
     const age = Date.now() - seen;
 
     if (age <= 16000) return 'online';
-    if (age <= 40000) return 'updating';
+    if (age <= 30000) return 'updating';
     return 'offline';
   }
+
+  // Internal status keywords (used for CSS classes, gating logic, etc.)
+  // stay the same as before - this only maps them to what's actually
+  // shown to a person, so "offline" reads as "No Power" without
+  // needing to touch anything else that keys off the raw string.
+  const STATUS_LABELS = {
+    online: 'Online',
+    updating: 'Updating',
+    connecting: 'Connecting',
+    offline: 'No Power'
+  };
 
   function deviceLabelFor(id, data){
     if (data && data.displayName) return data.displayName;
@@ -906,7 +923,7 @@
           <span class="chip-name">${deviceLabelFor(id, data)}</span>
           ${outdated ? '<span class="update-badge" title="Update available" style="margin-left:auto;">Update</span>' : ''}
         </div>
-        <div class="chip-state ${running ? 'running' : ''}">${running ? 'Running' : (online ? 'Idle' : status === 'updating' ? 'Updating' : status === 'connecting' ? 'Connecting' : 'Offline')}</div>
+        <div class="chip-state ${running ? 'running' : ''}">${running ? 'Running' : (online ? 'Idle' : STATUS_LABELS[status] || status)}</div>
       `;
       chip.addEventListener('click', () => selectDevice(id));
       overviewEl.appendChild(chip);
@@ -950,7 +967,7 @@
 
     const connStatus = connectionStatus(selectedId);
     connLed.className = 'led ' + connStatus;
-    connLabel.textContent = connStatus;
+    connLabel.textContent = STATUS_LABELS[connStatus] || connStatus;
 
     // The last-written RSSI just sits in Firebase forever until the
     // device writes again - nothing clears it when the device drops.

@@ -42,6 +42,23 @@ build), and it broke on double-digit versions ("0.2.0" vs "0.10.0"
 compares wrong as strings). Replaced with a real per-component
 version comparison, tested against 7 cases before committing.
 
+## Dashboard - offline reinterpreted as "No Power" - 2026-08-11
+
+Dashboard-only, no firmware code touched - no version bump. Hardware
+simplification: voltage/phase-loss protection is being handled
+entirely by the existing digital single-phasing preventer rather than
+custom ESP32 sensing - the device's own power supply will be wired
+through it, so if the preventer cuts power, the ESP32 goes dark too.
+
+This makes prolonged silence a genuine proxy for "the preventer cut
+power," not just a dropped WiFi connection - the offline threshold
+tightened from 40s to 30s, and its display label changed from
+"Offline" to "No Power" (internal status keyword/CSS classes
+unchanged - purely a display-label mapping, nothing else needed to
+change). Recovery is automatic and needs no special handling: once
+the device reconnects and publishes again, it naturally reads as
+"Online" through the same existing logic.
+
 ## [0.2.0] - 2026-08-11
 
 ### Added
