@@ -1,12 +1,10 @@
 #ifndef MOTOR_H
 #define MOTOR_H
 
-// NOTE: This is a temporary, command-based state model. There is no real
-// feedback source right now (the GPIO25 aux-contact wiring was only ever
-// a manual test jumper, not real hardware). This will be replaced once
-// current sensing (3x CT clamps on the outgoing/motor-side phases) is
-// wired and calibrated - at that point, isRunning() will reflect real
-// current draw instead of "what we last commanded."
+// Motor state is now based on real current feedback from the SCT013-030
+// CT (see current_sensor.h for details), not on the last command sent to
+// the starter. This means physical START/STOP operation is detected
+// automatically as well as remote control.
 enum class MotorState
 {
     OFF,
@@ -26,6 +24,8 @@ public:
     void update();
 
     bool isRunning();
+
+    float currentAmps();
 
 private:
 

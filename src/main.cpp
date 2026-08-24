@@ -11,6 +11,8 @@
 namespace
 {
     bool previousMotorRunning = false;
+    unsigned long lastCurrentSerialMs = 0;
+    constexpr unsigned long CURRENT_SERIAL_INTERVAL_MS = 10000;
 
     // GPIO0 (the BOOT button) is also the ESP32's own boot-mode
     // strapping pin - the ROM bootloader samples it at the instant of
@@ -115,12 +117,21 @@ void loop()
 
     motor.update();
 
-    // NOTE: state is currently command-based (see motor.h), not real
-    // feedback - this still catches remote-command-driven changes and
-    // pushes them immediately instead of waiting on the heartbeat, but
-    // it won't catch a manual panel button press or an actual motor
-    // fault until CT-based current sensing replaces this.
+    // Motor state now comes from the CT current sensor, so this catches
+    // remote commands, physical starter-button operation, and real
+    // motor stops/trips.
     bool runningNow = motor.isRunning();
+
+    // Print the measured RMS current every 10 seconds for local testing.
+    // The current value is intentionally NOT published to Firebase.
+    unsigned long nowMs = millis();
+    if (nowMs - lastCurrentSerialMs >= CURRENT_SERIAL_INTERVAL_MS)
+    {
+        lastCurrentSerialMs = nowMs;
+        Serial.printf("[Current] %.2f A RMS | Motor: %s\n",
+                      motor.currentAmps(),
+                      runningNow ? "RUNNING" : "OFF");
+    }
 
     if (runningNow != previousMotorRunning)
     {

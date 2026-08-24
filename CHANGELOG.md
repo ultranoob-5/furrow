@@ -1,3 +1,17 @@
+
+## [1.2.0] - 2026-08-24
+
+- Added CT-based motor feedback: one YHDC SCT013-030 (built-in burden,
+  voltage-output, 30A/1V rated) on ADC1 GPIO34, with an R8/R9/C3 network
+  biasing and AC-coupling its output for the ADC - see the "Current-sensor
+  feedback" section in README.md for the full circuit and a note on a
+  redundant external resistor (R6) worth removing from the current build.
+- Calibration constant uses the CT's datasheet-rated 30A/1V ratio; kept for
+  Serial/debugging.
+- Motor feedback changes to RUNNING only when measured current is > 2 A.
+- Motor feedback returns to OFF at the calibrated near-zero/noise floor.
+- Current amperage is no longer published to Firebase; only motor state is synchronized.
+
 # Changelog
 
 All notable changes are documented here. Format loosely follows

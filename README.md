@@ -229,3 +229,82 @@ into anything carrying mains voltage directly. If you're adapting
 this for your own panel, treat anything touching mains voltage as
 electrician territory, not a wiring diagram to follow alone - this
 applies to every future module too, not just Motor Control.
+
+## Current-sensor feedback (1-channel)
+
+The controller supports one YHDC SCT013-030 CT on ADC1 GPIO34. Per its
+datasheet, this model has its sampling (burden) resistor built in - it's a
+genuine voltage-output CT rated 30A RMS primary -> 1V RMS output (max input
+60A), so no external burden is needed for the CT itself. R8/R9 bias the
+signal to 1.65V and C3 AC-couples the CT's output onto that bias, so the ADC
+always sees a valid, mid-rail-centered waveform. Sampling uses the same
+RMS/digital-offset-filter approach as the Mottramlabs ESP32 4-channel
+current-sensor firmware.
+
+**Hardware note:** the CT_1 schematic this was built from also has a 100
+ohm resistor (R6) wired across the CT's own output leads. Since this CT
+already has an internal burden resistor, R6 is an extra load in parallel
+with it - the CT's datasheet doesn't publish the internal burden value, so
+there's no way to calculate exactly how much R6 pulls the output down from
+the rated 1V/30A figure. Recommend removing/bypassing R6 so the CT's rated
+output reaches C3 unloaded.
+
+The current reading is used as the motor's source of truth: physical
+starter-button START/STOP and remote START/STOP both become visible through
+the same motor state. Whether or not R6 stays fitted, calibrate against a
+clamp meter on a known motor current before treating the Amps value as
+measurement-grade - it's only used internally for the 2A ON/OFF threshold,
+never published to Firebase.
+
+### Schematic
+
+![CT sensor circuit: SCT013-030 into an R8/R9 bias divider and C3 AC-coupling capacitor, feeding the ESP32 ADC](docs/schematics/ct-sensor-circuit.jpg)
+
+- **CT_1_wire1 / CT_1_wire2** - the two output leads of the SCT013-030
+  clamp.
+- **R8, R9 (10K each)** - form a divider between 3.3V and GND, biasing
+  the ADC input to 1.65V (mid-rail) so the AC waveform swings within the
+  ESP32's 0-3.3V ADC range instead of clipping at ground on every negative
+  half-cycle.
+- **C3 (10uF)** - AC-couples CT_1_wire1 onto that 1.65V bias, blocking any
+  DC offset from the CT while passing the current-proportional AC signal
+  through.
+- **R6 (100 ohm)** - currently wired across CT_1_wire1/CT_1_wire2. As
+  noted above, this CT already has its own burden resistor built in, so R6
+  is redundant and recommended to be removed - see the hardware note
+  above.
+- **"Input for esp32"** - connects to `Config::CURRENT_ADC_PIN` (GPIO34,
+  ADC1) in `include/config.h`.
+
+### Wiring it up
+
+1. **Clamp the CT around one motor-side conductor.** Open the SCT013-030
+   and close it around a single phase wire feeding the motor (not both
+   wires of a cable, or it reads near-zero - the clamp needs to sense one
+   conductor's magnetic field only). The white dot/arrow on the clamp
+   body, if present, doesn't matter for current magnitude, only for sign,
+   which this firmware doesn't use.
+2. **Wire the CT's two leads to CT_1_wire1 and CT_1_wire2** in the
+   schematic above - polarity doesn't matter for an AC measurement.
+3. **Build the bias/coupling network** (R8, R9, C3) between those leads
+   and the ESP32, exactly as drawn. If R6 is still fitted from an earlier
+   build, remove it per the hardware note above.
+4. **Connect the junction after C3 ("Input for esp32") to GPIO34** on the
+   ESP32 - this is `Config::CURRENT_ADC_PIN` in `include/config.h`, and
+   stays on ADC1 so it keeps working alongside WiFi.
+5. **Power the bias network from the ESP32's own 3.3V and GND** - don't
+   share this with anything mains-side; the CT clamp itself is the only
+   part of this circuit anywhere near the motor wiring, and it's
+   inherently isolated (that's the whole point of a clamp-on CT).
+6. **Flash the firmware and open the Serial monitor** (115200 baud). With
+   the motor off, you should see a reading near 0.00A; with it running,
+   `[Current] X.XX A RMS | Motor: RUNNING` every 10 seconds. If it doesn't
+   move at all, double check the CT is clamped around only one conductor
+   and that CT_1_wire1/wire2 are actually connected (an open CT input
+   floats and reads noise, not a clean zero).
+7. **Calibrate:** compare the Serial reading against a clamp meter on the
+   same conductor while the motor runs. If it's consistently off by a
+   fixed ratio, adjust `CT_RATED_PRIMARY_A`/`CT_RATED_OUTPUT_V` in
+   `include/current_sensor.h` to match reality rather than the datasheet
+   figure - this matters most if R6 ends up staying in the circuit, since
+   that's what would introduce the mismatch.
