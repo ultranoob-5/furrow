@@ -19,7 +19,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.3.0/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.3.0/firebase-auth-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.3.0/firebase-database-compat.min.js"></script>
@@ -32,18 +32,26 @@
 <style>
   :root{
     --bg: #14161A;
+    --bg-glow: #1d2027;
     --panel: #1B1E23;
     --panel-raised: #21252B;
     --border: #2E333B;
     --text: #ECE9E2;
     --muted: #868C97;
     --amber: #E8A33D;
+    --amber-soft: rgba(232,163,61,0.14);
     --green: #49B675;
+    --green-soft: rgba(73,182,117,0.14);
     --green-dim: #2E5A41;
     --red: #E15241;
+    --red-soft: rgba(225,82,65,0.12);
     --red-dim: #5A2E29;
     --mono: 'JetBrains Mono', ui-monospace, monospace;
     --sans: 'Inter', system-ui, sans-serif;
+    --display: 'Nunito', 'Inter', system-ui, sans-serif;
+    --radius-lg: 22px;
+    --radius-md: 16px;
+    --radius-sm: 12px;
   }
 
   * { box-sizing: border-box; }
@@ -52,7 +60,7 @@
     margin: 0;
     min-height: 100vh;
     background:
-      radial-gradient(1200px 600px at 50% -10%, #1d2027 0%, var(--bg) 60%);
+      radial-gradient(1200px 600px at 50% -10%, var(--bg-glow) 0%, var(--bg) 60%);
     color: var(--text);
     font-family: var(--sans);
     display: flex;
@@ -61,25 +69,34 @@
     padding: 40px 20px 60px;
   }
 
+  /* ---- Header - the real leaf-and-circuit mark, not just a dot ------- */
+
   .app-title{
     width: 100%;
     max-width: 480px;
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 16px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    margin-bottom: 20px;
   }
 
-  .app-title .dot{
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--amber);
+  .app-title .leaf-mark{
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+  }
+
+  .signin-card .app-title .leaf-mark{
+    width: 56px;
+    height: 56px;
+  }
+
+  .app-title .brand{
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 20px;
+    letter-spacing: -0.01em;
+    color: var(--text);
   }
 
   /* ---- Overview strip ------------------------------------------------ */
@@ -91,22 +108,22 @@
     gap: 10px;
     overflow-x: auto;
     padding-bottom: 4px;
-    margin-bottom: 16px;
+    margin-bottom: 18px;
     scrollbar-width: thin;
   }
 
   .chip{
     flex: 0 0 auto;
-    min-width: 148px;
+    min-width: 152px;
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
     cursor: pointer;
-    transition: border-color 0.15s ease, transform 0.08s ease;
+    transition: border-color 0.18s ease, transform 0.08s ease, background 0.18s ease;
   }
 
-  .chip:hover{ border-color: #3a4049; }
+  .chip:hover{ border-color: #3a4049; background: var(--panel-raised); }
   .chip:active{ transform: translateY(1px); }
 
   .chip.active{
@@ -117,31 +134,29 @@
   .chip-top{
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin-bottom: 8px;
+    gap: 7px;
+    margin-bottom: 9px;
   }
 
   .chip-name{
-    font-size: 12px;
-    font-weight: 600;
+    font-family: var(--display);
+    font-size: 13.5px;
+    font-weight: 700;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .chip-state{
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 500;
     color: var(--muted);
   }
 
-  .chip-state.running{ color: var(--green); }
+  .chip-state.running{ color: var(--green); font-weight: 600; }
 
   .chip-empty{
-    font-family: var(--mono);
-    font-size: 12px;
+    font-size: 13px;
     color: var(--muted);
     padding: 10px 2px;
   }
@@ -160,7 +175,7 @@
   .led.online{
     background: var(--green);
     box-shadow: 0 0 8px 1px var(--green), 0 0 0 3px rgba(73,182,117,0.15);
-    animation: pulse 2.4s ease-in-out infinite;
+    animation: pulse 2.6s ease-in-out infinite;
   }
 
   .led.offline{
@@ -182,7 +197,7 @@
 
   @keyframes pulse{
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+    50% { opacity: 0.45; }
   }
 
   /* ---- Title row / rename -------------------------------------------- */
@@ -191,7 +206,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-top: 2px;
+    margin-top: 3px;
   }
 
   .rename-btn{
@@ -209,7 +224,7 @@
 
   .rename-btn:hover{
     color: var(--amber);
-    background: rgba(232,163,61,0.1);
+    background: var(--amber-soft);
   }
 
   input.name-edit{
@@ -217,12 +232,12 @@
     background: var(--panel-raised);
     border: 1px solid var(--amber);
     color: var(--text);
-    font-family: var(--sans);
-    font-size: 19px;
-    font-weight: 700;
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 800;
     letter-spacing: -0.01em;
-    padding: 4px 8px;
-    border-radius: 6px;
+    padding: 5px 10px;
+    border-radius: 8px;
     width: 200px;
     max-width: 60vw;
   }
@@ -234,7 +249,7 @@
     max-width: 480px;
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     box-shadow: 0 30px 80px -30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03);
     overflow: hidden;
   }
@@ -249,15 +264,14 @@
 
   .device-name{
     font-size: 12px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
     color: var(--muted);
     font-weight: 600;
   }
 
   .device-title{
-    font-size: 19px;
-    font-weight: 700;
+    font-family: var(--display);
+    font-size: 22px;
+    font-weight: 800;
     margin-top: 2px;
     letter-spacing: -0.01em;
   }
@@ -266,48 +280,69 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-family: var(--mono);
-    font-size: 11px;
+    font-size: 12px;
     color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    font-weight: 500;
   }
+
+  /* ---- Status block, with a soft leaf-glow signature ------------------ */
 
   .status-block{
-    padding: 32px 24px 24px;
+    position: relative;
+    padding: 36px 24px 26px;
     text-align: center;
     border-bottom: 1px solid var(--border);
-    background:
-      repeating-linear-gradient(180deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+    overflow: hidden;
   }
 
+  .status-block::before{
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 260px;
+    height: 260px;
+    background: var(--leaf-glow-color, transparent);
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    filter: blur(50px);
+    transform: translate(-50%, -50%);
+    opacity: var(--leaf-glow-opacity, 0);
+    transition: opacity 0.6s ease, background 0.6s ease;
+    pointer-events: none;
+  }
+
+  .status-block.is-running{ --leaf-glow-color: var(--green); --leaf-glow-opacity: 0.16; }
+  .status-block.is-pending{ --leaf-glow-color: var(--amber); --leaf-glow-opacity: 0.16; }
+
   .status-label{
-    font-family: var(--mono);
-    font-size: 11px;
+    position: relative;
+    font-size: 12.5px;
     color: var(--muted);
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+    font-weight: 600;
     margin-bottom: 10px;
   }
 
   .status-value{
-    font-family: var(--mono);
-    font-size: 42px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
+    position: relative;
+    font-family: var(--display);
+    font-size: 44px;
+    font-weight: 900;
+    letter-spacing: -0.01em;
     transition: color 0.25s ease;
   }
 
-  .status-value.running{ color: var(--green); text-shadow: 0 0 24px rgba(73,182,117,0.35); }
-  .status-value.off{ color: var(--muted); }
-  .status-value.pending{ color: var(--amber); text-shadow: 0 0 24px rgba(232,163,61,0.35); }
+  .status-value.running{ color: var(--green); text-shadow: 0 0 30px rgba(73,182,117,0.4); }
+  .status-value.off{ color: var(--text); opacity: 0.55; }
+  .status-value.pending{ color: var(--amber); text-shadow: 0 0 30px rgba(232,163,61,0.4); }
 
   .status-sub{
+    position: relative;
     margin-top: 8px;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--muted);
-    font-family: var(--mono);
   }
+
+  /* ---- Controls: pill buttons, still unambiguous colors ---------------- */
 
   .controls{
     display: grid;
@@ -321,14 +356,13 @@
     appearance: none;
     border: none;
     cursor: pointer;
-    font-family: var(--sans);
-    font-weight: 700;
-    font-size: 14px;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 16px;
+    letter-spacing: 0;
     color: #0e1210;
-    padding: 20px 0;
-    border-radius: 10px;
+    padding: 19px 0;
+    border-radius: 999px;
     position: relative;
     transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.15s ease;
   }
@@ -342,14 +376,14 @@
     background: linear-gradient(180deg, #5fd18a 0%, var(--green) 55%, #2c8a54 100%);
     box-shadow:
       0 4px 0 #1f6e42,
-      0 8px 16px -6px rgba(73,182,117,0.5);
+      0 10px 20px -8px rgba(73,182,117,0.5);
   }
 
   button.btn.stop{
     background: linear-gradient(180deg, #ef8375 0%, var(--red) 55%, #b23a2c 100%);
     box-shadow:
       0 4px 0 #7a2c22,
-      0 8px 16px -6px rgba(225,82,65,0.5);
+      0 10px 20px -8px rgba(225,82,65,0.5);
     color: #1c0d0a;
   }
 
@@ -363,32 +397,33 @@
     box-shadow: 0 0 0 #7a2c22, 0 4px 10px -6px rgba(225,82,65,0.5);
   }
 
+  /* ---- Readout: mono reserved for actual tabular values only ---------- */
+
   .readout{
-    padding: 18px 24px 22px;
+    padding: 20px 24px 22px;
   }
 
   .readout-row{
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    padding: 7px 0;
-    font-family: var(--mono);
-    font-size: 12.5px;
+    padding: 8px 0;
+    font-size: 13.5px;
   }
 
   .readout-row .k{
     color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-size: 10.5px;
+    font-weight: 500;
   }
 
   .readout-row .v{
+    font-family: var(--mono);
     color: var(--text);
     font-weight: 500;
     display: flex;
     align-items: center;
     gap: 6px;
+    font-size: 12.5px;
   }
 
   .ota-progress-track{
@@ -413,14 +448,12 @@
 
   .update-badge{
     font-family: var(--sans);
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
     color: #241804;
     background: var(--amber);
-    padding: 3px 7px;
-    border-radius: 5px;
+    padding: 3px 8px;
+    border-radius: 999px;
   }
 
   .signal-bars{
@@ -444,17 +477,15 @@
   .signal-bars span.on{ background: var(--green); }
 
   .danger-zone{
-    padding: 16px 24px 4px;
-    border-top: 1px dashed var(--border);
+    padding: 18px 24px 4px;
+    border-top: 1px solid var(--border);
   }
 
   .danger-label{
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 600;
     color: var(--muted);
-    margin-bottom: 10px;
+    margin-bottom: 12px;
   }
 
   .danger-buttons{
@@ -470,9 +501,9 @@
     color: var(--muted);
     font-family: var(--sans);
     font-weight: 600;
-    font-size: 12px;
-    padding: 10px 0;
-    border-radius: 8px;
+    font-size: 13px;
+    padding: 12px 0;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
   }
@@ -480,7 +511,7 @@
   .btn-danger:hover:not(:disabled){
     border-color: var(--amber);
     color: var(--amber);
-    background: rgba(232,163,61,0.06);
+    background: var(--amber-soft);
   }
 
   .btn-danger:disabled{
@@ -509,17 +540,17 @@
     max-width: 360px;
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 32px 28px;
+    border-radius: var(--radius-lg);
+    padding: 36px 28px;
     text-align: center;
     box-shadow: 0 30px 80px -30px rgba(0,0,0,0.6);
   }
 
   .signin-copy{
     color: var(--muted);
-    font-size: 13px;
+    font-size: 13.5px;
     line-height: 1.5;
-    margin: 0 0 20px;
+    margin: 0 0 22px;
   }
 
   #signinForm{
@@ -536,8 +567,8 @@
     color: var(--text);
     font-family: var(--sans);
     font-size: 14px;
-    padding: 12px 14px;
-    border-radius: 8px;
+    padding: 13px 15px;
+    border-radius: var(--radius-sm);
   }
 
   .signin-input:focus{
@@ -551,11 +582,11 @@
     background: var(--amber);
     color: #241804;
     border: none;
-    border-radius: 8px;
-    padding: 12px 0;
-    font-family: var(--sans);
-    font-weight: 700;
-    font-size: 14px;
+    border-radius: var(--radius-sm);
+    padding: 13px 0;
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 14.5px;
     cursor: pointer;
     margin-top: 4px;
     transition: filter 0.15s ease;
@@ -566,15 +597,14 @@
 
   .signin-error{
     color: var(--red);
-    font-size: 12px;
-    font-family: var(--mono);
+    font-size: 12.5px;
     margin: 16px 0 0;
     min-height: 14px;
   }
 
   .footer-note{
     padding: 14px 24px 20px;
-    font-size: 11px;
+    font-size: 11.5px;
     color: var(--muted);
     text-align: center;
     line-height: 1.5;
@@ -585,49 +615,46 @@
     max-width: 480px;
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     padding: 40px 24px;
     text-align: center;
-    font-family: var(--mono);
-    font-size: 13px;
+    font-size: 13.5px;
     color: var(--muted);
+    line-height: 1.6;
   }
 
   @media (max-width: 420px){
-    .status-value{ font-size: 34px; }
+    .status-value{ font-size: 36px; }
   }
 
   .logout-btn{
-  width: calc(100% - 48px);
-  margin: 0 24px 24px;
-  padding: 16px 0;
+    width: calc(100% - 48px);
+    margin: 0 24px 24px;
+    padding: 16px 0;
 
-  background: transparent;
-  border: 1px solid var(--red);
-  color: var(--red);
+    background: transparent;
+    border: 1px solid var(--red);
+    color: var(--red);
 
-  border-radius: 10px;
+    border-radius: var(--radius-sm);
 
-  font-family: var(--sans);
-  font-size: 14px;
-  font-weight: 700;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 700;
 
-  cursor: pointer;
+    cursor: pointer;
+  }
 
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.logout-btn:hover{
-  background: rgba(225,82,65,0.08);
-}
+  .logout-btn:hover{
+    background: var(--red-soft);
+  }
 </style>
 </head>
 <body>
 
   <div class="signin-gate" id="signinGate">
     <div class="signin-card">
-      <div class="app-title" style="margin-bottom: 20px; justify-content: center;"><span class="dot"></span>Furrow</div>
+      <div class="app-title" style="margin-bottom: 20px; justify-content: center;"><svg class="leaf-mark" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><g transform="translate(256,268)"><path d="M0,-175 C 100,-140 165,-55 150,35 C 138,105 75,165 0,195 C -75,165 -138,105 -150,35 C -165,-55 -100,-140 0,-175 Z" fill="#49B675"/><path d="M0,-160 C 0,-60 0,80 0,185" stroke="#3a8a5a" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.5"/><rect x="-7" y="188" width="14" height="42" rx="6" fill="#3a8a5a"/><g stroke="#E8A33D" stroke-width="7" fill="none" stroke-linecap="round"><path d="M0,-130 L0,-40"/><path d="M0,-40 L-70,-40 L-70,10"/><path d="M0,-40 L70,-40 L70,10"/><path d="M0,-40 L0,60 L-45,60 L-45,110"/><path d="M0,60 L45,60 L45,110"/></g><g fill="#E8A33D"><circle cx="0" cy="-130" r="9"/><circle cx="0" cy="-40" r="9"/><circle cx="-70" cy="-40" r="8"/><circle cx="70" cy="-40" r="8"/><circle cx="-70" cy="10" r="8"/><circle cx="70" cy="10" r="8"/><circle cx="0" cy="60" r="8"/><circle cx="-45" cy="60" r="8"/><circle cx="45" cy="60" r="8"/><circle cx="-45" cy="110" r="8"/><circle cx="45" cy="110" r="8"/></g></g></svg><span class="brand">Furrow</span></div>
       <p class="signin-copy">Sign in to view and control your devices.</p>
       <form id="signinForm">
         <input type="email" id="signinEmail" class="signin-input" placeholder="Email" autocomplete="username" required>
@@ -640,7 +667,7 @@
 
   <div class="app-content" id="appContent" style="display:none;">
 
-  <div class="app-title"><span class="dot"></span>Furrow</div>
+  <div class="app-title"><svg class="leaf-mark" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><g transform="translate(256,268)"><path d="M0,-175 C 100,-140 165,-55 150,35 C 138,105 75,165 0,195 C -75,165 -138,105 -150,35 C -165,-55 -100,-140 0,-175 Z" fill="#49B675"/><path d="M0,-160 C 0,-60 0,80 0,185" stroke="#3a8a5a" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.5"/><rect x="-7" y="188" width="14" height="42" rx="6" fill="#3a8a5a"/><g stroke="#E8A33D" stroke-width="7" fill="none" stroke-linecap="round"><path d="M0,-130 L0,-40"/><path d="M0,-40 L-70,-40 L-70,10"/><path d="M0,-40 L70,-40 L70,10"/><path d="M0,-40 L0,60 L-45,60 L-45,110"/><path d="M0,60 L45,60 L45,110"/></g><g fill="#E8A33D"><circle cx="0" cy="-130" r="9"/><circle cx="0" cy="-40" r="9"/><circle cx="-70" cy="-40" r="8"/><circle cx="70" cy="-40" r="8"/><circle cx="-70" cy="10" r="8"/><circle cx="70" cy="10" r="8"/><circle cx="0" cy="60" r="8"/><circle cx="-45" cy="60" r="8"/><circle cx="45" cy="60" r="8"/><circle cx="-45" cy="110" r="8"/><circle cx="45" cy="110" r="8"/></g></g></svg><span class="brand">Furrow</span></div>
 
   <div class="overview" id="overview">
     <div class="chip-empty">Loading devices&hellip;</div>
@@ -661,7 +688,7 @@
       </div>
     </div>
 
-    <div class="status-block">
+    <div class="status-block" id="statusBlock">
       <div class="status-label">Motor status</div>
       <div class="status-value off" id="motorStatus">&mdash;</div>
       <div class="status-sub" id="motorSub">waiting for data</div>
@@ -799,6 +826,7 @@
   const renameBtn = document.getElementById('renameBtn');
   const motorStatus = document.getElementById('motorStatus');
   const motorSub = document.getElementById('motorSub');
+  const statusBlock = document.getElementById('statusBlock');
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
   const restartBtn = document.getElementById('restartBtn');
@@ -1117,20 +1145,23 @@
     }
 
     if (pendingAction) {
-      motorStatus.textContent = pendingAction === 'start' ? 'STARTING\u2026' : 'STOPPING\u2026';
+      motorStatus.textContent = pendingAction === 'start' ? 'Starting\u2026' : 'Stopping\u2026';
       motorStatus.className = 'status-value pending';
+      if (statusBlock) statusBlock.className = 'status-block is-pending';
       motorSub.textContent = 'command sent, waiting for device';
       updateButtons(state);
       return;
     }
 
     if (state === 'RUNNING') {
-      motorStatus.textContent = 'RUNNING';
+      motorStatus.textContent = 'Running';
       motorStatus.className = 'status-value running';
+      if (statusBlock) statusBlock.className = 'status-block is-running';
       motorSub.textContent = 'pump is on';
     } else {
-      motorStatus.textContent = 'OFF';
+      motorStatus.textContent = 'Off';
       motorStatus.className = 'status-value off';
+      if (statusBlock) statusBlock.className = 'status-block';
       motorSub.textContent = 'pump is idle';
     }
 
