@@ -26,6 +26,7 @@ void CurrentSensor::begin()
     irms = 0.0f;
     readingReady = false;
     running = false;
+    consecutiveAboveRunThreshold = 0;
     nextSampleUs = micros();
 
     Logger::info(TAG, "Ready - GPIO" + String(Config::CURRENT_ADC_PIN));
@@ -76,16 +77,31 @@ void CurrentSensor::finishSample()
     if (running)
     {
         // Motor is considered OFF once measured current reaches the
-        // calibrated noise floor.
+        // calibrated noise floor. Immediate - no debounce needed here,
+        // see RUN_CONFIRM_WINDOWS's comment for why RUNNING and OFF are
+        // treated asymmetrically.
         if (irms <= STOP_THRESHOLD_A)
+        {
             running = false;
+            consecutiveAboveRunThreshold = 0;
+        }
     }
     else
     {
-        // Do not declare RUNNING for small/noise currents. The motor must
-        // draw more than 2 A before feedback changes to RUNNING.
+        // Do not declare RUNNING for small/noise currents, and do not
+        // declare it from a single noisy window either - require
+        // RUN_CONFIRM_WINDOWS consecutive windows above threshold first.
         if (irms > RUN_THRESHOLD_A)
-            running = true;
+        {
+            consecutiveAboveRunThreshold++;
+
+            if (consecutiveAboveRunThreshold >= RUN_CONFIRM_WINDOWS)
+                running = true;
+        }
+        else
+        {
+            consecutiveAboveRunThreshold = 0;
+        }
     }
 
     if (running != oldRunning)

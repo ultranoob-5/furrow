@@ -1,4 +1,21 @@
 
+## [1.2.1] - 2026-08-25
+
+- Fixed two real-hardware issues found while field-testing v1.2.0's CT
+  motor feedback:
+  - Motor stayed stuck reporting RUNNING forever after a real STOP,
+    because the OFF threshold (0.05A) sat an order of magnitude below
+    this CT's actual idle noise floor (~0.4A at this calibration's
+    gain). Raised to 0.8A.
+  - A single noisy 400ms RMS window could spike over the RUNNING
+    threshold with nothing actually drawing that current, firing a
+    false RUNNING report. Now requires 3 consecutive over-threshold
+    windows before committing to RUNNING (~1.2s added latency); OFF
+    stays immediate since there's no reason to delay reporting a real
+    stop.
+- See include/current_sensor.h for the full reasoning and the
+  real-hardware Serial logs both fixes were verified against.
+
 ## [1.2.0] - 2026-08-24
 
 - Added CT-based motor feedback: one YHDC SCT013-030 (built-in burden,

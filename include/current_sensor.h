@@ -23,6 +23,7 @@ private:
     float irms = 0.0f;
     bool readingReady = false;
     bool running = false;
+    uint8_t consecutiveAboveRunThreshold = 0;
 
     // Based on the Mottramlabs single-channel adaptation:
     // 400 samples at 1 ms gives about 20 cycles at 50 Hz.
@@ -59,8 +60,37 @@ private:
     // Motor feedback only: current above 2 A confirms the motor is running.
     // Current below the noise floor is treated as OFF. The calibrated RMS
     // value is retained for Serial/debugging, but is not published to Firebase.
+    //
+    // STOP_THRESHOLD_A was originally 0.05 A - too tight for this CT in
+    // practice. Confirmed on real hardware: after a genuine STOP (current
+    // actually dropping, not a stuck reading), it settles around 0.37-0.39A,
+    // not near-zero, and stayed there indefinitely rather than reporting
+    // OFF. This isn't a wiring fault - it's ESP32 ADC noise amplified by
+    // this CT's very sensitive calibration (ICAL = 30 A per volt, see
+    // the ICAL comment above): each single ADC count already corresponds
+    // to about 0.024 A at this gain (3.3V / 4095 counts * 30 A/V), so a
+    // completely ordinary ADC noise floor of a dozen-ish counts shows up
+    // as several tenths of an amp. 0.8 A keeps a solid margin above that
+    // observed noise ceiling while staying well clear of RUN_THRESHOLD_A,
+    // so the hysteresis gap between "definitely off" and "definitely
+    // running" stays wide either way.
     static constexpr float RUN_THRESHOLD_A = 2.0f;
-    static constexpr float STOP_THRESHOLD_A = 0.05f;
+    static constexpr float STOP_THRESHOLD_A = 0.8f;
+
+    // A single noisy RMS window can spike over RUN_THRESHOLD_A with
+    // nothing actually running - confirmed on real hardware: a false
+    // RUNNING (3.85A) fired from one window, then decayed back down
+    // over the next several (1.78, 0.84, 0.62 A) with the motor never
+    // having been on the whole time. Requiring the current to stay
+    // above threshold for several consecutive windows filters that
+    // out, at the cost of ~1.2s extra delay before a genuine start is
+    // confirmed (3 windows * 400ms/window, see SAMPLES/
+    // SAMPLE_INTERVAL_US above) - a small price for a farm pump that
+    // was never going to be checked on a sub-second timescale anyway.
+    // OFF deliberately stays immediate (no equivalent counter) - there's
+    // no reason to delay reporting a real stop, and a single low-current
+    // window is already good evidence the motor isn't drawing power.
+    static constexpr uint8_t RUN_CONFIRM_WINDOWS = 3;
 };
 
 extern CurrentSensor currentSensor;
