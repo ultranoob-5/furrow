@@ -6,36 +6,12 @@
 #include "config.h"
 #include "storage.h"
 #include "logger.h"
+#include "json_util.h"
 
 namespace
 {
     constexpr const char *TAG = "Notify";
     constexpr const char *WHAPI_URL = "https://gate.whapi.cloud/messages/text";
-
-    // Minimal JSON string escaping - only what's actually needed for
-    // our own alert message text (quotes, backslashes, newlines). Not
-    // a general-purpose JSON encoder, just enough to not break the
-    // request if a message ever contains one of these.
-    String jsonEscape(const String &value)
-    {
-        String escaped = "";
-
-        for (size_t i = 0; i < value.length(); i++)
-        {
-            char c = value.charAt(i);
-
-            switch (c)
-            {
-                case '"':  escaped += "\\\""; break;
-                case '\\': escaped += "\\\\"; break;
-                case '\n': escaped += "\\n";  break;
-                case '\r': escaped += "\\r";  break;
-                default:   escaped += c;
-            }
-        }
-
-        return escaped;
-    }
 }
 
 namespace Notify
@@ -55,7 +31,7 @@ namespace Notify
         http.addHeader("Content-Type", "application/json");
         http.addHeader("Authorization", String("Bearer ") + Config::WHAPI_TOKEN);
 
-        String body = "{\"to\":\"" + phone + "\",\"body\":\"" + jsonEscape(message) + "\"}";
+        String body = "{\"to\":\"" + JsonUtil::escape(phone) + "\",\"body\":\"" + JsonUtil::escape(message) + "\"}";
 
         int httpCode = http.POST(body);
 

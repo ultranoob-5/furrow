@@ -1,0 +1,29 @@
+{
+  "rules": {
+    "devices": {
+      ".read": true,
+      "$deviceId": {
+        "status": {
+          ".write": "auth.token.email == 'device@your-project-id.local'"
+        },
+        "motor": {
+          ".write": "auth.token.email == 'device@your-project-id.local'"
+        },
+        "ota": {
+          ".write": "auth.token.email == 'device@your-project-id.local'"
+        },
+        "command": {
+          "action": {
+            ".write": "auth.token.email == 'device@your-project-id.local' || auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+          },
+          "firmwareUrl": {
+            ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+          }
+        },
+        "displayName": {
+          ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+        }
+      }
+    }
+  }
+}

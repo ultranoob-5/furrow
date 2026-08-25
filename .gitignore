@@ -18,6 +18,14 @@ web/firebase-config.js
 # See .firebaserc.example for the template.
 .firebaserc
 
+# The device account email is baked into these rules (see SETUP.md
+# step 3) - same reasoning as .firebaserc above, not secret but
+# deployment-specific. See database.rules.example.json for the
+# template; `firebase deploy --only database` refuses to run at all
+# if this file doesn't exist yet, rather than silently deploying
+# nothing or falling back to the example's placeholder email.
+database.rules.json
+
 # Python bytecode cache from testing the power-watchdog script locally.
 __pycache__/
 

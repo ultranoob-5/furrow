@@ -5,7 +5,7 @@
 // icons) and always prefers a fresh network copy when online, falling
 // back to cache only if the network request actually fails.
 
-const CACHE_NAME = 'smc-dashboard-v1';
+const CACHE_NAME = 'furrow-dashboard-v1';
 
 const APP_SHELL = [
   './dashboard.html',

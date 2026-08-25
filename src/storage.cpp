@@ -7,6 +7,13 @@ namespace
 {
     Preferences prefs;
 
+    // "smc" (Smart Motor Controller, this project's name before the
+    // Furrow rename) is left as-is deliberately, not a missed cleanup
+    // spot: it's the actual NVS namespace key every already-flashed
+    // device's saved WiFi/owner/WhatsApp config lives under. Changing
+    // it would make prefs.begin() open an empty namespace on next
+    // boot for any existing device - a silent factory reset requiring
+    // reprovisioning, not a cosmetic rename.
     constexpr const char *NAMESPACE = "smc";
     constexpr const char *KEY_WIFI_SSID = "wifi_ssid";
     constexpr const char *KEY_WIFI_PASS = "wifi_pass";

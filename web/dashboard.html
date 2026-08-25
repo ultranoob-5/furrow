@@ -915,16 +915,40 @@
       const fw = data.status && data.status.firmware;
       const outdated = isNewerVersion(fw, latestFirmwareVersion);
 
+      // Built via DOM methods rather than an innerHTML template - the
+      // device name (deviceLabelFor) is user-provided (typed during
+      // provisioning), so it goes through textContent, never parsed as
+      // HTML. Everything else in this chip is a fixed/internal value.
       const chip = document.createElement('div');
       chip.className = 'chip' + (id === selectedId ? ' active' : '');
-      chip.innerHTML = `
-        <div class="chip-top">
-          <span class="led ${status}"></span>
-          <span class="chip-name">${deviceLabelFor(id, data)}</span>
-          ${outdated ? '<span class="update-badge" title="Update available" style="margin-left:auto;">Update</span>' : ''}
-        </div>
-        <div class="chip-state ${running ? 'running' : ''}">${running ? 'Running' : (online ? 'Idle' : STATUS_LABELS[status] || status)}</div>
-      `;
+
+      const top = document.createElement('div');
+      top.className = 'chip-top';
+
+      const led = document.createElement('span');
+      led.className = `led ${status}`;
+      top.appendChild(led);
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'chip-name';
+      nameEl.textContent = deviceLabelFor(id, data);
+      top.appendChild(nameEl);
+
+      if (outdated) {
+        const badge = document.createElement('span');
+        badge.className = 'update-badge';
+        badge.title = 'Update available';
+        badge.style.marginLeft = 'auto';
+        badge.textContent = 'Update';
+        top.appendChild(badge);
+      }
+
+      const stateEl = document.createElement('div');
+      stateEl.className = `chip-state ${running ? 'running' : ''}`;
+      stateEl.textContent = running ? 'Running' : (online ? 'Idle' : STATUS_LABELS[status] || status);
+
+      chip.appendChild(top);
+      chip.appendChild(stateEl);
       chip.addEventListener('click', () => selectDevice(id));
       overviewEl.appendChild(chip);
     });

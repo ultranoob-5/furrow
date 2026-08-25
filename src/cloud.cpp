@@ -17,6 +17,7 @@
 #include "logger.h"
 #include "storage.h"
 #include "notify.h"
+#include "json_util.h"
 
 Cloud cloud;
 
@@ -219,6 +220,11 @@ namespace
     // would just sit queued until we returned. This forces a few
     // pumps of the async client right now so progress updates actually
     // reach Firebase live, not all at once after the fact.
+    // phase/message are never escaped here, unlike name/owner above -
+    // every call site passes a fixed literal string (see the
+    // performOTA()/handlePendingCommand() calls below), never anything
+    // a person typed or a remote server sent, so there's nothing to
+    // guard against.
     void publishOtaStatus(const String &phase, int percent, const String &message = "")
     {
         String json = "{";
@@ -460,10 +466,16 @@ void Cloud::publishDevice()
     if (!app.ready())
         return;
 
+    // device.id()/firmware()/ip() are all internally generated (MAC-
+    // derived, compile-time, WiFi-library-provided) - safe as-is. name
+    // and owner are typed by a person during provisioning, so they go
+    // through JsonUtil::escape() to guard the JSON structure itself;
+    // see json_util.h for what an unescaped '"' here silently does to
+    // this write.
     String json = "{";
     json += "\"id\":\"" + device.id() + "\",";
-    json += "\"name\":\"" + device.name() + "\",";
-    json += "\"owner\":\"" + AppStorage::ownerEmail() + "\",";
+    json += "\"name\":\"" + JsonUtil::escape(device.name()) + "\",";
+    json += "\"owner\":\"" + JsonUtil::escape(AppStorage::ownerEmail()) + "\",";
     json += "\"firmware\":\"" + device.firmware() + "\",";
     json += "\"ip\":\"" + device.ip() + "\",";
     json += "\"rssi\":" + String(device.rssi()) + ",";
@@ -488,7 +500,7 @@ void Cloud::publishDevice()
     String waPhone = AppStorage::whatsAppPhone();
     if (waPhone.length() > 0)
     {
-        json += ",\"whatsappPhone\":\"" + waPhone + "\"";
+        json += ",\"whatsappPhone\":\"" + JsonUtil::escape(waPhone) + "\"";
     }
 
     // Resets the power-watchdog's dedup flag every single heartbeat

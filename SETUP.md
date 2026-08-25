@@ -61,7 +61,25 @@ Authentication → Users → **Add user** → any email-shaped string works
 
 ## 3. Set RTDB rules
 
-Realtime Database → Rules:
+```
+cp database.rules.example.json database.rules.json
+```
+
+Edit `database.rules.json` and replace every
+`device@your-project-id.local` with the real device account email you
+just created in step 2 (all four occurrences need to match). Then:
+
+```
+firebase deploy --only database
+```
+
+This is the recommended path - it keeps your rules in version control
+and `firebase deploy --only database` will refuse to run at all if
+`database.rules.json` doesn't exist yet, rather than risk deploying
+something wrong. If you'd rather paste rules directly into the
+Firebase Console instead (Realtime Database → Rules), that works too -
+just keep whichever copy you use as the source of truth, since nothing
+keeps the two in sync automatically.
 
 ```json
 {

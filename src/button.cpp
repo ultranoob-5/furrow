@@ -4,16 +4,19 @@
 #include "config.h"
 #include "relay.h"
 
-enum class ButtonState
+namespace
 {
-    IDLE,
-    START,
-    STOP
-};
+    enum class ButtonState
+    {
+        IDLE,
+        START,
+        STOP
+    };
 
-ButtonState state = ButtonState::IDLE;
+    ButtonState state = ButtonState::IDLE;
 
-unsigned long timer = 0;
+    unsigned long timer = 0;
+}
 
 void buttonInit()
 {

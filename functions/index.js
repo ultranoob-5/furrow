@@ -28,14 +28,20 @@ async function runWatchdog({ fetchDevices, sendWhatsApp, setDedupFlag, nowMs }) 
       continue; // never reported at all - nothing to compare against
     }
 
+    if (alreadyAlerted) {
+      continue; // already sent for this outage - skip immediately, before
+      // even computing ageMs, so a long-dead device costs one cheap
+      // property check per run, not a real evaluation. (Coming back
+      // online clears this on its own - see Cloud::publishDevice() in
+      // src/cloud.cpp, which republishes powerAlertSent:false on every
+      // heartbeat while the device is reporting normally, no watchdog
+      // involvement needed.)
+    }
+
     const ageMs = nowMs - lastSeen;
 
     if (ageMs < OFFLINE_THRESHOLD_MS) {
       continue; // still within normal heartbeat range
-    }
-
-    if (alreadyAlerted) {
-      continue; // already sent for this outage, don't spam every run
     }
 
     if (!phone) {
