@@ -746,6 +746,7 @@
       <div class="danger-label">Push notifications</div>
       <p style="font-size:11px;color:var(--muted);margin:0 0 10px;">Get an alert on this browser/device when this pump's motor starts or stops, or it loses power. Enabled separately per device - turning this on here doesn't affect any other device.</p>
       <button class="rename-btn" id="notifyEnableBtn" style="width:100%;">Enable notifications</button>
+      <button class="rename-btn" id="notifyTestBtn" style="width:100%; margin-top:8px; display:none;">Send test notification</button>
       <div id="notifyStatus" style="font-size:12px; margin-top:8px; opacity:0.8;"></div>
     </div>
 
@@ -919,6 +920,7 @@
   const rLastOnline = document.getElementById('rLastOnline');
   const rRssiText = document.getElementById('rRssiText');
   const notifyEnableBtn = document.getElementById('notifyEnableBtn');
+  const notifyTestBtn = document.getElementById('notifyTestBtn');
   const notifyStatus = document.getElementById('notifyStatus');
   const rRssiBars = document.getElementById('rRssiBars').children;
   const logoutBtn = document.getElementById('logoutBtn');
@@ -1516,47 +1518,99 @@
     }
   }
 
-  function markDeviceNotifyEnabled(deviceId) {
-    const ids = getNotifyEnabledDeviceIds();
-    ids.add(deviceId);
+  function setNotifyEnabledDeviceIds(ids) {
     localStorage.setItem(NOTIFY_STORAGE_KEY, JSON.stringify([...ids]));
   }
 
-  // Called from renderDetail() on every refresh (~1s) - kept cheap and
-  // idempotent so it never fights with an in-progress enable click.
-  function refreshNotifyUi() {
-    if (!notifyEnableBtn || !notifyStatus || notifyBusy) return;
+  // Called from renderDetail() on every refresh (~1s, statusOnly=false)
+  // and from enable/disable/test's own finally blocks (statusOnly=false
+  // too by default would clobber - see below) - kept cheap and
+  // idempotent so it never fights with an in-progress click.
+  //
+  // preserveStatus=true skips touching notifyStatus.textContent - only
+  // updates the button. Without this, a finally block's call here
+  // would immediately overwrite whatever specific confirmation message
+  // ("Test sent...", "Disabled...") the action had just set two lines
+  // earlier, before the person ever saw it - confirmed happening via
+  // an isolated logic test (Node, faked devicesRef/firebase/
+  // localStorage, mirroring functions/test.js's approach): every
+  // action's real status message was being replaced by this
+  // function's generic one in the same synchronous tick. The next
+  // periodic renderDetail() call a second or so later still settles
+  // back to the generic steady-state text naturally - only the
+  // immediate clobber needed fixing.
+  function refreshNotifyUi(preserveStatus) {
+    if (!notifyEnableBtn || !notifyTestBtn || !notifyStatus || notifyBusy) return;
 
     if (!('Notification' in window) || !('serviceWorker' in navigator)) {
       notifyEnableBtn.disabled = true;
-      notifyStatus.textContent = 'Not supported in this browser.';
+      notifyTestBtn.style.display = 'none';
+      if (!preserveStatus) notifyStatus.textContent = 'Not supported in this browser.';
       return;
     }
 
     if (!firebaseConfig.vapidKey) {
       notifyEnableBtn.disabled = true;
-      notifyStatus.textContent = 'Not configured on this deployment yet.';
+      notifyTestBtn.style.display = 'none';
+      if (!preserveStatus) notifyStatus.textContent = 'Not configured on this deployment yet.';
       return;
     }
 
-    // Deliberately never disables the button once "enabled" - it stays
-    // clickable forever so a person can always force a fresh
-    // registration (re-request permission, get a token, confirm it's
-    // saved) if something's ever actually wrong, without needing to
-    // clear site data. Confirmed this mattered on real hardware: an
-    // earlier version disabled it permanently after the first success,
-    // which meant there was no way to recover from a token that never
-    // actually got saved (or went stale) short of clearing storage.
     const enabled = getNotifyEnabledDeviceIds().has(selectedId);
-    notifyEnableBtn.textContent = enabled ? 'Notifications enabled (tap to refresh)' : 'Enable notifications';
-    notifyStatus.textContent = enabled ? 'This browser will get alerts for this device.' : '';
+    notifyEnableBtn.disabled = false;
+    notifyEnableBtn.textContent = enabled ? 'Disable notifications' : 'Enable notifications';
+    notifyTestBtn.style.display = enabled ? 'block' : 'none';
+    if (!preserveStatus) {
+      notifyStatus.textContent = enabled ? 'This browser will get alerts for this device.' : '';
+    }
+  }
+
+  // Shared by enable/disable/test - all three need the current push
+  // token, and it's the same token regardless of which device you
+  // happen to be viewing (the token belongs to this browser, not to
+  // any one device in our own app's sense - we just store the same
+  // token under whichever devices you've enabled it for).
+  async function getCurrentPushToken() {
+    const registration = await navigator.serviceWorker.ready;
+    const messaging = firebase.messaging();
+
+    if (!notifyMessagingReady) {
+      // FCM Web Push has two delivery paths: background (tab not
+      // focused - handled by sw.js's onBackgroundMessage) and
+      // foreground (tab open and focused - delivered straight to the
+      // page instead, bypassing the service worker entirely).
+      // Without this, a device event firing while the dashboard
+      // happens to be open and focused would silently drop.
+      //
+      // registration.showNotification(...), NOT new Notification(...):
+      // the latter throws a TypeError on nearly all mobile browsers,
+      // permanently, by design (MDN, Chromium bug 481856) - since the
+      // actual target here is a phone/PWA, that's not an edge case to
+      // special-case around.
+      // data, not notification - see functions/index.js's
+      // sendPushToDevice() for why (a notification-field message
+      // gets auto-displayed by the browser/SDK in addition to this
+      // handler's own showNotification() call, producing a
+      // duplicate - confirmed on real hardware).
+      messaging.onMessage((payload) => {
+        const title = (payload.data && payload.data.title) || 'Furrow';
+        const body = (payload.data && payload.data.body) || '';
+        registration.showNotification(title, { body, icon: './icons/icon-192.png' });
+      });
+      notifyMessagingReady = true;
+    }
+
+    return messaging.getToken({
+      vapidKey: firebaseConfig.vapidKey,
+      serviceWorkerRegistration: registration
+    });
   }
 
   async function enableNotificationsForSelectedDevice() {
     if (!selectedId || notifyBusy) return;
 
     notifyBusy = true;
-    notifyEnableBtn.disabled = true; // only for the duration of this attempt
+    notifyEnableBtn.disabled = true;
     notifyStatus.textContent = 'Requesting permission\u2026';
 
     try {
@@ -1566,51 +1620,17 @@
         return;
       }
 
-      const registration = await navigator.serviceWorker.ready;
-      const messaging = firebase.messaging();
-
-      if (!notifyMessagingReady) {
-        // FCM Web Push has two delivery paths: background (tab not
-        // focused - handled by sw.js's onBackgroundMessage) and
-        // foreground (tab open and focused - delivered straight to the
-        // page instead, bypassing the service worker entirely).
-        // Without this, a device event firing while the dashboard
-        // happens to be open and focused would silently drop.
-        //
-        // registration.showNotification(...), NOT new Notification(...):
-        // the latter throws a TypeError on nearly all mobile browsers,
-        // permanently, by design (MDN, Chromium bug 481856) - since the
-        // actual target here is a phone/PWA, that's not an edge case to
-        // special-case around.
-        // data, not notification - see functions/index.js's
-        // sendPushToDevice() for why (a notification-field message
-        // gets auto-displayed by the browser/SDK in addition to this
-        // handler's own showNotification() call, producing a
-        // duplicate - confirmed on real hardware).
-        messaging.onMessage((payload) => {
-          const title = (payload.data && payload.data.title) || 'Furrow';
-          const body = (payload.data && payload.data.body) || '';
-          registration.showNotification(title, { body, icon: './icons/icon-192.png' });
-        });
-        notifyMessagingReady = true;
-      }
-
-      const token = await messaging.getToken({
-        vapidKey: firebaseConfig.vapidKey,
-        serviceWorkerRegistration: registration
-      });
+      const token = await getCurrentPushToken();
 
       // Multiple browsers/people can each enable notifications for the
       // same device - push(), not set(), so this adds a token rather
-      // than overwriting anyone else's. But since this button can now
-      // be clicked repeatedly (see refreshNotifyUi()'s comment), check
-      // for the exact same token first - otherwise clicking "refresh"
-      // when the token hasn't actually changed would store a second
-      // entry holding an identical value, and sendPushToDevice() would
-      // then send to both, producing the exact duplicate-notification
-      // bug already fixed once (data-vs-notification payload commit) -
-      // this time from two entries pointing at the same token, not
-      // two delivery paths.
+      // than overwriting anyone else's. Check for the exact same token
+      // first, so clicking Enable again after it's already registered
+      // (e.g. to re-verify) doesn't store a second identical entry -
+      // sendPushToDevice() would then send to both, producing the
+      // exact duplicate-notification bug fixed once already (that time
+      // from a notification-vs-data payload issue, this time it'd be
+      // from two entries pointing at the same token).
       const existingSnap = await devicesRef.child(selectedId).child('fcmTokens').once('value');
       const existingTokens = Object.values(existingSnap.val() || {});
       const alreadyStored = existingTokens.includes(token);
@@ -1619,7 +1639,10 @@
         await devicesRef.child(selectedId).child('fcmTokens').push(token);
       }
 
-      markDeviceNotifyEnabled(selectedId);
+      const ids = getNotifyEnabledDeviceIds();
+      ids.add(selectedId);
+      setNotifyEnabledDeviceIds(ids);
+
       notifyStatus.textContent = alreadyStored
         ? 'Confirmed - this browser is already registered for this device.'
         : 'Enabled - this browser will now get alerts for this device.';
@@ -1628,12 +1651,93 @@
       notifyStatus.textContent = 'Failed: ' + err.message;
     } finally {
       notifyBusy = false;
-      refreshNotifyUi();
+      refreshNotifyUi(true);
+    }
+  }
+
+  async function disableNotificationsForSelectedDevice() {
+    if (!selectedId || notifyBusy) return;
+
+    notifyBusy = true;
+    notifyEnableBtn.disabled = true;
+    notifyStatus.textContent = 'Disabling\u2026';
+
+    try {
+      // Only removes this browser's own token entry for this specific
+      // device - doesn't touch the browser's underlying notification
+      // permission (staying granted is correct, in case you re-enable
+      // this or another device later) and doesn't touch any other
+      // browser/person's registration for the same device.
+      const token = await getCurrentPushToken();
+
+      const snap = await devicesRef.child(selectedId).child('fcmTokens').once('value');
+      const tokensObj = snap.val() || {};
+      const updates = {};
+      for (const [pushId, storedToken] of Object.entries(tokensObj)) {
+        if (storedToken === token) updates[pushId] = null;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await devicesRef.child(selectedId).child('fcmTokens').update(updates);
+      }
+
+      const ids = getNotifyEnabledDeviceIds();
+      ids.delete(selectedId);
+      setNotifyEnabledDeviceIds(ids);
+
+      notifyStatus.textContent = 'Disabled - this browser will no longer get alerts for this device.';
+    } catch (err) {
+      console.error('Disable notifications failed', err);
+      notifyStatus.textContent = 'Failed: ' + err.message;
+    } finally {
+      notifyBusy = false;
+      refreshNotifyUi(true);
+    }
+  }
+
+  // Lets someone confirm push actually reaches this browser right
+  // after enabling, instead of having to wait for a real motor toggle
+  // or outage - the whole reason this exists is that "enabled" alone
+  // doesn't prove delivery actually works.
+  async function sendTestNotificationForSelectedDevice() {
+    if (!selectedId || notifyBusy) return;
+
+    notifyBusy = true;
+    notifyTestBtn.disabled = true;
+    notifyStatus.textContent = 'Sending test notification\u2026';
+
+    try {
+      const token = await getCurrentPushToken();
+      const sendTestNotification = firebase.functions().httpsCallable('sendTestNotification');
+      const result = await sendTestNotification({
+        token,
+        title: 'Furrow test',
+        body: 'If you see this, push notifications work.'
+      });
+
+      notifyStatus.textContent = 'Test sent (id: ' + result.data.messageId + '). Check your notifications.';
+    } catch (err) {
+      console.error('Test send failed', err);
+      notifyStatus.textContent = 'Test failed: ' + err.message;
+    } finally {
+      notifyBusy = false;
+      refreshNotifyUi(true);
     }
   }
 
   if (notifyEnableBtn) {
-    notifyEnableBtn.addEventListener('click', enableNotificationsForSelectedDevice);
+    notifyEnableBtn.addEventListener('click', () => {
+      const enabled = getNotifyEnabledDeviceIds().has(selectedId);
+      if (enabled) {
+        disableNotificationsForSelectedDevice();
+      } else {
+        enableNotificationsForSelectedDevice();
+      }
+    });
+  }
+
+  if (notifyTestBtn) {
+    notifyTestBtn.addEventListener('click', sendTestNotificationForSelectedDevice);
   }
 </script>
 
