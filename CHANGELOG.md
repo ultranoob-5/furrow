@@ -1,4 +1,74 @@
 
+## [1.3.4] - 2026-08-26
+
+Found via detailed external review, not this project's own testing -
+verified each claim against the actual code (via simulation, since
+this sandbox has no ESP32 hardware) before acting on it.
+
+- **The real bug**: CurrentSensor::update() takes at most one ADC
+  sample per call, and its 1ms rate-limiting (SAMPLE_INTERVAL_US) only
+  does anything if update() is called faster than that. It's called
+  once per main.cpp loop() iteration, which - dominated by the
+  previous delay(10) plus everything else loop() does - was cycling
+  roughly every ~12ms, not ~1ms. Confirmed by simulating the exact
+  scheduling logic: a "400 samples @ 1ms = 400ms" window was actually
+  taking ~4.8 real seconds (12x slower), and RUN_CONFIRM_WINDOWS's
+  documented "~1.2s to confirm a start" was really more like 14+
+  seconds. This had been sitting underneath essentially all of the
+  earlier CT threshold/debounce tuning work without ever being
+  identified as the actual cause of anything.
+- Fix: reduced loop()'s delay(10) to delay(1) - still yields to
+  FreeRTOS (unlike removing it entirely, which risks starving the
+  WiFi stack or the watchdog), while letting loop() cycle often enough
+  for CurrentSensor's existing 1ms rate-limit to actually become the
+  binding constraint again. Doesn't guarantee hitting the intended
+  rate exactly - cloud.loop() especially can still occasionally take
+  longer than 1ms during real network I/O - so added an unconditional
+  per-window timing log (CurrentSensor, tag "Current": "Window: Xms
+  (intended 400ms)") so what's actually being achieved on real
+  hardware is directly observable, not assumed. This is the one part
+  of this release that can only really be verified by watching Serial
+  output on the real device - recommend checking that log after
+  flashing.
+- Updated the SAMPLES and RUN_CONFIRM_WINDOWS comments in
+  current_sensor.h to stop stating a fixed timing guarantee that
+  wasn't actually being met, pointing to the new log instead.
+
+- **Related but separate bug**: setup() published motor state to
+  Firebase (cloud.publishMotor()) before the first real CT reading
+  existed, meaning a motor that's actually running across a reboot
+  (most plausible after a deliberate remote restart or firmware
+  update) showed "OFF" in Firebase until the first real reading
+  corrected it - a window whose real duration was however long the
+  bug above was making it, up to several seconds or more. The
+  baselineEstablished fix in v1.3.3 only stopped this from being
+  misclassified as a "manual start" once corrected; it didn't stop
+  the wrong initial value from being published at all. Fixed by
+  removing publishMotor() from setup() entirely and gating every
+  other call site (Cloud::loop()'s heartbeat, handlePendingCommand()'s
+  post-command republish) behind motor.hasReading() - nothing
+  publishes a motor-state guess before a real reading exists anywhere
+  in the firmware now. The first real state publishes immediately
+  once known (from loop()'s baseline-establishment point), not
+  whenever the next heartbeat happens to land.
+
+Also reviewed and deliberately left unchanged, since both the
+external review and this project's own prior notes independently
+concluded the same thing:
+- OFF detection staying single-window/undebounced (current_sensor.h) -
+  a real tradeoff already made deliberately for fast stop reporting,
+  worth revisiting only if real motor behavior later shows occasional
+  false OFF readings.
+- Motor::start()'s "already RUNNING per CT, skip" guard - the
+  asymmetric counterpart to the STOP guard removed in v1.3.3, flagged
+  there as deliberately deferred until CT timing reliability (the
+  actual subject of this release) was solid enough to trust.
+- The R6/ICAL calibration gap (current_sensor.h) - already documented,
+  doesn't affect the ON/OFF threshold logic (empirically calibrated
+  against real hardware behavior, not the theoretical ICAL value), so
+  not worth resolving unless real energy-monitoring accuracy is
+  needed later.
+
 ## [1.3.3] - 2026-08-26
 
 Fixes found during a full line-by-line review of the entire codebase,

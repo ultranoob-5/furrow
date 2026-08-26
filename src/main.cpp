@@ -120,7 +120,15 @@ void setup()
     Serial.println("System Ready");
 
     cloud.publishDevice();
-    cloud.publishMotor();
+
+    // publishMotor() is deliberately NOT called here - motor.isRunning()
+    // right now is still just CurrentSensor's default (not-running),
+    // since no real reading exists yet. Publishing that would tell
+    // Firebase "OFF" even if the motor is genuinely running across this
+    // reboot, wrong for however long the first real reading actually
+    // takes (see current_sensor.h's SAMPLES comment - no longer a fixed
+    // ~400ms guarantee). loop() publishes the real state itself, the
+    // moment baselineEstablished actually becomes true.
 
     Notify::sendWhatsApp("\u2705 " + device.name() + " is online (firmware " + device.firmware() + ")");
 }
@@ -161,6 +169,16 @@ void loop()
         {
             previousMotorRunning = runningNow;
             baselineEstablished = true;
+
+            // The one and only place the FIRST motor-state publish
+            // happens - setup() deliberately skips it (see its own
+            // comment), and Cloud::loop()'s heartbeat/handlePendingCommand's
+            // republish are both gated behind motor.hasReading() too
+            // (src/cloud.cpp), so nothing else can publish a guess
+            // before this point either. No startedVia tag - this
+            // isn't a transition, it's the first time the real state
+            // is known at all.
+            cloud.publishMotor();
         }
     }
     else if (runningNow != previousMotorRunning)
@@ -183,5 +201,25 @@ void loop()
 
     cloud.loop();
 
-    delay(10);
+    // Was delay(10) - reduced specifically because of a real, confirmed
+    // problem: CurrentSensor::update() takes at most one ADC sample per
+    // call, and the 1ms rate-limiting inside it (SAMPLE_INTERVAL_US) only
+    // works if update() is actually called faster than that. At a
+    // delay(10)-dominated ~12ms loop cadence, it wasn't - every call took
+    // exactly one sample regardless of the 1ms target, so a "400 samples
+    // @ 1ms = 400ms" window actually took roughly 400 * 12ms = ~4.8s (a
+    // 12x slowdown), and RUN_CONFIRM_WINDOWS's "3 windows = ~1.2s" became
+    // more like 14+ seconds in reality. Confirmed by simulating the exact
+    // scheduling logic, not just inspected. delay(1) still yields to
+    // FreeRTOS (unlike removing the delay entirely, which risks starving
+    // the WiFi stack or the watchdog), while letting loop() cycle enough
+    // times per millisecond for CurrentSensor's existing 1ms rate-limit
+    // to actually become the binding constraint again, rather than the
+    // outer loop cadence being the real bottleneck it was quietly acting
+    // as. Doesn't guarantee hitting the intended rate exactly - the rest
+    // of loop() (cloud.loop() especially, during real network I/O) can
+    // still occasionally take longer than 1ms - see current_sensor.cpp's
+    // window-duration log for what's actually being achieved on real
+    // hardware, which this sandbox has no way to measure directly.
+    delay(1);
 }

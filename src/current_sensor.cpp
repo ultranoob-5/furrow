@@ -44,6 +44,9 @@ void CurrentSensor::update()
     // the sampling interval close to 1 ms even when loop() has jitter.
     nextSampleUs += SAMPLE_INTERVAL_US;
 
+    if (samplesTaken == 0)
+        windowStartUs = now; // first sample of a new window - mark its real start time
+
     const int sampleI = analogRead(Config::CURRENT_ADC_PIN);
 
     // Same adaptive DC-offset filter used by the Mottramlabs firmware.
@@ -60,6 +63,16 @@ void CurrentSensor::update()
 
 void CurrentSensor::finishSample()
 {
+    // How long this window actually took in real wall-clock time -
+    // logged unconditionally (not just when it's surprising), so real
+    // hardware behavior is directly observable rather than assumed.
+    // Intended is 400ms (SAMPLES * SAMPLE_INTERVAL_US); if this is
+    // printing something meaningfully larger, main.cpp's loop() isn't
+    // cycling fast enough to keep up with the 1ms sampling target -
+    // see SAMPLES's comment in current_sensor.h.
+    uint32_t windowDurationUs = micros() - windowStartUs;
+    Logger::info(TAG, "Window: " + String(windowDurationUs / 1000) + "ms (intended 400ms)");
+
     // Mottramlabs-style RMS conversion:
     //   ADC RMS counts -> volts -> amps using the CT calibration.
     const double adcRms = sqrt(sumI / SAMPLES);

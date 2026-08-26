@@ -20,13 +20,34 @@ private:
     double sumI = 0.0;
     double offsetI = 2048.0;
 
+    // Tracks how long a 400-sample window actually takes in real
+    // wall-clock time, logged once per window in finishSample() - not
+    // used for any threshold/state logic, purely observability. The
+    // scheduling here only takes one sample per update() call
+    // regardless of elapsed time, so how close this gets to the
+    // intended 400ms depends entirely on how often update() itself
+    // gets called (main.cpp's loop() cadence) - this is how to check
+    // what's actually being achieved on real hardware, rather than
+    // assuming the intended rate is what's really happening.
+    uint32_t windowStartUs = 0;
+
     float irms = 0.0f;
     bool readingReady = false;
     bool running = false;
     uint8_t consecutiveAboveRunThreshold = 0;
 
     // Based on the Mottramlabs single-channel adaptation:
-    // 400 samples at 1 ms gives about 20 cycles at 50 Hz.
+    // 400 samples at 1 ms gives about 20 cycles at 50 Hz - that's the
+    // *intended* rate, achieved only if update() is actually called at
+    // least that often. It's called once per main.cpp loop() iteration,
+    // which takes at most one sample regardless of how much real time
+    // has passed since the last one - so how close a window actually
+    // gets to 400ms depends entirely on loop()'s own cadence, not
+    // anything in this file. Confirmed this was a real problem, not
+    // theoretical: at loop()'s previous delay(10)-dominated cadence, a
+    // window was taking closer to 4-5 real seconds, not 400ms - see
+    // main.cpp's delay(1) comment for the fix and windowStartUs's log
+    // for how to check what's actually being achieved on real hardware.
     static constexpr uint16_t SAMPLES = 400;
     static constexpr uint32_t SAMPLE_INTERVAL_US = 1000;
 
@@ -83,10 +104,13 @@ private:
     // over the next several (1.78, 0.84, 0.62 A) with the motor never
     // having been on the whole time. Requiring the current to stay
     // above threshold for several consecutive windows filters that
-    // out, at the cost of ~1.2s extra delay before a genuine start is
-    // confirmed (3 windows * 400ms/window, see SAMPLES/
-    // SAMPLE_INTERVAL_US above) - a small price for a farm pump that
-    // was never going to be checked on a sub-second timescale anyway.
+    // out, at some added delay before a genuine start is confirmed -
+    // 3 windows, whatever one window's real duration actually is (see
+    // SAMPLES's comment above - not a fixed ~1.2s guarantee, since
+    // that depends on main.cpp's loop() cadence; check
+    // windowStartUs's log for the real number on real hardware). A
+    // small price either way for a farm pump that was never going to
+    // be checked on a sub-second timescale anyway.
     // OFF deliberately stays immediate (no equivalent counter) - there's
     // no reason to delay reporting a real stop, and a single low-current
     // window is already good evidence the motor isn't drawing power.

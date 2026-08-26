@@ -220,7 +220,15 @@ namespace
 
         pendingCommand = "";
 
-        cloud.publishMotor();
+        // Gated the same way as the heartbeat below and main.cpp's
+        // first-ever publish - never publish a motor-state guess
+        // before a real CT reading exists. A remote command arriving
+        // in the first few seconds after boot (plausible, if narrow -
+        // WiFi connect + Firebase auth + stream setup all take some
+        // time too) could otherwise still hit this same "OFF" default
+        // even after the setup()/heartbeat paths were fixed for it.
+        if (motor.hasReading())
+            cloud.publishMotor();
 
         // Acknowledge / clear the command so it isn't re-applied on the
         // next stream reconnect.
@@ -520,7 +528,17 @@ void Cloud::loop()
         lastHeartbeat = millis();
 
         publishDevice();
-        publishMotor();
+
+        // Same guard as main.cpp's first-ever publish and
+        // handlePendingCommand()'s republish above - if the very
+        // first heartbeat happens to land before the first real CT
+        // reading (plausible if the reading is still slow - see
+        // current_sensor.h), skip motor state this one time rather
+        // than publishing CurrentSensor's not-running default as
+        // fact. Once hasReading() is true this is never false again
+        // for the rest of this boot.
+        if (motor.hasReading())
+            publishMotor();
     }
 }
 

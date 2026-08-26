@@ -218,11 +218,15 @@ module.exports.runWatchdog = runWatchdog; // exported for test.js
 // stopping on its own - all of them, not just remote commands, since
 // this is driven by real current sensing, not the last command sent).
 //
-// Skips the very first write (event.data.before doesn't exist) so
-// provisioning/first-boot doesn't fire a spurious alert, and skips
-// no-op writes where the value didn't actually change (a republish of
-// the same state, which shouldn't happen in practice but costs
-// nothing to guard against).
+// Skips no-op writes where the value didn't actually change (a
+// republish of the same state, which shouldn't happen in practice but
+// costs nothing to guard against). Doesn't need a separate "is this
+// the very first write" check: before is null for a path that never
+// existed, which already differs from any real "RUNNING"/"OFF" value,
+// so a brand-new device's first-ever heartbeat naturally passes this
+// check rather than being skipped by it - harmless in practice, since
+// nobody has push notifications enabled yet for a device that was
+// just provisioned seconds ago.
 exports.onMotorStateChanged = onValueWritten(
   { ref: "/devices/{deviceId}/motor/state", region: RTDB_REGION },
   async (event) => {
