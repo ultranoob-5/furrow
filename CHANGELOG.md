@@ -1,4 +1,27 @@
 
+## [1.3.2] - 2026-08-26
+
+- Fixed a real bug in Motor::stop(): an early-return guard
+  (`if (state == MotorState::OFF) return;`) could silently discard a
+  genuine STOP command whenever the CT-sensed state happened to read
+  OFF at that moment - including a false reading, since the OFF-
+  detection path is deliberately immediate/undebounced (unlike
+  RUNNING, which requires 3 consecutive confirming windows) and a
+  single noisy RMS window is enough to trigger it. The comment right
+  above this code already stated the correct intended behavior ("the
+  physical starter remains the authority for stopping the motor") -
+  the guard clause just didn't actually implement what the comment
+  described. Removed it: STOP is now always sent unconditionally,
+  regardless of what the last known state was. Pulsing an
+  already-stopped motor's stop button is a harmless no-op, the same
+  as a person pressing Stop twice.
+- Motor::start() has an analogous guard (skips re-sending START if
+  state already reads RUNNING) with the same theoretical risk, though
+  lower in practice since RUNNING requires 3 confirming windows before
+  it's ever reported - left as-is for now, flagged for a separate
+  decision rather than changed unprompted alongside an unrelated
+  report.
+
 ## [1.3.1] - 2026-08-26
 
 - Motor-started push notifications now say whether it was a remote

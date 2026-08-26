@@ -35,11 +35,18 @@ void Motor::start()
 
 void Motor::stop()
 {
-    // Send STOP even if the last measured state is uncertain; the physical
-    // starter remains the authority for stopping the motor.
-    if (state == MotorState::OFF)
-        return;
-
+    // Always send STOP, even if the last CT-sensed state already reads
+    // OFF - that reading can be wrong (a transient noise dip in a
+    // single RMS window is enough, since the OFF-detection path is
+    // deliberately immediate/undebounced - see current_sensor.h's
+    // comment on why RUNNING requires 3 consecutive windows but OFF
+    // doesn't), and a stale or simply incorrect OFF reading must never
+    // be able to silently swallow an explicit STOP request. The
+    // physical starter remains the authority for whether the motor
+    // actually stops; this only ever pulses the same button a person
+    // would press by hand, and doing that on an already-stopped
+    // machine is a complete, harmless no-op - exactly like a human
+    // pressing Stop twice.
     pressStopButton();
 
     Logger::info(TAG, "Stop commanded - waiting for current feedback");
