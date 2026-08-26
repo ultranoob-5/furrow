@@ -535,6 +535,27 @@
     padding: 20px;
   }
 
+  /* Shown by default, before Firebase's async session check resolves
+     for the first time - avoids ever flashing the sign-in form for an
+     already-logged-in visit (the common case) or flashing the
+     dashboard's shell for a logged-out one. Whichever the real
+     destination turns out to be, this is hidden first and only that
+     one destination appears - never a flash of the wrong one. */
+  .auth-loading{
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .auth-loading .leaf-mark{
+    width: 48px;
+    height: 48px;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+
   .signin-card{
     width: 100%;
     max-width: 360px;
@@ -652,7 +673,18 @@
 </head>
 <body>
 
-  <div class="signin-gate" id="signinGate">
+  <div class="auth-loading" id="authLoading">
+    <div id="authLoadingSpinner">
+      <svg class="leaf-mark" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><g transform="translate(256,268)"><path d="M0,-175 C 100,-140 165,-55 150,35 C 138,105 75,165 0,195 C -75,165 -138,105 -150,35 C -165,-55 -100,-140 0,-175 Z" fill="#49B675"/><path d="M0,-160 C 0,-60 0,80 0,185" stroke="#3a8a5a" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.5"/><rect x="-7" y="188" width="14" height="42" rx="6" fill="#3a8a5a"/><g stroke="#E8A33D" stroke-width="7" fill="none" stroke-linecap="round"><path d="M0,-130 L0,-40"/><path d="M0,-40 L-70,-40 L-70,10"/><path d="M0,-40 L70,-40 L70,10"/><path d="M0,-40 L0,60 L-45,60 L-45,110"/><path d="M0,60 L45,60 L45,110"/></g><g fill="#E8A33D"><circle cx="0" cy="-130" r="9"/><circle cx="0" cy="-40" r="9"/><circle cx="-70" cy="-40" r="8"/><circle cx="70" cy="-40" r="8"/><circle cx="-70" cy="10" r="8"/><circle cx="70" cy="10" r="8"/><circle cx="0" cy="60" r="8"/><circle cx="-45" cy="60" r="8"/><circle cx="45" cy="60" r="8"/><circle cx="-45" cy="110" r="8"/><circle cx="45" cy="110" r="8"/></g></g></svg>
+    </div>
+    <div id="authLoadingError" style="display:none; text-align:center; padding: 0 28px; max-width: 320px;">
+      <svg class="leaf-mark" style="width:44px;height:44px;opacity:0.6;" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><g transform="translate(256,268)"><path d="M0,-175 C 100,-140 165,-55 150,35 C 138,105 75,165 0,195 C -75,165 -138,105 -150,35 C -165,-55 -100,-140 0,-175 Z" fill="#49B675"/></g></svg>
+      <p style="color: var(--muted); font-size: 13.5px; margin: 16px 0 20px; line-height:1.5;">Couldn&rsquo;t connect. Check your internet connection and try again.</p>
+      <button onclick="location.reload()" style="appearance:none; background: var(--amber); color:#241804; border:none; border-radius: var(--radius-sm); padding: 11px 24px; font-family: var(--display); font-weight:800; font-size:13.5px; cursor:pointer;">Reload</button>
+    </div>
+  </div>
+
+  <div class="signin-gate" id="signinGate" style="display:none;">
     <div class="signin-card">
       <div class="app-title" style="margin-bottom: 20px; justify-content: center;"><svg class="leaf-mark" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><g transform="translate(256,268)"><path d="M0,-175 C 100,-140 165,-55 150,35 C 138,105 75,165 0,195 C -75,165 -138,105 -150,35 C -165,-55 -100,-140 0,-175 Z" fill="#49B675"/><path d="M0,-160 C 0,-60 0,80 0,185" stroke="#3a8a5a" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.5"/><rect x="-7" y="188" width="14" height="42" rx="6" fill="#3a8a5a"/><g stroke="#E8A33D" stroke-width="7" fill="none" stroke-linecap="round"><path d="M0,-130 L0,-40"/><path d="M0,-40 L-70,-40 L-70,10"/><path d="M0,-40 L70,-40 L70,10"/><path d="M0,-40 L0,60 L-45,60 L-45,110"/><path d="M0,60 L45,60 L45,110"/></g><g fill="#E8A33D"><circle cx="0" cy="-130" r="9"/><circle cx="0" cy="-40" r="9"/><circle cx="-70" cy="-40" r="8"/><circle cx="70" cy="-40" r="8"/><circle cx="-70" cy="10" r="8"/><circle cx="70" cy="10" r="8"/><circle cx="0" cy="60" r="8"/><circle cx="-45" cy="60" r="8"/><circle cx="45" cy="60" r="8"/><circle cx="-45" cy="110" r="8"/><circle cx="45" cy="110" r="8"/></g></g></svg><span class="brand">Furrow</span></div>
       <p class="signin-copy">Sign in to view and control your devices.</p>
@@ -765,17 +797,58 @@
   // ---- Configuration -------------------------------------------------
   // firebaseConfig is defined by the loaded firebase-config.js script
 
+  // firebase-config.js and the 5 firebase-*.js CDN scripts (see the
+  // <head>) are all separate network requests, each able to fail
+  // independently. Confirmed both actually happen: firebase-config.js
+  // hit a transient 503 from Firebase Hosting on real hardware
+  // (nothing wrong with the deploy), and separately, testing this fix
+  // itself surfaced the SDK scripts failing to load producing the
+  // identical broken outcome via a different missing global (firebase
+  // itself, rather than firebaseConfig). Either one previously left
+  // firebase.initializeApp() throwing uncaught, and every line after
+  // it never ran - including the onAuthStateChanged handler that's
+  // supposed to hide the loading splash added for the
+  // flash-of-sign-in-screen fix. Net effect: stuck on the spinner
+  // forever with zero indication anything was wrong, worse than the
+  // sign-in form that at least used to appear before that fix existed.
+  // These are the two failure modes actually confirmed to happen, so
+  // they're what's guarded here - not a general defensive rewrite of
+  // the whole bootstrap.
+  function showAuthError(){
+    const spinner = document.getElementById('authLoadingSpinner');
+    const errorBox = document.getElementById('authLoadingError');
+    if (spinner) spinner.style.display = 'none';
+    if (errorBox) errorBox.style.display = 'block';
+  }
+
+  if (typeof firebase === 'undefined' || typeof firebaseConfig === 'undefined') {
+    console.error('Firebase failed to load - check network requests for the firebase-*.js CDN scripts and firebase-config.js');
+    showAuthError();
+    throw new Error('Firebase SDK or config unavailable - stopping before firebase.initializeApp()');
+  }
+
   // ---- Firebase init ---------------------------------------------------
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
   const db = firebase.database();
   const devicesRef = db.ref('devices');
 
+  // Safety net for any other reason onAuthStateChanged might never
+  // fire (e.g. reaching Firebase Auth's backend specifically fails,
+  // even though the config itself loaded fine) - same friendly error
+  // instead of an indefinite spinner. Cleared as soon as auth state
+  // actually resolves, whichever way.
+  let authResolved = false;
+  setTimeout(() => {
+    if (!authResolved) showAuthError();
+  }, 10000);
+
   let currentUserEmail = null;
 
   // ---- Sign-in gate --------------------------------------------------
   const signinGate = document.getElementById('signinGate');
   const appContent = document.getElementById('appContent');
+  const authLoading = document.getElementById('authLoading');
   const signinForm = document.getElementById('signinForm');
   const signinEmail = document.getElementById('signinEmail');
   const signinPassword = document.getElementById('signinPassword');
@@ -800,6 +873,9 @@
   });
 
   auth.onAuthStateChanged((user) => {
+    authResolved = true;
+    authLoading.style.display = 'none';
+
     if (!user) {
       currentUserEmail = null;
       signinGate.style.display = 'flex';
