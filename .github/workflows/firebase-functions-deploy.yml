@@ -1,0 +1,75 @@
+name: Deploy Cloud Functions to Firebase
+
+# Deploys functions/ to Firebase Cloud Functions whenever it actually
+# changes on main - mirrors firebase-hosting-deploy.yml's pattern
+# exactly (same secrets, same service-account auth, same "call the
+# real CLI directly" approach), just for functions instead of hosting.
+# Independent of the firmware release process
+# (.github/workflows/build-and-release.yml, triggered by version tags)
+# and of the hosting deploy - each of the three deploys the moment its
+# own part of the repo actually changes, none waiting on the others.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - 'firebase.json'
+      - 'database.rules.example.json'
+
+# This job only checks out code (read) and deploys via its own
+# separate Firebase service-account credential (FIREBASE_SERVICE_ACCOUNT,
+# written to a temp file below) - it never uses GITHUB_TOKEN for
+# anything else (no commits, no PR comments, no releases), so it
+# doesn't need any of GITHUB_TOKEN's default write permissions.
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        working-directory: functions
+        # npm ci, not npm install - reproducible, exact-lockfile install,
+        # the right choice for CI (matches what a real deploy needs,
+        # unlike hosting which has no build step of its own at all).
+        run: npm ci
+
+      - name: Run tests
+        working-directory: functions
+        # Fails the whole job (and skips the deploy step below) if
+        # test.js's assertions don't pass - the same check you'd
+        # normally run by hand before deploying, now enforced
+        # automatically rather than relying on remembering to run it.
+        run: node test.js
+
+      - name: Generate .firebaserc from repository secret
+        run: |
+          cat > .firebaserc << RCEOF
+          {
+            "projects": {
+              "default": "${{ secrets.FIREBASE_PROJECT_ID }}"
+            }
+          }
+          RCEOF
+
+      - name: Write service account credentials
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$RUNNER_TEMP/firebase-service-account.json"
+
+      - name: firebase deploy
+        working-directory: .
+        run: npx firebase-tools deploy --only functions --project "${{ secrets.FIREBASE_PROJECT_ID }}"
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+        # Same non-interactive service-account auth mechanism as the
+        # hosting workflow - see its own comment on this env var for
+        # the full explanation. WHAPI_TOKEN (the Cloud Functions
+        # secret powerWatchdog reads via defineSecret()) needs no
+        # handling here at all - it already lives in Google Secret
+        # Manager from the original manual setup (SETUP.md step 9),
+        # and Firebase's own deploy process reads it directly from
+        # there, completely decoupled from this CI workflow or any
+        # GitHub secret.
