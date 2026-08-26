@@ -16,6 +16,12 @@ name: Power-Loss Watchdog (manual diagnostic)
 on:
   workflow_dispatch: # manual only - trigger from the Actions tab
 
+# Only ever checks out code and calls out to Firebase/Whapi with its
+# own separate secrets - never writes to the repo itself, so it
+# doesn't need any of GITHUB_TOKEN's default write permissions.
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest

@@ -23,6 +23,14 @@ on:
       - 'web/**'
       - 'firebase.json'
 
+# This job only checks out code (read) and deploys via its own
+# separate Firebase service-account credential (FIREBASE_SERVICE_ACCOUNT,
+# written to a temp file above) - it never uses GITHUB_TOKEN for
+# anything else (no commits, no PR comments, no releases), so it
+# doesn't need any of GITHUB_TOKEN's default write permissions.
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
