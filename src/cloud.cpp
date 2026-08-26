@@ -472,22 +472,29 @@ void Cloud::publishDevice()
     // through JsonUtil::escape() to guard the JSON structure itself;
     // see json_util.h for what an unescaped '"' here silently does to
     // this write.
-    String json = "{";
-    json += "\"id\":\"" + device.id() + "\",";
-    json += "\"name\":\"" + JsonUtil::escape(device.name()) + "\",";
-    json += "\"owner\":\"" + JsonUtil::escape(AppStorage::ownerEmail()) + "\",";
-    json += "\"firmware\":\"" + device.firmware() + "\",";
-    json += "\"ip\":\"" + device.ip() + "\",";
-    json += "\"rssi\":" + String(device.rssi()) + ",";
-    json += "\"online\":" + String(device.online() ? "true" : "false") + ",";
-    json += "\"uptime\":" + String(device.uptime()) + ",";
-    // {".sv":"timestamp"} is a Firebase server-value placeholder - the
-    // server fills in its own current time on write, not whatever the
-    // ESP32 thinks the time is (it has no RTC/NTP). This is what makes
-    // "last seen" a real, authoritative fact in the database itself,
-    // rather than something only true if some browser happened to be
-    // open and watching at the right moment to observe it.
-    json += "\"lastSeen\":{\".sv\":\"timestamp\"}";
+    //
+    // Fixed char buffers + snprintf instead of String concatenation -
+    // this function runs every HEARTBEAT_INTERVAL_MS (10s) for as long
+    // as the device is up, potentially months at a time for unattended
+    // farm equipment. The old code built this JSON with ~10 separate
+    // String += calls; each one can reallocate the whole buffer on the
+    // heap as it grows, so a routine 10s-forever heartbeat was doing
+    // up to 10 heap allocate/free cycles every single time - exactly
+    // the pattern that fragments a long-uptime heap. One snprintf()
+    // into a stack buffer needs zero heap allocations for the JSON
+    // itself (the String objects for the escaped name/owner/phone
+    // still exist below, since JsonUtil::escape() has to build
+    // arbitrary-length output - only the repeated-growth pattern is
+    // what's fixed here, not String's mere existence anywhere in this
+    // function).
+    //
+    // 640 bytes is generous on purpose, not tightly measured: name is
+    // capped at 40 chars by the provisioning form but escaping can
+    // roughly double a pathological all-quotes input, owner email has
+    // no hard cap, and getting this wrong silently truncates a real
+    // device's status write - cheap insurance on an ESP32's stack.
+    String escapedName = JsonUtil::escape(device.name());
+    String escapedOwner = JsonUtil::escape(AppStorage::ownerEmail());
 
     // Published (not just kept in local flash) specifically so the
     // power-loss watchdog (.github/workflows/power-watchdog.yml) can
@@ -498,19 +505,45 @@ void Cloud::publishDevice()
     // so a device with no WhatsApp config configured doesn't publish
     // an empty string.
     String waPhone = AppStorage::whatsAppPhone();
+    char waPhoneField[150] = "";
+
     if (waPhone.length() > 0)
     {
-        json += ",\"whatsappPhone\":\"" + JsonUtil::escape(waPhone) + "\"";
+        String escapedPhone = JsonUtil::escape(waPhone);
+        snprintf(waPhoneField, sizeof(waPhoneField), ",\"whatsappPhone\":\"%s\"", escapedPhone.c_str());
     }
 
-    // Resets the power-watchdog's dedup flag every single heartbeat
-    // this device is alive to send one - the watchdog only sets this
-    // true when it detects an outage, so as long as the device is
-    // reporting normally, this stays false without the device needing
-    // to know anything about the watchdog's own state.
-    json += ",\"powerAlertSent\":false";
+    char json[640];
+    int len = snprintf(json, sizeof(json),
+        "{\"id\":\"%s\",\"name\":\"%s\",\"owner\":\"%s\",\"firmware\":\"%s\",\"ip\":\"%s\","
+        "\"rssi\":%d,\"online\":%s,\"uptime\":%lu,"
+        // {".sv":"timestamp"} is a Firebase server-value placeholder -
+        // the server fills in its own current time on write, not
+        // whatever the ESP32 thinks the time is (it has no RTC/NTP).
+        // This is what makes "last seen" a real, authoritative fact
+        // in the database itself, rather than something only true if
+        // some browser happened to be open and watching at the right
+        // moment to observe it.
+        "\"lastSeen\":{\".sv\":\"timestamp\"}%s,"
+        // Resets the power-watchdog's dedup flag every single
+        // heartbeat this device is alive to send one - the watchdog
+        // only sets this true when it detects an outage, so as long
+        // as the device is reporting normally, this stays false
+        // without the device needing to know anything about the
+        // watchdog's own state.
+        "\"powerAlertSent\":false}",
+        device.id().c_str(),
+        escapedName.c_str(),
+        escapedOwner.c_str(),
+        device.firmware().c_str(),
+        device.ip().c_str(),
+        device.rssi(),
+        device.online() ? "true" : "false",
+        device.uptime(),
+        waPhoneField);
 
-    json += "}";
+    if (len < 0 || len >= (int)sizeof(json))
+        Logger::error(TAG, "publishDevice: JSON truncated - name/owner/phone unusually long? Buffer is " + String(sizeof(json)) + " bytes");
 
     database.set<object_t>(aClientMain, statusPath, object_t(json), processData, "publishDevice");
 }
@@ -520,10 +553,26 @@ void Cloud::publishMotor()
     if (!app.ready())
         return;
 
-    String json = "{";
-    json += "\"state\":\"" + String(motor.isRunning() ? "RUNNING" : "OFF") + "\",";
-    json += "\"updatedAt\":" + String(millis());
-    json += "}";
+    // Fixed char buffer + snprintf instead of String concatenation -
+    // this function runs every HEARTBEAT_INTERVAL_MS (10s) for as long
+    // as the device is up, potentially months at a time for unattended
+    // farm equipment. String's += operator reallocates on the heap
+    // each time the buffer needs to grow, and doing that on a fixed
+    // 10s cadence indefinitely is exactly the kind of repeated
+    // allocate/free pattern that fragments a long-uptime heap. A
+    // stack-allocated char[] with one single snprintf() call needs
+    // zero heap allocations at all. Not applied file-wide - see the
+    // sizing comment on publishDevice() below for why the much rarer/
+    // one-time paths in this file (path setup, OTA, remote commands)
+    // were deliberately left as String.
+    char json[96];
+    int len = snprintf(json, sizeof(json),
+        "{\"state\":\"%s\",\"updatedAt\":%lu}",
+        motor.isRunning() ? "RUNNING" : "OFF",
+        millis());
+
+    if (len < 0 || len >= (int)sizeof(json))
+        Logger::error(TAG, "publishMotor: JSON truncated - buffer too small (shouldn't be reachable, both fields are fixed-format)");
 
     database.set<object_t>(aClientMain, motorPath, object_t(json), processData, "publishMotor");
 }
