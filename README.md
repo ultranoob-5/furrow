@@ -153,12 +153,20 @@ port, relay cables, and serial pins. ~1.2h print time.
   Firebase's paid "Blaze" plan - see [SETUP.md](SETUP.md) step 8 for
   why that's still effectively free at this scale
 - **Browser/PWA push notifications**, alongside WhatsApp, for the same
-  three events: power loss, power restored, and the motor starting or
+  events: power loss, power restored, and the motor starting or
   stopping (including a physical button press at the panel, not just
   remote commands - this comes from the same real current-sensor
   feedback as everything else). Enabled per device, from that
   device's own panel on the dashboard - see
   [SETUP.md step 11](SETUP.md#11-push-notifications-optional)
+- **Failed start/stop alerts**, on both WhatsApp and push: if a remote
+  Start or Stop command doesn't actually take effect within 30
+  seconds (checked against real current-sensor feedback, not just
+  whether the relay pulse was sent), you get told - a stuck
+  contactor, tripped overload relay, or blown fuse won't just fail
+  silently. Remote commands only - a physical button press at the
+  panel never routes through the device's own command handling, so
+  there's no expected outcome to check it against for that case.
 
 **Releases**
 - Every version is documented in [CHANGELOG.md](CHANGELOG.md)

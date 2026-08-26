@@ -78,6 +78,19 @@ namespace
     int otaLastReportedPercent = -1;
     bool otaStatusReset = false;
 
+    // Confirms a remote start/stop command actually took effect, using
+    // the same real CT current feedback everything else here trusts -
+    // not just "we sent the relay pulse". Deliberately remote-command-
+    // only: a physical button press at the panel never routes through
+    // this firmware at all (the button is wired straight to the
+    // starter's own control loop, in parallel with the relay - see
+    // README.md's Wiring section), so there's no "expected outcome" to
+    // compare against for that case, only for a command this device
+    // itself issued and can therefore verify.
+    String commandConfirmPending = ""; // "start" or "stop", empty when nothing's pending
+    unsigned long commandConfirmSince = 0;
+    constexpr unsigned long COMMAND_CONFIRM_TIMEOUT_MS = 30000;
+
     void processData(AsyncResult &result)
     {
         if (result.isError())
@@ -194,11 +207,15 @@ namespace
         {
             Logger::info(TAG, "Remote command: START");
             motor.start();
+            commandConfirmPending = "start";
+            commandConfirmSince = millis();
         }
         else if (pendingCommand == "stop")
         {
             Logger::info(TAG, "Remote command: STOP");
             motor.stop();
+            commandConfirmPending = "stop";
+            commandConfirmSince = millis();
         }
 
         pendingCommand = "";
@@ -208,6 +225,55 @@ namespace
         // Acknowledge / clear the command so it isn't re-applied on the
         // next stream reconnect.
         database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
+    }
+
+    // Checked every Cloud::loop() iteration - cheap no-op when nothing's
+    // pending. If a start/stop command was just dispatched above,
+    // compares its expected outcome against motor.isRunning() (the real
+    // CT-sensed state, same source of truth as everything else) rather
+    // than trusting the relay pulse alone succeeded. A new start/stop
+    // command overwrites commandConfirmPending before this ever sees
+    // the old one time out, so issuing a second command before the
+    // first's window elapses can never produce a false failure alert
+    // for the abandoned one - only the latest command's outcome is
+    // ever actually checked.
+    void checkCommandConfirmation()
+    {
+        if (commandConfirmPending.length() == 0)
+            return;
+
+        bool expectedRunning = (commandConfirmPending == "start");
+
+        if (motor.isRunning() == expectedRunning)
+        {
+            // Confirmed - the command took effect. Nothing to publish;
+            // publishMotor() already covers the real state change.
+            commandConfirmPending = "";
+            return;
+        }
+
+        if (millis() - commandConfirmSince < COMMAND_CONFIRM_TIMEOUT_MS)
+            return; // still within the grace window - Star-Delta transitions can take several seconds
+
+        Logger::error(TAG, "Motor failed to " + commandConfirmPending + " - no confirmation within " +
+                            String(COMMAND_CONFIRM_TIMEOUT_MS / 1000) + "s");
+
+        Notify::sendWhatsApp("\u26a0\ufe0f " + device.name() + " failed to " + commandConfirmPending +
+                              (expectedRunning
+                                   ? " - no current detected after 30s. Check the panel."
+                                   : " - motor still drawing current after 30s. Check the panel."));
+
+        // Small, rare-path write (only ever happens on an actual
+        // failure, never routinely) - a String path concatenation here
+        // is fine, unlike the hot 10s-forever publishDevice()/
+        // publishMotor() paths. Triggers a new onMotorCommandFailed
+        // Cloud Function (RTDB-watched) for the push-notification side;
+        // WhatsApp already went out directly above.
+        char json[96];
+        snprintf(json, sizeof(json), "{\"action\":\"%s\",\"at\":{\".sv\":\"timestamp\"}}", commandConfirmPending.c_str());
+        database.set<object_t>(aClientMain, motorPath + "/commandFailure", object_t(json), processData, "commandFailure");
+
+        commandConfirmPending = "";
     }
 
     // Downloads and flashes new firmware from a URL, then restarts.
@@ -437,6 +503,8 @@ void Cloud::loop()
     }
 
     handlePendingCommand();
+
+    checkCommandConfirmation();
 
     if (otaRequested)
     {

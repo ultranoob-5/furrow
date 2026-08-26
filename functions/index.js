@@ -284,13 +284,56 @@ exports.onPowerRestored = onValueWritten(
   }
 );
 
-// EXPERIMENTAL - Firebase Cloud Messaging (browser push) proof of
-// concept, called manually from dashboard.html's "Send test
-// notification" button (setupPushExperiment()). Not wired into any
-// real alert path - WhatsApp alerts (above) are completely unaffected
-// either way. Only proves a browser's push token actually works
-// end to end; no token persistence, no automatic triggering, nothing
-// beyond "does a push notification arrive."
+// Fires a push when a remote start/stop command doesn't actually take
+// effect within 30s - see src/cloud.cpp's checkCommandConfirmation(),
+// which is what writes devices/{id}/motor/commandFailure in the first
+// place (compares the command's expected outcome against real CT
+// current feedback, not just whether the relay pulse was sent).
+// WhatsApp already went out directly from the device itself by the
+// time this fires - firmware has its own Whapi credential and doesn't
+// need to round-trip through a Cloud Function for that channel; this
+// function only ever handles the push side.
+//
+// Deliberately remote-command-only, same limitation as the firmware
+// side: a physical button press at the panel never routes through the
+// device's own command handling at all, so there's no "expected
+// outcome" recorded anywhere for this to compare against for that
+// case.
+exports.onMotorCommandFailed = onValueWritten(
+  { ref: "/devices/{deviceId}/motor/commandFailure", region: RTDB_REGION },
+  async (event) => {
+    const after = event.data.after.val();
+    if (!after || !after.action) {
+      return;
+    }
+
+    const deviceId = event.params.deviceId;
+    const db = getDatabase();
+    const nameSnap = await db.ref(`devices/${deviceId}/status/name`).once("value");
+    const name = nameSnap.val() || deviceId;
+
+    const body = after.action === "start"
+      ? "No current detected 30s after the start command - check the panel."
+      : "Motor still drawing current 30s after the stop command - check the panel.";
+
+    try {
+      const result = await sendPushToDevice(deviceId, `${name} failed to ${after.action}`, body);
+      logger.info(`[CommandFailedPush] ${deviceId} (${name}): ${after.action} failure, sent to ${result.sent} token(s)`);
+    } catch (err) {
+      logger.error(`[CommandFailedPush] ${deviceId} (${name}): send failed: ${err}`);
+    }
+  }
+);
+
+// Manual test trigger, called from a device panel's "Send test
+// notification" button once notifications are enabled for that
+// device - lets someone confirm push actually reaches this browser
+// right after enabling, instead of waiting for a real event (power
+// loss, motor state change, etc.). Not itself part of any real alert
+// path - those are the RTDB-triggered functions below/above
+// (powerWatchdog, onMotorStateChanged, onPowerRestored,
+// onMotorCommandFailed) - this one only ever fires when a person
+// explicitly clicks the test button.
 //
 // Any signed-in owner can call this - deliberately not restricted
 // further, since it never touches device data, only sends a push to

@@ -25,6 +25,7 @@ assert(typeof mod.powerWatchdog === "function", "index.js failed to export power
 assert(typeof mod.runWatchdog === "function", "index.js failed to export runWatchdog as a function");
 assert(typeof mod.onMotorStateChanged === "function", "index.js failed to export onMotorStateChanged as a function");
 assert(typeof mod.onPowerRestored === "function", "index.js failed to export onPowerRestored as a function");
+assert(typeof mod.onMotorCommandFailed === "function", "index.js failed to export onMotorCommandFailed as a function");
 assert(typeof mod.sendTestNotification === "function", "index.js failed to export sendTestNotification as a function");
 console.log("Module load check: PASS (this is the exact check that would have caught the admin.database() bug)\n");
 

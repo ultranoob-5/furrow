@@ -1,4 +1,21 @@
 
+## [1.3.0] - 2026-08-26
+
+- Added failed start/stop detection and alerting: a remote Start/Stop
+  command that doesn't actually take effect within 30 seconds (checked
+  against real CT current feedback, not just whether the relay pulse
+  was sent) now fires an alert on both WhatsApp and push - a stuck
+  contactor, tripped overload relay, or blown fuse no longer fails
+  silently. Remote commands only - a physical button press at the
+  panel never routes through the device's own command handling, so
+  there's nothing to compare against for that case.
+- New Cloud Function, onMotorCommandFailed, watching
+  devices/{id}/motor/commandFailure for the push side; WhatsApp is
+  sent directly from the device itself, same as the existing WiFi-
+  reconnect and OTA-failure alerts.
+- Minor version bump (1.2.x -> 1.3.0), not a patch - this is a new
+  feature, not a bug fix, per semver.
+
 ## [1.2.2] - 2026-08-26
 
 - Reduced heap fragmentation risk in Cloud::publishDevice() and
