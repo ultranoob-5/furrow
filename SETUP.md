@@ -106,6 +106,9 @@ keeps the two in sync automatically.
         },
         "displayName": {
           ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+        },
+        "fcmTokens": {
+          ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
         }
       }
     }
@@ -262,6 +265,55 @@ from step 1).
 
 Either way, open the dashboard and sign in with an owner account from
 step 4.
+
+## 11. Push notifications (optional)
+
+Browser/PWA push notifications, alongside WhatsApp (step 8), for the
+same kinds of events: power loss, power restored, and motor
+starting/stopping. Also needs the Blaze plan (same reasoning as step
+8, since this runs as Cloud Functions too) - skip this section if you
+haven't upgraded and don't plan to.
+
+1. Firebase Console → your project → gear icon → **Project settings**
+   → **General** tab → scroll to **Your apps** → your web app → **SDK
+   setup and configuration**. This shows your whole `firebaseConfig`
+   object - copy the `appId` and `messagingSenderId` values from it
+   (these two aren't used by Auth/Database, which is everything else
+   this dashboard needed until now, so they were never set up before -
+   skipping them produces a "Missing App configuration value: appId"
+   error the moment you try to enable notifications).
+2. Same Project settings → **Cloud Messaging** tab → **Web
+   configuration** → Web Push certificates → **Generate key pair**.
+   Copy the key shown (starts with something like `B...`).
+3. Add all three (`appId`, `messagingSenderId`, `vapidKey`) to
+   `web/firebase-config.js` (local testing) - see
+   `web/firebase-config.example.js` for where each goes - and/or as
+   `FIREBASE_APP_ID`, `FIREBASE_MESSAGING_SENDER_ID`, and
+   `FIREBASE_VAPID_KEY` repository secrets on GitHub (same place as
+   the other `FIREBASE_*` secrets from step 9), so automatic dashboard
+   deploys pick them up too.
+4. **If you already deployed RTDB rules before this feature existed**,
+   redeploy them: `firebase deploy --only database`. The rules gained
+   a new `fcmTokens` field (owner-writable, alongside `displayName` -
+   see step 3) - without redeploying, the dashboard's write when you
+   enable notifications fails with a permissions error, silently as
+   far as the UI's concerned beyond the status text.
+5. Deploy the new Cloud Functions: `firebase deploy --only functions`
+6. Open the dashboard, sign in, select a device, and use the "Push
+   notifications" section near the bottom of its panel: **Enable
+   notifications** asks your browser for permission, gets a push
+   token, and saves it against that specific device. Enable separately
+   on each device you want alerts from - it's per-device, not global,
+   same as WhatsApp's per-device recipient.
+
+From there it's automatic - no more buttons to press. You'll get a
+push when that device loses power, when it recovers, or when its
+motor starts or stops (including a physical button press at the
+panel, not just remote commands - this comes from the same real
+current-sensor feedback everything else uses). The easiest way to
+confirm the whole pipeline works after setup is just pressing
+Start/Stop from the dashboard and watching for the motor push to
+arrive within a few seconds.
 
 ---
 

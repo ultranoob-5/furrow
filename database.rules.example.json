@@ -22,6 +22,9 @@
         },
         "displayName": {
           ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+        },
+        "fcmTokens": {
+          ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
         }
       }
     }

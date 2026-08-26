@@ -152,6 +152,13 @@ port, relay cables, and serial pins. ~1.2h print time.
   device. If one's gone quiet, it sends the alert. This piece needs
   Firebase's paid "Blaze" plan - see [SETUP.md](SETUP.md) step 8 for
   why that's still effectively free at this scale
+- **Browser/PWA push notifications**, alongside WhatsApp, for the same
+  three events: power loss, power restored, and the motor starting or
+  stopping (including a physical button press at the panel, not just
+  remote commands - this comes from the same real current-sensor
+  feedback as everything else). Enabled per device, from that
+  device's own panel on the dashboard - see
+  [SETUP.md step 11](SETUP.md#11-push-notifications-optional)
 
 **Releases**
 - Every version is documented in [CHANGELOG.md](CHANGELOG.md)
