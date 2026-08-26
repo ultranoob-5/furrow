@@ -1,4 +1,52 @@
 
+## [1.3.3] - 2026-08-26
+
+Fixes found during a full line-by-line review of the entire codebase,
+not from a specific bug report:
+
+- Fixed pressStopButton() having the same "already mid-pulse, ignore"
+  guard as pressStartButton() - a STOP arriving while a START pulse
+  was still active (well within 500ms, entirely plausible: hit Start,
+  immediately correct with Stop) did nothing at all. This directly
+  undermined the v1.3.2 Motor::stop() fix - that fix only guaranteed
+  Motor::stop() calls pressStopButton(), not that pressStopButton()
+  actually acts on it. STOP now always preempts an in-progress START.
+- JsonUtil::escape() only escaped 4 of the ~34 characters JSON
+  actually requires escaping (RFC 8259 mandates all of U+0000-U+001F,
+  not just the common ones). A pasted control character in a device
+  name or phone number would have produced invalid JSON, silently
+  defeating the exact protection this function exists to provide.
+- provisioning.cpp's WiFi scan JSON never escaped SSIDs at all, and
+  didn't even include json_util.h. A nearby network's SSID (entirely
+  outside your control) containing a '"' would have broken the setup
+  page's network dropdown.
+- Fixed a false "started manually at the panel" push notification
+  possible when the device reboots while the motor is already running
+  (most plausible after a deliberate remote restart or firmware
+  update) - previousMotorRunning was seeded from CurrentSensor's
+  default (not-running) state before any real reading had completed,
+  making the first real reading look like a fresh transition. Now
+  waits for Motor::hasReading() before establishing the baseline.
+- Network::begin() now retries the stored WiFi credentials up to 3
+  times (each with the existing 15s timeout) before falling back to
+  full reprovisioning, instead of giving up after one attempt. A
+  transient issue right at boot - the router still rebooting after a
+  shared power blip, for instance - no longer wipes perfectly good
+  credentials and strands the device waiting for someone to physically
+  visit and reconfigure it.
+
+Also fixed on the dashboard side (web/, no firmware impact):
+- Logging out never called devicesRef.off() - the original Firebase
+  listener from startDeviceListener() is persistent and never
+  auto-cleans up, so repeated login/logout cycles in one browser
+  session accumulated multiple simultaneous listeners, each firing
+  redundantly on every future device update.
+- The factory-reset confirmation trimmed the typed input but never
+  the stored device name it's compared against - a name with an
+  accidental leading/trailing space (easy to type by mistake) made
+  the confirmation permanently unsatisfiable, since the person can't
+  see or reasonably type an invisible space to match.
+
 ## [1.3.2] - 2026-08-26
 
 - Fixed a real bug in Motor::stop(): an early-return guard

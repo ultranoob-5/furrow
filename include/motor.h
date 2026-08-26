@@ -25,6 +25,13 @@ public:
 
     bool isRunning();
 
+    // True once the CT sensor has completed at least one real RMS
+    // reading (see CurrentSensor::hasReading()) - false in the brief
+    // window right after boot before that first reading exists. Used
+    // to avoid seeding a false baseline from CurrentSensor's default
+    // (not-running) state before any real measurement has happened.
+    bool hasReading();
+
     float currentAmps();
 
 private:

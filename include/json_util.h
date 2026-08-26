@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <cstdio>
 
 // Minimal JSON string escaping - covers exactly what this project's
 // hand-built JSON payloads need (quotes, backslashes, newlines), not a
@@ -20,6 +21,7 @@ namespace JsonUtil
         for (size_t i = 0; i < value.length(); i++)
         {
             char c = value.charAt(i);
+            unsigned char uc = (unsigned char)c;
 
             switch (c)
             {
@@ -27,7 +29,26 @@ namespace JsonUtil
                 case '\\': escaped += "\\\\"; break;
                 case '\n': escaped += "\\n";  break;
                 case '\r': escaped += "\\r";  break;
-                default:   escaped += c;
+                case '\t': escaped += "\\t";  break;
+                default:
+                    // RFC 8259 requires escaping every control
+                    // character (U+0000-U+001F), not just the common
+                    // ones above - the four named cases only covered
+                    // 4 of the ~32. \uXXXX is the generic escape form
+                    // for anything without its own short form; an
+                    // unescaped control byte here would otherwise
+                    // silently produce invalid JSON, the exact failure
+                    // this function exists to prevent.
+                    if (uc < 0x20)
+                    {
+                        char buf[7];
+                        snprintf(buf, sizeof(buf), "\\u%04x", uc);
+                        escaped += buf;
+                    }
+                    else
+                    {
+                        escaped += c;
+                    }
             }
         }
 

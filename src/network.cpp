@@ -24,30 +24,55 @@ bool Network::begin()
     String ssid = AppStorage::wifiSSID();
     String password = AppStorage::wifiPassword();
 
-    Logger::info(TAG, "Connecting to WiFi \"" + ssid + "\"...");
+    // Retries a few times (each with the existing 15s timeout) before
+    // giving up entirely, rather than falling back to full
+    // reprovisioning after a single attempt. A transient issue right
+    // at boot - the router still rebooting after a shared power blip,
+    // for instance - shouldn't wipe perfectly good stored credentials
+    // and strand the device waiting for someone to physically visit
+    // and reconfigure it through the captive portal. This is the same
+    // resilience philosophy Network::loop() already applies once
+    // running (retries indefinitely, every 5s) - this just extends it
+    // to cover the boot-time connection too, instead of only what
+    // happens after the first one succeeds.
+    constexpr int MAX_CONNECT_ATTEMPTS = 3;
 
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid.c_str(), password.c_str());
-
-    unsigned long start = millis();
-
-    while (WiFi.status() != WL_CONNECTED)
+    for (int attempt = 1; attempt <= MAX_CONNECT_ATTEMPTS; attempt++)
     {
-        if (millis() - start >= CONNECT_TIMEOUT_MS)
+        Logger::info(TAG, "Connecting to WiFi \"" + ssid + "\" (attempt " +
+                           String(attempt) + "/" + String(MAX_CONNECT_ATTEMPTS) + ")...");
+
+        WiFi.mode(WIFI_STA);
+        WiFi.begin(ssid.c_str(), password.c_str());
+
+        unsigned long start = millis();
+
+        while (WiFi.status() != WL_CONNECTED)
         {
-            Logger::warn(TAG, "Connect timed out");
-            return false;
+            if (millis() - start >= CONNECT_TIMEOUT_MS)
+                break;
+
+            delay(300);
         }
 
-        delay(300);
+        if (WiFi.status() == WL_CONNECTED)
+        {
+            wasConnected = true;
+
+            Logger::info(TAG, "WiFi connected - IP: " + WiFi.localIP().toString() +
+                               ", RSSI: " + String(WiFi.RSSI()) + " dBm");
+
+            return true;
+        }
+
+        Logger::warn(TAG, "Connect attempt " + String(attempt) + " timed out");
+
+        WiFi.disconnect();
     }
 
-    wasConnected = true;
+    Logger::warn(TAG, "All " + String(MAX_CONNECT_ATTEMPTS) + " connect attempts failed");
 
-    Logger::info(TAG, "WiFi connected - IP: " + WiFi.localIP().toString() +
-                       ", RSSI: " + String(WiFi.RSSI()) + " dBm");
-
-    return true;
+    return false;
 }
 
 void Network::loop()

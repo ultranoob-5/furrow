@@ -11,6 +11,20 @@
 namespace
 {
     bool previousMotorRunning = false;
+
+    // False until the first real CT reading completes - motor.begin()
+    // hasn't taken any actual sample yet (CurrentSensor::begin() just
+    // initializes state, defaulting to not-running), so seeding
+    // previousMotorRunning immediately after it would be wrong
+    // whenever the motor is actually already running across a reboot
+    // (most plausible after a deliberate remote restart or firmware
+    // update - a shared-circuit power loss would normally stop the
+    // motor too, not just this device). Without this, that first real
+    // reading gets misread as a fresh transition and incorrectly
+    // tagged "manual" in the push notification, even though nothing
+    // was actually pressed - the motor was just running the whole
+    // time, through the reboot.
+    bool baselineEstablished = false;
     unsigned long lastCurrentSerialMs = 0;
     constexpr unsigned long CURRENT_SERIAL_INTERVAL_MS = 10000;
 
@@ -98,7 +112,9 @@ void setup()
 
     cloud.begin();
 
-    previousMotorRunning = motor.isRunning();
+    // previousMotorRunning is NOT seeded here - see baselineEstablished's
+    // comment above. loop() establishes it from the first real CT
+    // reading instead.
 
     Serial.println();
     Serial.println("System Ready");
@@ -133,7 +149,21 @@ void loop()
                       runningNow ? "RUNNING" : "OFF");
     }
 
-    if (runningNow != previousMotorRunning)
+    if (!baselineEstablished)
+    {
+        // Wait for the first real CT reading before comparing anything -
+        // motor.isRunning() before that point is just CurrentSensor's
+        // default (not-running), not a real measurement. Establishing
+        // the baseline here, rather than treating this first real
+        // reading as a "transition," avoids a false publish/alert for
+        // whatever the actual pre-boot state genuinely was.
+        if (motor.hasReading())
+        {
+            previousMotorRunning = runningNow;
+            baselineEstablished = true;
+        }
+    }
+    else if (runningNow != previousMotorRunning)
     {
         previousMotorRunning = runningNow;
 

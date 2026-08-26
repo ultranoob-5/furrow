@@ -65,6 +65,11 @@ bool Motor::isRunning()
     return state == MotorState::RUNNING;
 }
 
+bool Motor::hasReading()
+{
+    return currentSensor.hasReading();
+}
+
 float Motor::currentAmps()
 {
     return currentSensor.currentAmps();

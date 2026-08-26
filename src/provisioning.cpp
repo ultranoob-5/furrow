@@ -6,6 +6,7 @@
 #include "provisioning.h"
 #include "storage.h"
 #include "logger.h"
+#include "json_util.h"
 
 namespace
 {
@@ -198,7 +199,7 @@ namespace Provisioning
             {
                 if (i > 0)
                     json += ",";
-                json += "\"" + WiFi.SSID(i) + "\"";
+                json += "\"" + JsonUtil::escape(WiFi.SSID(i)) + "\"";
             }
             json += "]";
             cachedScanJson = json;
