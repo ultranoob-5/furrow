@@ -65,8 +65,8 @@ self.addEventListener('fetch', (event) => {
 // it just never receives anything since no token was ever requested.
 try {
   importScripts(
-    'https://cdnjs.cloudflare.com/ajax/libs/firebase/12.3.0/firebase-app-compat.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/firebase/12.3.0/firebase-messaging-compat.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/firebase/12.17.1/firebase-app-compat.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/firebase/12.17.1/firebase-messaging-compat.min.js',
     'firebase-config.js'
   );
 
