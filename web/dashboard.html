@@ -1431,6 +1431,12 @@
     .catch((err) => console.error('Could not check latest firmware version', err));
   let selectedId = null;
   let pendingAction = null;   // "start" | "stop" | null
+  let pendingActionSince = 0;
+  // Slightly longer than firmware's own 30s command-confirmation
+  // window (see checkCommandConfirmation() in src/cloud.cpp), so a
+  // genuine failure has already been decided and alerted on by
+  // firmware before this gives up waiting - not a race against it.
+  const PENDING_ACTION_TIMEOUT_MS = 35000;
   let authReady = false;
 
   // status.lastSeen is a Firebase server-stamped timestamp (see cloud.cpp)
@@ -1688,6 +1694,20 @@
       if (confirmed) pendingAction = null;
     }
 
+    // Without this, a command that genuinely fails (motor never
+    // actually starts/stops - the whole reason the failed-start/stop
+    // alert feature exists) left this UI stuck showing "Starting…"/
+    // "Stopping…" forever, since the only way it ever cleared above
+    // was a real confirmed state change that, in a genuine failure,
+    // was never going to happen - confirmed on real hardware (stuck
+    // on "Starting..." well past the point firmware itself had
+    // already given up and sent a failed-to-start alert). Falls
+    // through to showing whatever the real current state actually is
+    // once this fires, not a stale guess.
+    if (pendingAction && Date.now() - pendingActionSince > PENDING_ACTION_TIMEOUT_MS) {
+      pendingAction = null;
+    }
+
     if (pendingAction) {
       motorStatus.textContent = pendingAction === 'start' ? 'Starting\u2026' : 'Stopping\u2026';
       motorStatus.className = 'status-value pending';
@@ -1760,6 +1780,7 @@
     if (!selectedId) return;
 
     pendingAction = action;
+    pendingActionSince = Date.now();
     renderMotor((devices[selectedId] && devices[selectedId].motor) ? devices[selectedId].motor.state : null);
 
     db.ref(`devices/${selectedId}/command/action`).set(action).catch((err) => {
