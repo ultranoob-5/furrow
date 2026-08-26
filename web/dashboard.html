@@ -100,6 +100,96 @@
     color: var(--text);
   }
 
+  /* ---- Connection status banner (this browser's own connectivity,
+     not any device's) - amber/muted, never red/alarming, since this
+     is routine ("your phone lost signal"), not an emergency the way
+     a device actually losing power is. ------------------------------ */
+
+  .connection-banner{
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    border-radius: var(--radius-sm);
+    font-size: 12.5px;
+    font-weight: 500;
+    background: var(--amber-soft);
+    border: 1px solid rgba(232,163,61,0.3);
+    color: var(--text);
+    animation: connectionBannerIn 0.25s ease;
+  }
+
+  @keyframes connectionBannerIn{
+    from{ opacity: 0; transform: translateY(-4px); }
+    to{ opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---- Install prompt banner - green/inviting, distinct from the
+     amber connection banner, since this is a helpful nudge, not a
+     warning. ------------------------------------------------------- */
+
+  .install-banner{
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    border-radius: var(--radius-sm);
+    background: var(--green-soft);
+    border: 1px solid rgba(73,182,117,0.35);
+    animation: connectionBannerIn 0.25s ease;
+  }
+
+  .install-banner .leaf-mark{
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+  }
+
+  .install-banner-text{
+    flex: 1;
+    font-size: 12.5px;
+    color: var(--text);
+    line-height: 1.4;
+  }
+
+  .install-banner-actions{
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .install-banner-btn{
+    appearance: none;
+    border: none;
+    border-radius: 999px;
+    padding: 7px 14px;
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 12px;
+    cursor: pointer;
+    background: var(--green);
+    color: #0e1210;
+  }
+
+  .install-banner-dismiss{
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 6px;
+  }
+
+  .install-banner-dismiss:hover{ color: var(--text); }
+
   /* ---- Overview strip ------------------------------------------------ */
 
   .overview{
@@ -226,6 +316,75 @@
   .rename-btn:hover{
     color: var(--amber);
     background: var(--amber-soft);
+  }
+
+  /* Notification toggle - a real, clearly-tappable button, unlike
+     .rename-btn (built for the small inline pencil icon, not a
+     primary action - no border, tiny padding, easy to miss entirely).
+     Color signals which action it performs: green invites turning
+     notifications on, neutral for turning them off (reversible,
+     no urgency either way, just not "come do this"). */
+  .notify-toggle-btn{
+    appearance: none;
+    width: 100%;
+    border-radius: var(--radius-sm);
+    padding: 12px 0;
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 13.5px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+
+  .notify-toggle-btn:disabled{
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .notify-toggle-btn.state-off{
+    background: var(--green-soft);
+    border: 1px solid rgba(73,182,117,0.4);
+    color: var(--green);
+  }
+
+  .notify-toggle-btn.state-off:hover{
+    border-color: var(--green);
+    background: rgba(73,182,117,0.22);
+  }
+
+  .notify-toggle-btn.state-on{
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+
+  .notify-toggle-btn.state-on:hover{
+    border-color: var(--amber);
+    color: var(--amber);
+    background: var(--amber-soft);
+  }
+
+  /* Send test - deliberately secondary/lighter than the toggle above
+     it, so it doesn't compete as an equal action - it's a supplement
+     to Enable, not a parallel choice. */
+  .notify-test-btn{
+    appearance: none;
+    width: 100%;
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: var(--muted);
+    border-radius: var(--radius-sm);
+    padding: 10px 0;
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+
+  .notify-test-btn:hover{
+    border-color: var(--amber);
+    color: var(--amber);
   }
 
   input.name-edit{
@@ -477,23 +636,89 @@
 
   .signal-bars span.on{ background: var(--green); }
 
-  .danger-zone{
-    padding: 18px 24px 4px;
+  /* ---- Advanced settings: one collapsible section holding
+     everything that isn't day-to-day (push notifications, restart,
+     firmware update, factory reset) - collapsed by default so the
+     panel stays focused on Start/Stop and the readout, the actual
+     reason someone opens this. --------------------------------- */
+
+  .advanced-settings{
     border-top: 1px solid var(--border);
   }
 
-  .danger-label{
+  .advanced-toggle{
+    appearance: none;
+    width: 100%;
+    background: transparent;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 13.5px;
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .advanced-toggle:hover{ color: var(--amber); }
+
+  .advanced-chevron{
+    width: 16px;
+    height: 16px;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .advanced-toggle[aria-expanded="true"] .advanced-chevron{
+    transform: rotate(180deg);
+  }
+
+  .advanced-body{
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.25s ease;
+  }
+
+  .advanced-body.open{
+    max-height: 900px; /* comfortably above the real content height - a
+                           transition target has to be a concrete value,
+                           not "auto", so this is deliberately generous
+                           rather than tightly measured */
+  }
+
+  .settings-section{
+    padding: 14px 24px 18px;
+  }
+
+  /* Divider between subsections, not on the first one (right under
+     the toggle already has its own border there) - each of the 4
+     (notifications, restart, firmware, factory reset) reads as its
+     own distinct thing instead of one continuous block. */
+  .settings-section + .settings-section{
+    border-top: 1px solid var(--border);
+  }
+
+  .settings-label{
     font-size: 12px;
     font-weight: 600;
     color: var(--muted);
-    margin-bottom: 12px;
+    margin-bottom: 8px;
   }
 
-  .danger-buttons{
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
+  .settings-desc{
+    font-size: 11px;
+    color: var(--muted);
+    margin: 0 0 10px;
+    line-height: 1.5;
   }
+
+  /* Factory reset only - visually set apart from the other three
+     (routine/reversible) actions, since this one genuinely is riskier:
+     wipes WiFi/owner config and requires reconnecting the device in
+     person, not just a 10-20s wait like Restart. */
+  .settings-label-danger{ color: var(--red); }
 
   .btn-danger{
     appearance: none;
@@ -518,6 +743,17 @@
   .btn-danger:disabled{
     cursor: not-allowed;
     opacity: 0.4;
+  }
+
+  .btn-danger-severe{
+    border-color: rgba(225,82,65,0.4);
+    color: var(--red);
+  }
+
+  .btn-danger-severe:hover:not(:disabled){
+    border-color: var(--red);
+    color: var(--red);
+    background: var(--red-soft);
   }
 
   .app-content{
@@ -654,9 +890,13 @@
     margin: 0 24px 24px;
     padding: 16px 0;
 
+    /* Neutral, not red - signing out is routine and instantly
+       reversible (just sign back in), nothing like Factory Reset.
+       Sharing the same red as that button made two very different
+       levels of consequence look identical. */
     background: transparent;
-    border: 1px solid var(--red);
-    color: var(--red);
+    border: 1px solid var(--border);
+    color: var(--muted);
 
     border-radius: var(--radius-sm);
 
@@ -665,10 +905,13 @@
     font-weight: 700;
 
     cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
   }
 
   .logout-btn:hover{
-    background: var(--red-soft);
+    border-color: var(--amber);
+    color: var(--amber);
+    background: var(--amber-soft);
   }
 </style>
 </head>
@@ -680,7 +923,7 @@
     </div>
     <div id="authLoadingError" style="display:none; text-align:center; padding: 0 28px; max-width: 320px;">
       <svg class="leaf-mark" style="width:44px;height:44px;opacity:0.6;" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><g transform="translate(256,268)"><path d="M0,-175 C 100,-140 165,-55 150,35 C 138,105 75,165 0,195 C -75,165 -138,105 -150,35 C -165,-55 -100,-140 0,-175 Z" fill="#49B675"/></g></svg>
-      <p style="color: var(--muted); font-size: 13.5px; margin: 16px 0 20px; line-height:1.5;">Couldn&rsquo;t connect. Check your internet connection and try again.</p>
+      <p id="authErrorMessage" style="color: var(--muted); font-size: 13.5px; margin: 16px 0 20px; line-height:1.5;">Couldn&rsquo;t connect. Check your internet connection and try again.</p>
       <button onclick="location.reload()" style="appearance:none; background: var(--amber); color:#241804; border:none; border-radius: var(--radius-sm); padding: 11px 24px; font-family: var(--display); font-weight:800; font-size:13.5px; cursor:pointer;">Reload</button>
     </div>
   </div>
@@ -701,6 +944,24 @@
   <div class="app-content" id="appContent" style="display:none;">
 
   <div class="app-title"><svg class="leaf-mark" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><g transform="translate(256,268)"><path d="M0,-175 C 100,-140 165,-55 150,35 C 138,105 75,165 0,195 C -75,165 -138,105 -150,35 C -165,-55 -100,-140 0,-175 Z" fill="#49B675"/><path d="M0,-160 C 0,-60 0,80 0,185" stroke="#3a8a5a" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.5"/><rect x="-7" y="188" width="14" height="42" rx="6" fill="#3a8a5a"/><g stroke="#E8A33D" stroke-width="7" fill="none" stroke-linecap="round"><path d="M0,-130 L0,-40"/><path d="M0,-40 L-70,-40 L-70,10"/><path d="M0,-40 L70,-40 L70,10"/><path d="M0,-40 L0,60 L-45,60 L-45,110"/><path d="M0,60 L45,60 L45,110"/></g><g fill="#E8A33D"><circle cx="0" cy="-130" r="9"/><circle cx="0" cy="-40" r="9"/><circle cx="-70" cy="-40" r="8"/><circle cx="70" cy="-40" r="8"/><circle cx="-70" cy="10" r="8"/><circle cx="70" cy="10" r="8"/><circle cx="0" cy="60" r="8"/><circle cx="-45" cy="60" r="8"/><circle cx="45" cy="60" r="8"/><circle cx="-45" cy="110" r="8"/><circle cx="45" cy="110" r="8"/></g></g></svg><span class="brand">Furrow</span></div>
+
+  <!-- Hidden by default - only ever shown when this browser's own
+       connection is the problem (no network, or network's up but
+       can't reach Firebase specifically), distinct from any single
+       device's own online/offline status. See updateConnectionBanner()
+       - without this, a person whose phone drops signal has no way to
+       tell "my phone lost connection" apart from "the pump lost
+       power", since the dashboard would just look stale either way. -->
+  <div class="connection-banner" id="connectionBanner" style="display:none;"></div>
+
+  <!-- Hidden by default. Two different real paths, not one: Chrome/
+       Android supports a real programmatic install (beforeinstallprompt),
+       iOS Safari has no such API at all - the only way there is the
+       manual Share -> Add to Home Screen flow, so that path just shows
+       instructions instead of a button. Never shown if already
+       installed (standalone display mode) or previously dismissed -
+       see maybeShowInstallBanner(). -->
+  <div class="install-banner" id="installBanner" style="display:none;"></div>
 
   <div class="overview" id="overview">
     <div class="chip-empty">Loading devices&hellip;</div>
@@ -742,40 +1003,49 @@
       <div class="readout-row"><span class="k">Last online</span><span class="v" id="rLastOnline">&mdash;</span></div>
     </div>
 
-    <div class="danger-zone" id="notifyZone">
-      <div class="danger-label">Push notifications</div>
-      <p style="font-size:11px;color:var(--muted);margin:0 0 10px;">Get an alert on this browser/device when this pump's motor starts or stops, or it loses power. Enabled separately per device - turning this on here doesn't affect any other device.</p>
-      <button class="rename-btn" id="notifyEnableBtn" style="width:100%;">Enable notifications</button>
-      <button class="rename-btn" id="notifyTestBtn" style="width:100%; margin-top:8px; display:none;">Send test notification</button>
-      <div id="notifyStatus" style="font-size:12px; margin-top:8px; opacity:0.8;"></div>
-    </div>
+    <div class="advanced-settings">
+      <button type="button" class="advanced-toggle" id="advancedToggle" aria-expanded="false" aria-controls="advancedBody">
+        <span>Advanced settings</span>
+        <svg class="advanced-chevron" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
 
-    <div class="danger-zone">
-      <div class="danger-label">Device controls</div>
-      <p style="font-size:11px;color:var(--muted);margin:0 0 10px;">Reboots the device - back online in about 10-20 seconds.</p>
-      <div class="danger-buttons">
-        <button class="btn-danger" id="restartBtn" disabled style="width:100%;">Restart</button>
-      </div>
-    </div>
+      <div class="advanced-body" id="advancedBody">
 
-    <div class="danger-zone">
-      <div class="danger-label">Factory reset</div>
-      <p style="font-size:11px;color:var(--muted);margin:0 0 10px;">Clears WiFi, name, owner, and WhatsApp config. Device stays reachable locally - it starts broadcasting its own setup WiFi network again immediately, but goes offline from this dashboard until someone reconnects it in person.</p>
-      <button class="btn-danger" id="factoryResetBtn" disabled style="width:100%;">Factory Reset</button>
-    </div>
-
-    <div class="danger-zone">
-      <div class="danger-label">Firmware update</div>
-      <p style="font-size:11px;color:var(--muted);margin:0 0 10px;">Always installs the latest published release.</p>
-      <button class="btn-danger" id="updateBtn" disabled style="width:100%;">Update Firmware</button>
-      <div id="otaProgressBlock" style="display:none; margin-top:14px;">
-        <div style="display:flex; justify-content:space-between; font-family:var(--mono); font-size:11px; color:var(--muted); margin-bottom:6px;">
-          <span id="otaPhaseLabel">&mdash;</span>
-          <span id="otaPercentLabel">0%</span>
+        <div class="settings-section" id="notifyZone">
+          <div class="settings-label">Push notifications</div>
+          <p class="settings-desc">Get an alert on this browser/device when this pump's motor starts or stops, or it loses power. Enabled separately per device - turning this on here doesn't affect any other device.</p>
+          <button class="notify-toggle-btn state-off" id="notifyEnableBtn">Enable notifications</button>
+          <button class="notify-test-btn" id="notifyTestBtn" style="margin-top:8px; display:none;">Send test notification</button>
+          <div id="notifyStatus" style="font-size:12px; margin-top:8px; opacity:0.8;"></div>
         </div>
-        <div class="ota-progress-track">
-          <div class="ota-progress-fill" id="otaProgressFill" style="width:0%;"></div>
+
+        <div class="settings-section">
+          <div class="settings-label">Restart device</div>
+          <p class="settings-desc">Reboots the ESP32 - back online in about 10-20 seconds. The motor itself isn't affected either way; it keeps running or stays off exactly as it was, since that's controlled by the starter panel's own hardware, not the device.</p>
+          <button class="btn-danger" id="restartBtn" disabled style="width:100%;">Restart device</button>
         </div>
+
+        <div class="settings-section">
+          <div class="settings-label">Firmware update</div>
+          <p class="settings-desc">Always installs the latest published release.</p>
+          <button class="btn-danger" id="updateBtn" disabled style="width:100%;">Update firmware</button>
+          <div id="otaProgressBlock" style="display:none; margin-top:14px;">
+            <div style="display:flex; justify-content:space-between; font-family:var(--mono); font-size:11px; color:var(--muted); margin-bottom:6px;">
+              <span id="otaPhaseLabel">&mdash;</span>
+              <span id="otaPercentLabel">0%</span>
+            </div>
+            <div class="ota-progress-track">
+              <div class="ota-progress-fill" id="otaProgressFill" style="width:0%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-label settings-label-danger">Factory reset</div>
+          <p class="settings-desc">Clears WiFi, name, owner, and WhatsApp config. Device stays reachable locally - it starts broadcasting its own setup WiFi network again immediately, but goes offline from this dashboard until someone reconnects it in person.</p>
+          <button class="btn-danger btn-danger-severe" id="factoryResetBtn" disabled style="width:100%;">Reset to factory settings</button>
+        </div>
+
       </div>
     </div>
 
@@ -819,8 +1089,46 @@
   function showAuthError(){
     const spinner = document.getElementById('authLoadingSpinner');
     const errorBox = document.getElementById('authLoadingError');
+    const message = document.getElementById('authErrorMessage');
     if (spinner) spinner.style.display = 'none';
     if (errorBox) errorBox.style.display = 'block';
+
+    // Distinguishes "you genuinely have no network" from "the device
+    // has network but couldn't reach the server" - the previous
+    // version showed the same generic message either way, which
+    // doesn't actually help someone figure out what to do next. These
+    // read as two different problems because they are.
+    if (message) {
+      message.textContent = navigator.onLine
+        ? 'Couldn\u2019t reach the server. This might be temporary - try again in a moment.'
+        : 'You\u2019re offline. Check your WiFi or mobile data, then try again.';
+    }
+
+    // Auto-retry once connectivity actually returns, rather than
+    // requiring a manual tap on Reload - there's nothing else useful
+    // to do on this screen anyway, so reloading the moment it's
+    // possible is the right default here (unlike, say, auto-reloading
+    // out from under someone mid-task elsewhere in the app, which
+    // this deliberately doesn't do - see the connection-status banner
+    // above for that steady-state case instead).
+    window.addEventListener('online', () => {
+      if (!errorBox || errorBox.style.display === 'none') return;
+      if (message) message.textContent = 'Back online - reloading\u2026';
+      setTimeout(() => location.reload(), 800);
+    }, { once: true });
+
+    // Covers the other real case (not just genuinely offline): already
+    // online the whole time, but the server itself had a transient
+    // issue - confirmed happening for real (firebase-config.js's 503).
+    // The 'online' event above never fires there, since nothing ever
+    // actually went offline to transition back from. One bounded
+    // retry after a reasonable wait, not a tight loop - if it fails
+    // again, the person's still looking at a working Reload button
+    // and an accurate message either way.
+    setTimeout(() => {
+      if (!errorBox || errorBox.style.display === 'none') return;
+      location.reload();
+    }, 15000);
   }
 
   if (typeof firebase === 'undefined' || typeof firebaseConfig === 'undefined') {
@@ -834,6 +1142,153 @@
   const auth = firebase.auth();
   const db = firebase.database();
   const devicesRef = db.ref('devices');
+
+  // ---- Connection status (this browser, not any device) ---------------
+  // Two signals combined: navigator.onLine fires instantly the moment
+  // WiFi/cellular actually drops (but can't tell you whether Firebase
+  // itself is reachable - some networks report "online" for a captive
+  // portal or a DNS-only connection). Firebase's own special
+  // .info/connected path is the more meaningful signal for whether
+  // *this app* is actually working right now - true only when the
+  // live data connection to Firebase is genuinely up, false the
+  // moment it drops for any reason, reconnects automatically. Without
+  // this, a person whose phone loses signal has no way to tell that
+  // apart from "the pump lost power" - the dashboard would just look
+  // stale either way, silently.
+  let firebaseConnected = true; // optimistic default until the listener below reports otherwise
+
+  function updateConnectionBanner() {
+    const banner = document.getElementById('connectionBanner');
+    if (!banner) return;
+
+    if (!navigator.onLine) {
+      banner.textContent = '\u26a0\ufe0f You\u2019re offline - showing the last data received.';
+      banner.style.display = 'flex';
+    } else if (!firebaseConnected) {
+      banner.textContent = '\u21bb Reconnecting\u2026';
+      banner.style.display = 'flex';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  window.addEventListener('online', updateConnectionBanner);
+  window.addEventListener('offline', updateConnectionBanner);
+
+  db.ref('.info/connected').on('value', (snap) => {
+    firebaseConnected = snap.val() === true;
+    updateConnectionBanner();
+  });
+
+  updateConnectionBanner(); // reflect the true starting state immediately, don't wait for the first event
+
+  // ---- Install prompt ---------------------------------------------------
+  // Chrome/Android fires beforeinstallprompt when the site meets PWA
+  // installability criteria (manifest, service worker, HTTPS - already
+  // true here). iOS Safari has no equivalent API at all - the only
+  // install path there is manual (Share -> Add to Home Screen), so
+  // that platform gets instructions instead of a button. Neither path
+  // shows anything if the app is already running installed
+  // (standalone display mode), or if the person already dismissed
+  // this once - respected permanently via localStorage, not re-nagged
+  // on a cooldown.
+  const INSTALL_DISMISSED_KEY = 'furrowInstallDismissed';
+  let deferredInstallPrompt = null;
+
+  function isStandalone() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
+
+  function isIOS() {
+    return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  }
+
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault(); // suppress the browser's own mini-infobar - we show our own banner instead, on our own timing
+    deferredInstallPrompt = event;
+    maybeShowInstallBanner();
+  });
+
+  window.addEventListener('appinstalled', () => {
+    localStorage.setItem(INSTALL_DISMISSED_KEY, 'true'); // covers installing via the browser's own menu too, not just our button
+    deferredInstallPrompt = null;
+    const banner = document.getElementById('installBanner');
+    if (banner) banner.style.display = 'none';
+  });
+
+  function dismissInstallBanner() {
+    localStorage.setItem(INSTALL_DISMISSED_KEY, 'true');
+    const banner = document.getElementById('installBanner');
+    if (banner) banner.style.display = 'none';
+  }
+
+  async function triggerInstall() {
+    if (!deferredInstallPrompt) return;
+
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice; // either outcome, the browser's own dialog already handled it - nothing more for us to do with the result itself
+    deferredInstallPrompt = null;
+
+    const banner = document.getElementById('installBanner');
+    if (banner) banner.style.display = 'none';
+  }
+
+  // Called once beforeinstallprompt fires AND once auth resolves signed-
+  // in (whichever happens last actually triggers the visible banner -
+  // both call sites are safe to call early, this function itself
+  // checks everything needed before showing anything).
+  function maybeShowInstallBanner() {
+    const banner = document.getElementById('installBanner');
+    if (!banner) return;
+    if (isStandalone()) return;
+    if (localStorage.getItem(INSTALL_DISMISSED_KEY) === 'true') return;
+    if (appContent.style.display === 'none') return; // don't show before someone's actually signed in and seeing the real app
+
+    banner.textContent = '';
+
+    const leaf = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    leaf.setAttribute('class', 'leaf-mark');
+    leaf.setAttribute('viewBox', '0 0 512 512');
+    // innerHTML here is safe, unlike the dashboard's earlier XSS fix -
+    // this is a fixed, hardcoded string with zero interpolated data
+    // (no device names, no user input, nothing dynamic at all), so
+    // there's nothing for anyone to inject regardless of how this
+    // function gets called.
+    leaf.innerHTML = '<g transform="translate(256,268)"><path d="M0,-175 C 100,-140 165,-55 150,35 C 138,105 75,165 0,195 C -75,165 -138,105 -150,35 C -165,-55 -100,-140 0,-175 Z" fill="#49B675"/></g>';
+    banner.appendChild(leaf);
+
+    const text = document.createElement('div');
+    text.className = 'install-banner-text';
+
+    const actions = document.createElement('div');
+    actions.className = 'install-banner-actions';
+
+    if (deferredInstallPrompt) {
+      text.textContent = 'Install Furrow for quick access from your home screen.';
+
+      const installBtn = document.createElement('button');
+      installBtn.className = 'install-banner-btn';
+      installBtn.textContent = 'Install';
+      installBtn.addEventListener('click', triggerInstall);
+      actions.appendChild(installBtn);
+    } else if (isIOS()) {
+      text.textContent = 'Add Furrow to your Home Screen: tap Share, then "Add to Home Screen".';
+      // no install button possible on iOS - dismiss only
+    } else {
+      return; // neither path applies (desktop browser without beforeinstallprompt support, etc.) - nothing to show
+    }
+
+    const dismissBtn = document.createElement('button');
+    dismissBtn.className = 'install-banner-dismiss';
+    dismissBtn.textContent = '\u00d7';
+    dismissBtn.setAttribute('aria-label', 'Dismiss');
+    dismissBtn.addEventListener('click', dismissInstallBanner);
+    actions.appendChild(dismissBtn);
+
+    banner.appendChild(text);
+    banner.appendChild(actions);
+    banner.style.display = 'flex';
+  }
 
   // Safety net for any other reason onAuthStateChanged might never
   // fire (e.g. reaching Firebase Auth's backend specifically fails,
@@ -890,6 +1345,7 @@
     appContent.style.display = 'flex';
     authReady = true;
     startDeviceListener();
+    maybeShowInstallBanner();
   });
 
   // ---- DOM refs ----------------------------------------------------------
@@ -919,6 +1375,15 @@
   const rFwBadge = document.getElementById('rFwBadge');
   const rLastOnline = document.getElementById('rLastOnline');
   const rRssiText = document.getElementById('rRssiText');
+  const advancedToggle = document.getElementById('advancedToggle');
+  const advancedBody = document.getElementById('advancedBody');
+  if (advancedToggle && advancedBody) {
+    advancedToggle.addEventListener('click', () => {
+      const isOpen = advancedBody.classList.toggle('open');
+      advancedToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+  }
+
   const notifyEnableBtn = document.getElementById('notifyEnableBtn');
   const notifyTestBtn = document.getElementById('notifyTestBtn');
   const notifyStatus = document.getElementById('notifyStatus');
@@ -1559,6 +2024,8 @@
     const enabled = getNotifyEnabledDeviceIds().has(selectedId);
     notifyEnableBtn.disabled = false;
     notifyEnableBtn.textContent = enabled ? 'Disable notifications' : 'Enable notifications';
+    notifyEnableBtn.classList.toggle('state-on', enabled);
+    notifyEnableBtn.classList.toggle('state-off', !enabled);
     notifyTestBtn.style.display = enabled ? 'block' : 'none';
     if (!preserveStatus) {
       notifyStatus.textContent = enabled ? 'This browser will get alerts for this device.' : '';
