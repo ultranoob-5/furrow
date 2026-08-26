@@ -1,4 +1,20 @@
 
+## [1.2.2] - 2026-08-26
+
+- Reduced heap fragmentation risk in Cloud::publishDevice() and
+  Cloud::publishMotor() - both run every 10 seconds for as long as the
+  device is up, potentially months at a time. Replaced repeated
+  String concatenation (each += can reallocate the whole buffer on
+  the heap as it grows) with a single snprintf() into a fixed stack
+  buffer per function - zero heap allocations for the JSON
+  construction itself. Behavior-preserving: verified with a
+  standalone comparison harness that the old and new logic produce
+  byte-identical JSON across 8 cases (normal operation, no WhatsApp
+  phone, offline device, escaped-quote name, max uptime value).
+  Everything else in cloud.cpp (OTA, remote commands, path setup)
+  deliberately left as String - those paths are one-time or rare/
+  human-triggered, not a real fragmentation risk.
+
 ## [1.2.1] - 2026-08-25
 
 - Fixed two real-hardware issues found while field-testing v1.2.0's CT
