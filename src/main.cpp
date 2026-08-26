@@ -139,7 +139,16 @@ void loop()
 
         Serial.println(runningNow ? "Motor is now RUNNING" : "Motor is now OFF");
 
-        cloud.publishMotor();
+        // startedVia only ever applies to a transition into RUNNING -
+        // see cloud.h's comment on remoteStartWasPending() for why a
+        // stop can't be inferred the same safe way (power loss, a
+        // trip, or an overload can all stop a motor with no remote
+        // command involved at all, so "no remote command pending"
+        // doesn't mean "manual" the way it does for a start).
+        if (runningNow)
+            cloud.publishMotor(cloud.remoteStartWasPending() ? "remote" : "manual");
+        else
+            cloud.publishMotor();
     }
 
     cloud.loop();

@@ -616,7 +616,7 @@ void Cloud::publishDevice()
     database.set<object_t>(aClientMain, statusPath, object_t(json), processData, "publishDevice");
 }
 
-void Cloud::publishMotor()
+void Cloud::publishMotor(const char *startedVia)
 {
     if (!app.ready())
         return;
@@ -633,14 +633,32 @@ void Cloud::publishMotor()
     // sizing comment on publishDevice() below for why the much rarer/
     // one-time paths in this file (path setup, OTA, remote commands)
     // were deliberately left as String.
-    char json[96];
-    int len = snprintf(json, sizeof(json),
-        "{\"state\":\"%s\",\"updatedAt\":%lu}",
-        motor.isRunning() ? "RUNNING" : "OFF",
-        millis());
+    //
+    // startedVia is only ever non-null from the one call site that
+    // just caught a transition into RUNNING (see cloud.h's comment on
+    // the declaration) - database.set()'s full-replace semantics mean
+    // any call that omits it (every heartbeat, every OFF transition)
+    // naturally clears out whatever was there before, so a stale tag
+    // never lingers into a later, unrelated publish.
+    char json[128];
+    int len = (startedVia != nullptr)
+        ? snprintf(json, sizeof(json),
+              "{\"state\":\"%s\",\"updatedAt\":%lu,\"startedVia\":\"%s\"}",
+              motor.isRunning() ? "RUNNING" : "OFF",
+              millis(),
+              startedVia)
+        : snprintf(json, sizeof(json),
+              "{\"state\":\"%s\",\"updatedAt\":%lu}",
+              motor.isRunning() ? "RUNNING" : "OFF",
+              millis());
 
     if (len < 0 || len >= (int)sizeof(json))
-        Logger::error(TAG, "publishMotor: JSON truncated - buffer too small (shouldn't be reachable, both fields are fixed-format)");
+        Logger::error(TAG, "publishMotor: JSON truncated - buffer too small (shouldn't be reachable, all fields are fixed-format)");
 
     database.set<object_t>(aClientMain, motorPath, object_t(json), processData, "publishMotor");
+}
+
+bool Cloud::remoteStartWasPending()
+{
+    return commandConfirmPending == "start";
 }

@@ -239,7 +239,25 @@ exports.onMotorStateChanged = onValueWritten(
     const name = nameSnap.val() || deviceId;
 
     try {
-      const body = after === "RUNNING" ? "Motor started." : "Motor stopped.";
+      let body = after === "RUNNING" ? "Motor started." : "Motor stopped.";
+
+      // startedVia only ever applies to a transition into RUNNING (see
+      // src/cloud.h's comment on remoteStartWasPending() for why a
+      // stop can't be attributed the same safe way) - a separate read
+      // since this trigger only sees the motor/state leaf itself, not
+      // its sibling fields. Absent for OFF transitions and for the
+      // rare case a RUNNING transition happened without it (falls
+      // back to the plain message, same as before this existed).
+      if (after === "RUNNING") {
+        const viaSnap = await db.ref(`devices/${deviceId}/motor/startedVia`).once("value");
+        const via = viaSnap.val();
+        if (via === "remote") {
+          body = "Motor started via remote command.";
+        } else if (via === "manual") {
+          body = "Motor started manually at the panel.";
+        }
+      }
+
       const result = await sendPushToDevice(deviceId, `${name} is now ${after}`, body);
       logger.info(`[MotorPush] ${deviceId} (${name}): ${before} -> ${after}, sent to ${result.sent} token(s)`);
     } catch (err) {

@@ -1,4 +1,24 @@
 
+## [1.3.1] - 2026-08-26
+
+- Motor-started push notifications now say whether it was a remote
+  command or someone at the panel: "Motor started via remote command"
+  vs "Motor started manually at the panel", instead of just "Motor
+  started." Detected by exclusion, not by directly sensing the
+  physical button (which the ESP32 has no way to do): if a real start
+  is detected and no remote start command is currently awaiting
+  confirmation, nothing else could have caused it.
+- Deliberately start-only, not stop: a motor stopping without a
+  remote command in flight could mean several different things (power
+  loss, an overload trip, a genuine manual stop), so guessing "manual"
+  there would often be wrong. A motor starting only has two possible
+  causes, so the same inference is safe there and not for stops.
+- New optional startedVia field in the motor RTDB node ("remote" |
+  "manual"), only ever present on the specific publish that caught a
+  transition into RUNNING - never on the routine heartbeat republish
+  or an OFF transition, and automatically cleared by the next publish
+  that omits it (database.set()'s full-replace semantics).
+
 ## [1.3.0] - 2026-08-26
 
 - Added failed start/stop detection and alerting: a remote Start/Stop

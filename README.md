@@ -156,8 +156,12 @@ port, relay cables, and serial pins. ~1.2h print time.
   events: power loss, power restored, and the motor starting or
   stopping (including a physical button press at the panel, not just
   remote commands - this comes from the same real current-sensor
-  feedback as everything else). Enabled per device, from that
-  device's own panel on the dashboard - see
+  feedback as everything else). A motor-started notification also
+  says whether it was a remote command or someone at the panel - only
+  for starts, not stops, since a stop has too many other possible
+  causes (power loss, an overload trip) to safely guess "manual" just
+  because no remote command was involved. Enabled per device, from
+  that device's own panel on the dashboard - see
   [SETUP.md step 11](SETUP.md#11-push-notifications-optional)
 - **Failed start/stop alerts**, on both WhatsApp and push: if a remote
   Start or Stop command doesn't actually take effect within 30
