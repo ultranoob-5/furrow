@@ -269,10 +269,11 @@ step 4.
 ## 11. Push notifications (optional)
 
 Browser/PWA push notifications, alongside WhatsApp (step 8), for the
-same kinds of events: power loss, power restored, and motor
-starting/stopping. Also needs the Blaze plan (same reasoning as step
-8, since this runs as Cloud Functions too) - skip this section if you
-haven't upgraded and don't plan to.
+same kinds of events: power loss, power restored, motor starting/
+stopping, and a remote command failing to take effect. Also needs the
+Blaze plan (same reasoning as step 8, since this runs as Cloud
+Functions too) - skip this section if you haven't upgraded and don't
+plan to.
 
 1. Firebase Console → your project → gear icon → **Project settings**
    → **General** tab → scroll to **Your apps** → your web app → **SDK
