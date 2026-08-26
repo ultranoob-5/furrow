@@ -1830,7 +1830,14 @@
 
     if (typed === null) return; // cancelled
 
-    if (typed.trim() !== name) {
+    // .trim() on both sides, not just typed - name itself is never
+    // trimmed anywhere it's set (provisioning's form field, the
+    // rename flow), so a device name with an accidental leading/
+    // trailing space (easy to type by mistake, especially on a
+    // mobile keyboard) would otherwise make this comparison
+    // permanently fail: the person can't see or reasonably be
+    // expected to type an invisible space to match what's stored.
+    if (typed.trim() !== name.trim()) {
       alert('Name didn\'t match - factory reset cancelled, nothing was sent.');
       return;
     }
@@ -1955,6 +1962,15 @@
 
   auth.signOut()
     .then(() => {
+
+      // Firebase's .on('value', ...) listeners are persistent - they
+      // never auto-cleanup on their own. Without this, logging out
+      // just reset deviceListenerStarted (letting a future login
+      // register a fresh listener) while the OLD one kept running
+      // forever underneath, silently accumulating one more on every
+      // login/logout cycle in the same browser session - each firing
+      // redundantly on every future device update.
+      devicesRef.off('value');
 
       devices = {};
       selectedId = null;
