@@ -220,8 +220,11 @@ Full step-by-step setup is in **[SETUP.md](SETUP.md)** - expect
 2. Copy `include/secrets.example.h` → `include/secrets.h` and fill in
    your own values (this file is never shared/committed - see
    [Secrets](#secrets))
-3. Flash the firmware onto the ESP32 once, over USB, using PlatformIO
-   (a plugin for the free VS Code editor)
+3. Flash the firmware onto the ESP32 once, over USB - either the
+   browser flasher at `flash.html` on your deployed dashboard (just
+   pick a release and click through, Chrome/Edge desktop only) or
+   PlatformIO (a plugin for the free VS Code editor) if you're
+   building the firmware yourself
 4. Connect your phone to the ESP32's temporary WiFi network and finish
    setup from a browser - no app needed
 5. Open the dashboard, sign in, done

@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Furrow - Flash a device</title>
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!-- ESP Web Tools - handles the actual flashing protocol (entering
+     bootloader mode, erasing, writing each part, verifying) over the
+     Web Serial API. This project doesn't reimplement any of that -
+     https://esphome.github.io/esp-web-tools/, pinned to a specific
+     version rather than @latest for stability, matching how this
+     project already pins the Firebase SDK version in dashboard.html. -->
+<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+
+<style>
+  :root{
+    --bg: #14161A;
+    --bg-glow: #1d2027;
+    --panel: #1B1E23;
+    --panel-raised: #21252B;
+    --border: #2E333B;
+    --text: #ECE9E2;
+    --muted: #868C97;
+    --amber: #E8A33D;
+    --amber-soft: rgba(232,163,61,0.14);
+    --green: #49B675;
+    --green-soft: rgba(73,182,117,0.14);
+    --red: #E15241;
+    --red-soft: rgba(225,82,65,0.12);
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+    --display: 'Nunito', 'Inter', system-ui, sans-serif;
+    --radius-lg: 22px;
+    --radius-md: 16px;
+    --radius-sm: 12px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body{
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(1200px 600px at 50% -10%, var(--bg-glow) 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: var(--sans);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 60px;
+  }
+
+  .app-title{
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .app-title .leaf-mark{ width: 34px; height: 34px; flex-shrink: 0; }
+
+  .app-title .brand{
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 20px;
+    letter-spacing: -0.01em;
+  }
+
+  .subtitle{
+    width: 100%;
+    max-width: 480px;
+    color: var(--muted);
+    font-size: 13.5px;
+    margin: 0 0 22px;
+  }
+
+  .panel{
+    width: 100%;
+    max-width: 480px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 30px 80px -30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03);
+    overflow: hidden;
+    margin-bottom: 18px;
+  }
+
+  .panel-section{ padding: 22px 24px; }
+  .panel-section + .panel-section{ border-top: 1px solid var(--border); }
+
+  .section-label{
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  select{
+    appearance: none;
+    width: 100%;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 13px 15px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+
+  select:focus{ outline: none; border-color: var(--amber); }
+
+  .release-notes{
+    margin-top: 14px;
+    padding: 14px 16px;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--muted);
+    white-space: pre-wrap;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  .install-row{
+    display: flex;
+    justify-content: center;
+    padding: 8px 0 4px;
+  }
+
+  esp-web-install-button{ --esp-tools-button-color: var(--green); }
+
+  .install-btn{
+    appearance: none;
+    background: linear-gradient(180deg, #5fd18a 0%, var(--green) 55%, #2c8a54 100%);
+    color: #0e1210;
+    border: none;
+    border-radius: 999px;
+    padding: 15px 36px;
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 15.5px;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #1f6e42, 0 10px 20px -8px rgba(73,182,117,0.5);
+  }
+
+  .install-btn:hover{ filter: brightness(1.05); }
+
+  .status-banner{
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    margin-top: 14px;
+    border-radius: var(--radius-sm);
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+
+  .status-banner.warn{
+    display: flex;
+    background: var(--amber-soft);
+    border: 1px solid rgba(232,163,61,0.3);
+  }
+
+  .status-banner.error{
+    display: flex;
+    background: var(--red-soft);
+    border: 1px solid rgba(225,82,65,0.3);
+    color: var(--red);
+  }
+
+  .steps{
+    margin: 0;
+    padding-left: 20px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--muted);
+  }
+
+  .steps li::marker{ color: var(--amber); }
+
+  .steps strong{ color: var(--text); }
+
+  details{
+    margin-top: 4px;
+  }
+
+  summary{
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--muted);
+    padding: 4px 0;
+  }
+
+  summary:hover{ color: var(--amber); }
+
+  .troubleshoot-body{
+    margin-top: 10px;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+
+  .troubleshoot-body p{ margin: 0 0 10px; }
+  .troubleshoot-body p:last-child{ margin-bottom: 0; }
+
+  .footer-note{
+    width: 100%;
+    max-width: 480px;
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .footer-note a{ color: var(--muted); }
+
+  code{
+    font-family: var(--mono);
+    font-size: 0.92em;
+    background: rgba(255,255,255,0.06);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+
+  <a href="/" style="text-decoration:none; color:inherit;">
+  <div class="app-title">
+    <svg class="leaf-mark" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><g transform="translate(256,268)"><path d="M0,-175 C 100,-140 165,-55 150,35 C 138,105 75,165 0,195 C -75,165 -138,105 -150,35 C -165,-55 -100,-140 0,-175 Z" fill="#49B675"/><path d="M0,-160 C 0,-60 0,80 0,185" stroke="#3a8a5a" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.5"/><rect x="-7" y="188" width="14" height="42" rx="6" fill="#3a8a5a"/><g stroke="#E8A33D" stroke-width="7" fill="none" stroke-linecap="round"><path d="M0,-130 L0,-40"/><path d="M0,-40 L-70,-40 L-70,10"/><path d="M0,-40 L70,-40 L70,10"/><path d="M0,-40 L0,60 L-45,60 L-45,110"/><path d="M0,60 L45,60 L45,110"/></g><g fill="#E8A33D"><circle cx="0" cy="-130" r="9"/><circle cx="0" cy="-40" r="9"/><circle cx="-70" cy="-40" r="8"/><circle cx="70" cy="-40" r="8"/><circle cx="-70" cy="10" r="8"/><circle cx="70" cy="10" r="8"/><circle cx="0" cy="60" r="8"/><circle cx="-45" cy="60" r="8"/><circle cx="45" cy="60" r="8"/><circle cx="-45" cy="110" r="8"/><circle cx="45" cy="110" r="8"/></g></g></svg>
+    <span class="brand">Furrow</span>
+  </div>
+  </a>
+  <p class="subtitle">Flash a blank ESP32 with Furrow firmware for the first time - straight from your browser, no software to install.</p>
+
+  <div class="panel">
+    <div class="panel-section">
+      <div class="section-label">Firmware version</div>
+      <select id="versionSelect">
+        <option value="">Loading releases from GitHub&hellip;</option>
+      </select>
+      <div class="release-notes" id="releaseNotes" style="display:none;"></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="install-row">
+        <esp-web-install-button id="installButton">
+          <button class="install-btn" slot="activate" id="installActivateBtn" disabled>Connect device</button>
+        </esp-web-install-button>
+      </div>
+
+      <div class="status-banner" id="browserWarning">
+        &#9888;&#65039; This needs Chrome or Edge on a computer, connected over USB. Safari, Firefox, and any browser on iPhone/iPad can&rsquo;t do this - it&rsquo;s a platform limitation, not something this page can work around.
+      </div>
+
+      <div class="status-banner" id="loadError"></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">How this works</div>
+      <ol class="steps">
+        <li>Connect the ESP32 to this computer with a USB cable.</li>
+        <li>Click <strong>Connect device</strong> above and pick the right serial port when your browser asks.</li>
+        <li>Choose <strong>Install</strong> - this erases the chip and writes the selected firmware from scratch, since this is meant for a blank or previously-different device.</li>
+        <li>Wait for it to finish. Don&rsquo;t disconnect the cable while it&rsquo;s writing.</li>
+        <li>Once it reboots, follow <a href="https://github.com/ultranoob-5/furrow/blob/main/SETUP.md" target="_blank" rel="noopener">SETUP.md</a> to connect it to WiFi and your Furrow account for the first time.</li>
+      </ol>
+
+      <details>
+        <summary>Already have a Furrow device running? Don&rsquo;t use this.</summary>
+        <div class="troubleshoot-body">
+          <p>This tool is for a device that has never run Furrow firmware before, or one you want to wipe and start over on. An already-provisioned device updates itself remotely from its own dashboard panel (Advanced settings &rarr; Update firmware) - no cable needed, and it won&rsquo;t lose its WiFi/owner configuration the way a full flash from here would.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Troubleshooting</summary>
+        <div class="troubleshoot-body">
+          <p><strong>No port shows up when you click Connect:</strong> your computer may need a driver for this board's USB-to-serial chip (commonly CP2102 or CH340) - search for "CP2102 driver" or "CH340 driver" plus your OS. Most Mac/Linux systems already have these built in.</p>
+          <p><strong>Connects, but the install fails partway through:</strong> some bare ESP32 boards need you to manually hold the <strong>BOOT</strong> button while it connects, since they lack the auto-reset circuit that handles this automatically on most dev boards. Hold BOOT, click Connect, keep holding until it starts writing, then release.</p>
+          <p><strong>Something went wrong and the board won't boot at all:</strong> this is recoverable - hold <strong>BOOT</strong>, briefly press and release <strong>EN</strong> (reset), then release BOOT. This forces the chip back into download mode so you can just try the flash again.</p>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <p class="footer-note">
+    Firmware built and published automatically from <a href="https://github.com/ultranoob-5/furrow" target="_blank" rel="noopener">github.com/ultranoob-5/furrow</a> on every tagged release - this page never modifies or stores it, only relays it from GitHub.
+  </p>
+
+<script>
+  const GITHUB_OWNER = 'ultranoob-5';
+  const GITHUB_REPO = 'furrow';
+
+  // Deployed region for firmwareProxy - no explicit region was set on
+  // that function (see functions/index.js), so it deploys to Cloud
+  // Functions v2's default, us-central1, same as this project's other
+  // non-RTDB-triggered functions (powerWatchdog, sendTestNotification).
+  // If a future deploy ever changes this, this is the one line to
+  // update - check the actual URL Firebase reports after deploying
+  // functions if this ever stops working.
+  const FIRMWARE_PROXY_BASE = 'https://us-central1-furrow-123098.cloudfunctions.net/firmwareProxy';
+
+  // Every part a full flash of a blank ESP32 needs, and the standard
+  // offsets for this chip family - not something that varies per
+  // release unless the project's partition scheme itself changes
+  // (platformio.ini doesn't customize it, so these are the ESP32
+  // Arduino framework's own defaults). See
+  // .github/workflows/build-and-release.yml for where these 4 files
+  // actually get built and published as release assets.
+  const FLASH_PARTS = [
+    { file: 'bootloader.bin', offset: 4096 },
+    { file: 'partitions.bin', offset: 32768 },
+    { file: 'boot_app0.bin', offset: 57344 },
+    { file: 'firmware.bin', offset: 65536 },
+  ];
+
+  const REQUIRED_ASSET_NAMES = FLASH_PARTS.map((p) => p.file);
+
+  const versionSelect = document.getElementById('versionSelect');
+  const releaseNotes = document.getElementById('releaseNotes');
+  const installButton = document.getElementById('installButton');
+  const installActivateBtn = document.getElementById('installActivateBtn');
+  const browserWarning = document.getElementById('browserWarning');
+  const loadError = document.getElementById('loadError');
+
+  // Web Serial API support check - Chrome/Edge desktop only, as of
+  // today. Checked directly rather than sniffing the user agent,
+  // since that's the actual capability that matters and it's a more
+  // durable check as browser support evolves.
+  if (!('serial' in navigator)) {
+    browserWarning.className = 'status-banner warn';
+  }
+
+  function showError(message) {
+    loadError.textContent = message;
+    loadError.className = 'status-banner error';
+  }
+
+  // Builds the manifest ESP Web Tools needs, pointing each part at the
+  // CORS proxy (see functions/index.js's firmwareProxy for why a direct
+  // GitHub URL doesn't work here - GitHub's release-asset CDN sends no
+  // Access-Control-Allow-Origin header at all, confirmed directly).
+  // Returned as a blob: URL, which recent esp-web-tools versions
+  // resolve correctly - avoids needing a real manifest.json file
+  // published anywhere, since the structure is fully predictable from
+  // the tag name alone.
+  function buildManifestUrl(tag) {
+    const manifest = {
+      name: 'Furrow',
+      version: tag,
+      new_install_prompt_erase: true,
+      builds: [
+        {
+          chipFamily: 'ESP32',
+          parts: FLASH_PARTS.map((p) => ({
+            path: `${FIRMWARE_PROXY_BASE}?tag=${encodeURIComponent(tag)}&file=${encodeURIComponent(p.file)}`,
+            offset: p.offset,
+          })),
+        },
+      ],
+    };
+
+    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+    return URL.createObjectURL(blob);
+  }
+
+  let currentManifestUrl = null;
+
+  function selectVersion(release) {
+    if (currentManifestUrl) URL.revokeObjectURL(currentManifestUrl);
+    currentManifestUrl = buildManifestUrl(release.tag_name);
+    installButton.setAttribute('manifest', currentManifestUrl);
+    installActivateBtn.disabled = false;
+
+    if (release.body && release.body.trim()) {
+      releaseNotes.textContent = release.body.trim();
+      releaseNotes.style.display = 'block';
+    } else {
+      releaseNotes.style.display = 'none';
+    }
+  }
+
+  function hasFullFlashSet(release) {
+    const assetNames = new Set((release.assets || []).map((a) => a.name));
+    return REQUIRED_ASSET_NAMES.every((name) => assetNames.has(name));
+  }
+
+  fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases`)
+    .then((r) => {
+      if (!r.ok) throw new Error(`GitHub API returned ${r.status}`);
+      return r.json();
+    })
+    .then((releases) => {
+      // Older releases (before this flasher existed) only published
+      // firmware.bin, not the full bootloader/partitions/boot_app0 set
+      // a blank chip actually needs - filtered out rather than shown
+      // as an option that would just fail partway through.
+      const flashable = releases.filter(hasFullFlashSet);
+
+      if (flashable.length === 0) {
+        showError('No releases with a complete flash set were found yet.');
+        versionSelect.innerHTML = '<option value="">No releases available</option>';
+        return;
+      }
+
+      versionSelect.innerHTML = '';
+      flashable.forEach((release, i) => {
+        const opt = document.createElement('option');
+        opt.value = release.tag_name;
+        opt.textContent = release.tag_name + (i === 0 ? ' (latest)' : '');
+        versionSelect.appendChild(opt);
+      });
+
+      versionSelect.addEventListener('change', () => {
+        const chosen = flashable.find((r) => r.tag_name === versionSelect.value);
+        if (chosen) selectVersion(chosen);
+      });
+
+      selectVersion(flashable[0]); // default to latest
+    })
+    .catch((err) => {
+      console.error('Failed to load releases', err);
+      showError('Couldn\u2019t load the release list from GitHub. Check your connection and reload.');
+      versionSelect.innerHTML = '<option value="">Couldn\u2019t load releases</option>';
+    });
+</script>
+
+</body>
+</html>

@@ -68,6 +68,66 @@ jobs:
       - name: Rename output for a stable, predictable asset name
         run: cp .pio/build/esp32dev/firmware.bin firmware.bin
 
+      - name: Extract the full flash set (for first-time/blank-chip flashing)
+        run: |
+          # firmware.bin alone (above) is only sufficient for OTA-style
+          # updates, where a bootloader and partition table are already
+          # on the device from an earlier full flash. The web flasher
+          # (web/flash.html) needs the complete set a blank, never-
+          # before-programmed ESP32 actually requires - these three are
+          # what any full flash (PlatformIO's own `pio run -t upload`
+          # included) writes alongside firmware.bin.
+          cp .pio/build/esp32dev/bootloader.bin bootloader.bin
+          cp .pio/build/esp32dev/partitions.bin partitions.bin
+
+          # boot_app0.bin isn't project-built - it's a fixed file that
+          # initializes the OTA-select partition so the bootloader knows
+          # to boot the app just written. Its actual location/name isn't
+          # as stable across platformio's espressif32 platform versions
+          # as first assumed - platformio.ini doesn't pin a version, so
+          # this build could be on the newer ESP-IDF-based Arduino Core
+          # 3.x, which restructured the whole build system; ESP-IDF's own
+          # native name for the same file is ota_data_initial.bin, not
+          # boot_app0.bin, and newer builds sometimes already copy it
+          # straight into the build output directory rather than only
+          # living in the installed framework package.
+          #
+          # Checks the most likely spots first, under both names, before
+          # falling back to a broad, unrestricted search - and if even
+          # that comes up empty, dumps enough real information (the full
+          # build output directory, every .bin file under ~/.platformio
+          # matching either name) to fix this correctly on the next
+          # attempt instead of guessing blind a third time.
+          BOOT_APP0=""
+          for CANDIDATE in \
+            ".pio/build/esp32dev/boot_app0.bin" \
+            ".pio/build/esp32dev/ota_data_initial.bin"
+          do
+            if [ -f "$CANDIDATE" ]; then
+              BOOT_APP0="$CANDIDATE"
+              break
+            fi
+          done
+
+          if [ -z "$BOOT_APP0" ]; then
+            BOOT_APP0=$(find ~/.platformio \( -name "boot_app0.bin" -o -name "ota_data_initial.bin" \) 2>/dev/null | head -n1)
+          fi
+
+          if [ -z "$BOOT_APP0" ]; then
+            echo "::error::boot_app0.bin/ota_data_initial.bin not found in the build output or anywhere under ~/.platformio"
+            echo "--- Diagnostic: full contents of .pio/build/esp32dev/ ---"
+            ls -la .pio/build/esp32dev/ || echo "(directory doesn't exist)"
+            echo "--- Diagnostic: any .bin file under ~/.platformio matching boot/ota by name ---"
+            find ~/.platformio -iname "*boot_app0*" -o -iname "*ota_data_initial*" 2>/dev/null
+            exit 1
+          fi
+
+          echo "Found boot_app0/ota_data_initial at: $BOOT_APP0"
+          cp "$BOOT_APP0" boot_app0.bin
+
+          echo "Flash set ready:"
+          ls -la bootloader.bin partitions.bin boot_app0.bin firmware.bin
+
       - name: Extract changelog section for this release
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
@@ -88,7 +148,11 @@ jobs:
       - name: Create/update GitHub Release with firmware attached
         uses: softprops/action-gh-release@v3
         with:
-          files: firmware.bin
+          files: |
+            firmware.bin
+            bootloader.bin
+            partitions.bin
+            boot_app0.bin
           body_path: release_notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

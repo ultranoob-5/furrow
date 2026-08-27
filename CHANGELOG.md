@@ -1,4 +1,23 @@
 
+## [1.3.5] - 2026-08-26
+
+No firmware code changes - identical firmware.bin to v1.3.4. Re-tagged
+purely to get a release published through the updated
+build-and-release.yml (added after v1.3.4 was tagged), which now
+publishes the full flash set (bootloader.bin, partitions.bin,
+boot_app0.bin alongside firmware.bin) that web/flash.html's browser
+flasher needs for a first-time flash of a blank chip.
+
+v1.3.2/v1.3.3/v1.3.4's own releases will never pick this up no matter
+how many times their workflow runs are re-triggered - GitHub Actions
+executes a tag-triggered workflow exactly as that workflow file
+existed at the tagged commit, not whatever's currently on main. Those
+three tags all predate the build-and-release.yml change, so their
+release workflow runs, however many times re-run, only ever have the
+old firmware.bin-only version of the file available to execute. Only
+a new tag pointing at a commit on or after that change actually picks
+up the new behavior - this is that tag.
+
 ## [1.3.4] - 2026-08-26
 
 Found via detailed external review, not this project's own testing -

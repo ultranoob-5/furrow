@@ -1,5 +1,5 @@
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onValueWritten } = require("firebase-functions/v2/database");
 const { defineSecret } = require("firebase-functions/params");
 const { logger } = require("firebase-functions");
@@ -388,5 +388,82 @@ exports.sendTestNotification = onCall(async (request) => {
   } catch (err) {
     logger.error(`[PushTest] send failed: ${err.message}`);
     throw new HttpsError("internal", err.message);
+  }
+});
+
+// web/flash.html's browser flasher needs to fetch firmware binaries
+// from GitHub Releases, but GitHub's release-asset CDN
+// (objects.githubusercontent.com, after the redirect) sends no
+// Access-Control-Allow-Origin header at all - confirmed directly (curl
+// -I against a real release asset shows no CORS header present), not
+// assumed. A browser fetch() from a different origin (this dashboard)
+// is blocked outright, regardless of the asset being fully public.
+// GitHub's own REST API (api.github.com) *is* CORS-enabled, which is
+// why flash.html can list releases directly - it's specifically the
+// binary download endpoint that isn't.
+//
+// This function is the fix: CORS is a browser-enforced restriction,
+// it doesn't apply to a server fetching another server at all, so this
+// fetches the asset itself (no CORS problem here) and returns it with
+// its own Access-Control-Allow-Origin header set. GitHub stays the
+// single real source of firmware binaries - this only ever relays
+// bytes, never stores or modifies them.
+const FIRMWARE_ASSET_ALLOWLIST = ["firmware.bin", "bootloader.bin", "partitions.bin", "boot_app0.bin"];
+const FIRMWARE_TAG_PATTERN = /^v\d+\.\d+\.\d+$/;
+
+// Pure validation, separated from the HTTP trigger below so it can be
+// unit tested directly (see test.js) without needing to mock an
+// Express request/response pair.
+function isValidFirmwareAssetRequest(tag, file) {
+  return typeof tag === "string" && FIRMWARE_TAG_PATTERN.test(tag) &&
+         typeof file === "string" && FIRMWARE_ASSET_ALLOWLIST.includes(file);
+}
+module.exports.isValidFirmwareAssetRequest = isValidFirmwareAssetRequest; // exported for test.js
+
+// Deliberately public/unauthenticated - the whole point is helping
+// someone set up their very first device, plausibly before they have
+// (or before a friend helping them has) any Furrow sign-in at all.
+// Gating this behind auth would add friction to exactly the moment
+// it's supposed to remove it, for data that's already fully public
+// on GitHub's own release page regardless. tag/file are both
+// strictly validated against fixed patterns before being used to
+// build the outbound URL - never passed through directly - so this
+// can't become an open proxy for arbitrary GitHub URLs.
+//
+// invoker: "public" is explicit, not left to the CLI's default -
+// found genuinely conflicting accounts of whether Firebase's tooling
+// makes a new onRequest function callable by an anonymous browser by
+// default or not (a Firebase team member's own forum comment says
+// yes; another real-world report says the opposite happened for
+// them). Rather than deploy and find out which one was true this
+// time via a silent 403 in flash.html, this removes the ambiguity
+// outright.
+exports.firmwareProxy = onRequest({ invoker: "public" }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+
+  const tag = req.query.tag;
+  const file = req.query.file;
+
+  if (!isValidFirmwareAssetRequest(tag, file)) {
+    res.status(400).send("Invalid tag or file");
+    return;
+  }
+
+  const url = `https://github.com/ultranoob-5/furrow/releases/download/${tag}/${file}`;
+
+  try {
+    const upstream = await fetch(url);
+
+    if (!upstream.ok) {
+      logger.warn(`[FirmwareProxy] upstream ${upstream.status} for ${tag}/${file}`);
+      res.status(upstream.status).send(`GitHub returned ${upstream.status} for this release asset`);
+      return;
+    }
+
+    res.set("Content-Type", "application/octet-stream");
+    res.send(Buffer.from(await upstream.arrayBuffer()));
+  } catch (err) {
+    logger.error(`[FirmwareProxy] fetch failed for ${tag}/${file}: ${err}`);
+    res.status(502).send("Failed to fetch firmware from GitHub");
   }
 });

@@ -159,9 +159,25 @@ repository secrets above - no separate ones needed.
 
 ## 6. Flash the firmware
 
-VS Code + PlatformIO: **Build**, then **Upload**. Open Serial Monitor,
-confirm it boots (no credentials yet, so it should drop into
-provisioning mode - see next step).
+Two ways to get firmware onto the device - pick whichever fits:
+
+- **Browser flasher (easiest, no local setup)**: on a computer with
+  Chrome or Edge, open `flash.html` on your deployed dashboard (e.g.
+  `https://furrow-123098.web.app/flash.html`), pick a version, plug
+  in the ESP32 over USB, and click through. Pulls the already-built
+  firmware straight from this repo's GitHub Releases - nothing to
+  install, and none of steps 1-5 above are needed for this path
+  specifically, since you're not building anything locally. Doesn't
+  work on Safari, Firefox, or any browser on iPhone/iPad - a real
+  platform limitation (Web Serial API), not something the page can
+  work around.
+- **VS Code + PlatformIO** (needed if you're changing the firmware
+  itself, not just flashing an existing release): **Build**, then
+  **Upload**.
+
+Either way, open Serial Monitor afterward and confirm it boots (no
+credentials yet, so it should drop into provisioning mode - see next
+step).
 
 ## 7. Provision the device
 

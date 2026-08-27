@@ -27,9 +27,56 @@ assert(typeof mod.onMotorStateChanged === "function", "index.js failed to export
 assert(typeof mod.onPowerRestored === "function", "index.js failed to export onPowerRestored as a function");
 assert(typeof mod.onMotorCommandFailed === "function", "index.js failed to export onMotorCommandFailed as a function");
 assert(typeof mod.sendTestNotification === "function", "index.js failed to export sendTestNotification as a function");
+assert(typeof mod.firmwareProxy === "function", "index.js failed to export firmwareProxy as a function");
+assert(typeof mod.isValidFirmwareAssetRequest === "function", "index.js failed to export isValidFirmwareAssetRequest as a function");
 console.log("Module load check: PASS (this is the exact check that would have caught the admin.database() bug)\n");
 
-const { runWatchdog } = mod;
+const { runWatchdog, isValidFirmwareAssetRequest } = mod;
+
+// Security-relevant: firmwareProxy builds an outbound GitHub URL from
+// these two query params, so a validation bug here is a real open-
+// proxy/SSRF risk, not just a correctness nitpick. Tested directly
+// rather than assumed correct from reading the regex/allowlist.
+function testFirmwareAssetValidation() {
+  const cases = [
+    // [tag, file, expectedValid, description]
+    ["v1.3.4", "firmware.bin", true, "valid tag + valid file"],
+    ["v1.3.4", "bootloader.bin", true, "valid tag + bootloader.bin"],
+    ["v1.3.4", "partitions.bin", true, "valid tag + partitions.bin"],
+    ["v1.3.4", "boot_app0.bin", true, "valid tag + boot_app0.bin"],
+    ["v0.1.1", "firmware.bin", true, "valid older tag still accepted"],
+    ["v1.3.4", "readme.md", false, "file not in the allowlist"],
+    ["v1.3.4", "../../../etc/passwd", false, "path traversal in file"],
+    ["v1.3.4", "firmware.bin?x=1", false, "trailing junk on an otherwise-valid file"],
+    ["1.3.4", "firmware.bin", false, "tag missing the leading v"],
+    ["v1.3", "firmware.bin", false, "tag missing the patch component"],
+    ["v1.3.4.5", "firmware.bin", false, "tag with an extra component"],
+    ["v1.3.4-beta", "firmware.bin", false, "tag with a suffix"],
+    ["main", "firmware.bin", false, "a branch name instead of a tag"],
+    ["v1.3.4; rm -rf /", "firmware.bin", false, "shell-injection-shaped tag"],
+    ["https://evil.example.com/", "firmware.bin", false, "a full URL as the tag"],
+    [null, "firmware.bin", false, "null tag"],
+    [undefined, "firmware.bin", false, "undefined tag"],
+    ["v1.3.4", null, false, "null file"],
+    ["v1.3.4", undefined, false, "undefined file"],
+    [123, "firmware.bin", false, "numeric tag (not a string)"],
+    ["v1.3.4", "", false, "empty string file"],
+    ["", "firmware.bin", false, "empty string tag"],
+  ];
+
+  let failures = 0;
+  for (const [tag, file, expected, description] of cases) {
+    const actual = isValidFirmwareAssetRequest(tag, file);
+    const pass = actual === expected;
+    console.log(`[${pass ? "PASS" : "FAIL"}] ${description} (tag=${JSON.stringify(tag)}, file=${JSON.stringify(file)}) -> ${actual}`);
+    if (!pass) failures++;
+  }
+
+  assert(failures === 0, `${failures} firmwareProxy validation case(s) failed - see above`);
+  console.log("\nfirmwareProxy validation: ALL 21 CASES PASS\n");
+}
+
+testFirmwareAssetValidation();
 
 async function main() {
   const nowMs = Date.now();
