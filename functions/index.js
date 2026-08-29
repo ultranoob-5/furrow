@@ -97,7 +97,21 @@ async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag,
     logger.info(`${deviceId} (${name}): offline ${offlineSeconds}s - alerted`);
 
     try {
-      await setDedupFlag(deviceId);
+      // Snapshot motor state HERE, at first detection - not later, at
+      // recovery time. This is the one moment that's actually safe to
+      // read it: the device has been silently offline for a while
+      // already, so there's no race with its own reconnect sequence
+      // the way reading motor/state at recovery time would have (the
+      // device republishes its own fresh state within a few seconds
+      // of reconnecting - see main.cpp's baselineEstablished gating -
+      // so a read at THAT point could easily land after the fresh
+      // value overwrote the real pre-outage one). Powers the
+      // auto-resume feature (onPowerRestored below) - "was this
+      // motor actually running right before the outage" needs to be
+      // answered from a value that was frozen before recovery could
+      // possibly race it.
+      const motor = (data && data.motor) || {};
+      await setDedupFlag(deviceId, motor.state);
     } catch (err) {
       logger.error(`  Failed to set dedup flag (may re-alert next run): ${err}`);
     }
@@ -201,8 +215,14 @@ exports.powerWatchdog = onSchedule(
       },
       sendWhatsApp: sendWhatsAppReal,
       sendPush: sendPushToDevice,
-      setDedupFlag: async (deviceId) => {
-        await db.ref(`devices/${deviceId}/status/powerAlertSent`).set(true);
+      setDedupFlag: async (deviceId, motorStateAtOutage) => {
+        // Multi-path update, not two separate .set() calls - both
+        // fields should land together atomically, and this is also
+        // just one round-trip instead of two.
+        await db.ref(`devices/${deviceId}`).update({
+          "status/powerAlertSent": true,
+          "motor/stateBeforeOutage": motorStateAtOutage || null,
+        });
       },
       nowMs: Date.now(),
     });
@@ -270,6 +290,39 @@ exports.onMotorStateChanged = onValueWritten(
   }
 );
 
+// Pure decision logic for auto-resume, separated from the actual
+// delayed action (below) so it's unit-testable (see test.js) without
+// needing to fake a real multi-minute sleep.
+//
+// Opt-in and off unless a device's owner explicitly enabled it -
+// this restarts a physical motor with no human confirming in the
+// moment, so silence (missing/absent settings) always means "do
+// nothing," never "assume yes."
+function shouldAutoResume(autoResumeSettings, motorStateBeforeOutage) {
+  if (!autoResumeSettings || autoResumeSettings.enabled !== true) {
+    return false;
+  }
+
+  // "Restore previous state," not "always turn on" - only resumes if
+  // the motor was actually running right before the outage (the
+  // snapshot runWatchdog took at outage detection - see its own
+  // comment for why that specific moment, not recovery time, is the
+  // only race-free place to have captured this).
+  return motorStateBeforeOutage === "RUNNING";
+}
+
+// 1-10 minutes, matching the dashboard's own input constraints -
+// clamped again here rather than trusting the client-supplied range,
+// and falling back to the shortest safe delay (not 0/immediate, not
+// NaN) if the stored value is ever missing or malformed.
+function clampAutoResumeDelayMinutes(delayMinutes) {
+  const n = Number(delayMinutes);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(10, Math.max(1, n));
+}
+module.exports.shouldAutoResume = shouldAutoResume; // exported for test.js
+module.exports.clampAutoResumeDelayMinutes = clampAutoResumeDelayMinutes; // exported for test.js
+
 // Fires a push when a device recovers from a flagged power-loss
 // outage - watches powerAlertSent's true -> false transition, which
 // Cloud::publishDevice() (src/cloud.cpp) already sets automatically
@@ -303,8 +356,119 @@ exports.onPowerRestored = onValueWritten(
     } catch (err) {
       logger.error(`[PowerRestoredPush] ${deviceId} (${name}): send failed: ${err}`);
     }
+
+    // Auto-resume, entirely separate from the push notification above
+    // (which has already gone out either way by this point) - reads
+    // this device's own opt-in settings and the motor-state snapshot
+    // runWatchdog took at outage detection, not anything live.
+    //
+    // Deliberately does NOT sleep inline here to wait out the delay -
+    // event-handling functions (this trigger type) have a hard 540s
+    // (9 min) timeoutSeconds ceiling, confirmed directly by actually
+    // trying to load this function with a longer timeout configured
+    // (it threw immediately) - a 10-minute requested delay alone
+    // already exceeds that cap before any buffer for the work around
+    // it, so a single long-running invocation genuinely can't do
+    // this. Instead just writes a scheduling record; the actual
+    // delayed start is autoResumeWatchdog below - a periodic scheduled
+    // function, the same pattern powerWatchdog already uses
+    // successfully - checking once a minute for delays that have
+    // elapsed, which has no such ceiling since the waiting happens
+    // across many short, independent runs instead of one long one.
+    try {
+      const [autoResumeSnap, stateBeforeSnap] = await Promise.all([
+        db.ref(`devices/${deviceId}/autoResume`).once("value"),
+        db.ref(`devices/${deviceId}/motor/stateBeforeOutage`).once("value"),
+      ]);
+
+      const autoResumeSettings = autoResumeSnap.val();
+      const stateBeforeOutage = stateBeforeSnap.val();
+
+      if (shouldAutoResume(autoResumeSettings, stateBeforeOutage)) {
+        const delayMinutes = clampAutoResumeDelayMinutes(autoResumeSettings.delayMinutes);
+        const dueAt = Date.now() + delayMinutes * 60 * 1000;
+
+        await db.ref(`devices/${deviceId}/autoResume/dueAt`).set(dueAt);
+        logger.info(`[AutoResume] ${deviceId} (${name}): was RUNNING before the outage, auto-resume enabled - scheduled for ${delayMinutes}m from now (${new Date(dueAt).toISOString()})`);
+      }
+
+      // Clear the snapshot either way, once this outage's recovery has
+      // been fully handled - avoids a stale value lingering and being
+      // misread at some unrelated future outage if auto-resume gets
+      // disabled in between.
+      await db.ref(`devices/${deviceId}/motor/stateBeforeOutage`).remove();
+    } catch (err) {
+      logger.error(`[AutoResume] ${deviceId} (${name}): failed: ${err}`);
+    }
   }
 );
+
+// Companion to onPowerRestored above - that function only ever
+// schedules an auto-resume (writes autoResume/dueAt), it never sends
+// the start command itself, since a single event-handling invocation
+// can't safely sleep out a delay that can be up to 10 real minutes
+// (hard 540s timeout ceiling on that trigger type - see its own
+// comment). This is what actually acts once a scheduled delay has
+// elapsed - same "run every minute, check every device" shape as
+// powerWatchdog, just checking a different condition.
+async function runAutoResumeWatchdog({ fetchDevices, sendStartCommand, clearDueAt, nowMs }) {
+  const devices = (await fetchDevices()) || {};
+  const results = [];
+
+  for (const [deviceId, data] of Object.entries(devices)) {
+    const autoResume = (data && data.autoResume) || {};
+    const dueAt = autoResume.dueAt;
+
+    if (dueAt === undefined || dueAt === null) {
+      continue; // nothing scheduled for this device right now
+    }
+
+    if (nowMs < dueAt) {
+      continue; // scheduled, but the delay hasn't elapsed yet
+    }
+
+    try {
+      await sendStartCommand(deviceId);
+      results.push(deviceId);
+    } catch (err) {
+      logger.error(`[AutoResumeWatchdog] ${deviceId}: failed to send start command: ${err}`);
+      continue; // don't clear dueAt if the send itself failed - retry next run
+    }
+
+    try {
+      await clearDueAt(deviceId);
+    } catch (err) {
+      logger.error(`[AutoResumeWatchdog] ${deviceId}: start sent but failed to clear dueAt (may re-send next run): ${err}`);
+    }
+  }
+
+  return results; // list of device IDs actually resumed, useful for tests
+}
+module.exports.runAutoResumeWatchdog = runAutoResumeWatchdog; // exported for test.js
+
+exports.autoResumeWatchdog = onSchedule("every 1 minutes", async () => {
+  const db = getDatabase();
+
+  await runAutoResumeWatchdog({
+    fetchDevices: async () => {
+      const snapshot = await db.ref("devices").once("value");
+      return snapshot.val();
+    },
+    sendStartCommand: async (deviceId) => {
+      // Same command/action path a person clicking Start on the
+      // dashboard already writes to - the device's own
+      // checkCommandConfirmation() (src/cloud.cpp) and the existing
+      // failed-start alert both apply automatically, no special-
+      // casing needed for this being automated rather than a human
+      // click.
+      await db.ref(`devices/${deviceId}/command/action`).set("start");
+    },
+    clearDueAt: async (deviceId) => {
+      await db.ref(`devices/${deviceId}/autoResume/dueAt`).remove();
+    },
+    nowMs: Date.now(),
+  });
+});
 
 // Fires a push when a remote start/stop command doesn't actually take
 // effect within 30s - see src/cloud.cpp's checkCommandConfirmation(),

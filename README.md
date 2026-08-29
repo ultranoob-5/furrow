@@ -171,6 +171,14 @@ port, relay cables, and serial pins. ~1.2h print time.
   silently. Remote commands only - a physical button press at the
   panel never routes through the device's own command handling, so
   there's no expected outcome to check it against for that case.
+- **Auto-resume after a power loss** (optional, off by default, per
+  device): if this pump was actually running right before the power
+  went out, automatically starts it again once the device reconnects -
+  after a delay you set (1-10 minutes), so it doesn't restart the
+  instant power returns. Deliberately restores previous state rather
+  than always turning on - if it was off before the outage, it stays
+  off. Enabled from the same Advanced settings panel as push
+  notifications, on the dashboard.
 
 **Releases**
 - Every version is documented in [CHANGELOG.md](CHANGELOG.md)

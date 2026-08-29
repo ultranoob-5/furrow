@@ -25,6 +25,9 @@
         },
         "fcmTokens": {
           ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+        },
+        "autoResume": {
+          ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
         }
       }
     }

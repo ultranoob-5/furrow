@@ -1020,6 +1020,20 @@
           <div id="notifyStatus" style="font-size:12px; margin-top:8px; opacity:0.8;"></div>
         </div>
 
+        <div class="settings-section" id="autoResumeZone">
+          <div class="settings-label">Auto-resume after power loss</div>
+          <p class="settings-desc">If this pump was running when the power went out, automatically start it again once the device reconnects - after the delay below, so it doesn't restart the instant power returns. Off (default) means nothing restarts on its own; you'd start it yourself from here or the panel.</p>
+          <button class="notify-toggle-btn state-off" id="autoResumeToggleBtn">Enable auto-resume</button>
+          <div id="autoResumeDelayRow" style="margin-top:12px;">
+            <label for="autoResumeDelayInput" style="font-size:12px; color:var(--muted); display:block; margin-bottom:6px;">Delay before restarting (1&ndash;10 minutes)</label>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <input type="number" id="autoResumeDelayInput" min="1" max="10" step="1" value="5" style="width:70px; background:var(--panel-raised); border:1px solid var(--border); color:var(--text); border-radius:var(--radius-sm); padding:10px 12px; font-family:var(--sans); font-size:14px;">
+              <span style="font-size:13px; color:var(--muted);">minutes</span>
+            </div>
+          </div>
+          <div id="autoResumeStatus" style="font-size:12px; margin-top:8px; opacity:0.8;"></div>
+        </div>
+
         <div class="settings-section">
           <div class="settings-label">Restart device</div>
           <p class="settings-desc">Reboots the ESP32 - back online in about 10-20 seconds. The motor itself isn't affected either way; it keeps running or stays off exactly as it was, since that's controlled by the starter panel's own hardware, not the device.</p>
@@ -1388,6 +1402,10 @@
   const notifyEnableBtn = document.getElementById('notifyEnableBtn');
   const notifyTestBtn = document.getElementById('notifyTestBtn');
   const notifyStatus = document.getElementById('notifyStatus');
+  const autoResumeToggleBtn = document.getElementById('autoResumeToggleBtn');
+  const autoResumeDelayRow = document.getElementById('autoResumeDelayRow');
+  const autoResumeDelayInput = document.getElementById('autoResumeDelayInput');
+  const autoResumeStatus = document.getElementById('autoResumeStatus');
   const rRssiBars = document.getElementById('rRssiBars').children;
   const logoutBtn = document.getElementById('logoutBtn');
 
@@ -1598,6 +1616,7 @@
     rLastOnline.textContent = formatDateTime(seen);
 
     refreshNotifyUi();
+    refreshAutoResumeUi(data.autoResume || {});
   }
 
   // RSSI roughly: > -60 great, -60 to -70 good, -70 to -80 weak, < -80 poor
@@ -2243,6 +2262,118 @@
 
   if (notifyTestBtn) {
     notifyTestBtn.addEventListener('click', sendTestNotificationForSelectedDevice);
+  }
+
+  // ---- Auto-resume after power loss --------------------------------
+  // Opt-in, off by default, per device - a physical motor restarting
+  // with no one confirming it in the moment is a real safety-relevant
+  // action, not just a UI convenience, so silence (never touched this
+  // setting) always means "do nothing," never "assume yes." Restores
+  // to the pump's previous state, not an unconditional "always turn
+  // on" - only auto-starts if it was genuinely running right before
+  // the outage (decided server-side by functions/index.js's
+  // shouldAutoResume(), using a snapshot the watchdog took at outage
+  // detection - this dashboard only ever writes the enabled/delay
+  // settings, never decides or acts on them itself).
+  let autoResumeBusy = false;
+
+  function clampDelayInput(value){
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 5;
+    return Math.min(10, Math.max(1, Math.round(n)));
+  }
+
+  // preserveStatus=true skips resetting autoResumeStatus - same
+  // reasoning as refreshNotifyUi's own preserveStatus flag: without
+  // it, this function's own call from renderDetail() (which runs on
+  // every ~1s periodic refresh) would immediately clobber whatever
+  // confirmation message an action just set, before anyone could
+  // read it - a bug already found and fixed once for the notify
+  // toggle, applied here from the start instead of repeating it.
+  function refreshAutoResumeUi(settings, preserveStatus){
+    if (!autoResumeToggleBtn || autoResumeBusy) return;
+
+    autoResumeToggleBtn.disabled = false;
+
+    const enabled = settings.enabled === true;
+    autoResumeToggleBtn.textContent = enabled ? 'Disable auto-resume' : 'Enable auto-resume';
+    autoResumeToggleBtn.classList.toggle('state-on', enabled);
+    autoResumeToggleBtn.classList.toggle('state-off', !enabled);
+    autoResumeDelayRow.style.display = 'block';
+
+    // Only overwrite the delay input from remote data if the person
+    // isn't actively focused on it right now - avoids clobbering an
+    // in-progress edit on the next periodic refresh.
+    if (document.activeElement !== autoResumeDelayInput) {
+      autoResumeDelayInput.value = settings.delayMinutes || 5;
+    }
+
+    if (!preserveStatus) {
+      autoResumeStatus.textContent = '';
+    }
+  }
+
+  async function toggleAutoResume(){
+    if (!selectedId || autoResumeBusy) return;
+
+    const currentSettings = (devices[selectedId] && devices[selectedId].autoResume) || {};
+    const currentlyEnabled = currentSettings.enabled === true;
+
+    autoResumeBusy = true;
+    autoResumeToggleBtn.disabled = true;
+    autoResumeStatus.textContent = currentlyEnabled ? 'Disabling\u2026' : 'Enabling\u2026';
+
+    try {
+      if (currentlyEnabled) {
+        // Only flips enabled off - keeps the last delayMinutes value,
+        // so re-enabling later remembers the previous preference
+        // rather than resetting to the default every time.
+        await db.ref(`devices/${selectedId}/autoResume/enabled`).set(false);
+        autoResumeStatus.textContent = 'Auto-resume disabled.';
+      } else {
+        const delayMinutes = clampDelayInput(autoResumeDelayInput.value);
+        await db.ref(`devices/${selectedId}/autoResume`).update({ enabled: true, delayMinutes });
+        autoResumeStatus.textContent = `Enabled - will restart ${delayMinutes} minute${delayMinutes === 1 ? '' : 's'} after power returns, only if it was running before the outage.`;
+      }
+    } catch (err) {
+      console.error('Failed to update auto-resume setting', err);
+      autoResumeStatus.textContent = 'Failed: ' + err.message;
+    } finally {
+      autoResumeBusy = false;
+      const latest = (devices[selectedId] && devices[selectedId].autoResume) || {};
+      refreshAutoResumeUi(latest, true);
+    }
+  }
+
+  if (autoResumeToggleBtn) {
+    autoResumeToggleBtn.addEventListener('click', toggleAutoResume);
+  }
+
+  if (autoResumeDelayInput) {
+    autoResumeDelayInput.addEventListener('change', async () => {
+      if (!selectedId || autoResumeBusy) return;
+
+      const data = devices[selectedId] || {};
+      // The delay input is always visible (even while disabled, so
+      // someone can set their preferred value before ever turning
+      // this on) - but only writes delayMinutes as its own update
+      // while already enabled. Changing it before enabling just sits
+      // in the input locally; toggleAutoResume()'s own enable branch
+      // reads whatever's currently there and writes it together with
+      // enabled:true in one update, so nothing is lost either way.
+      if (!(data.autoResume && data.autoResume.enabled === true)) return;
+
+      const delayMinutes = clampDelayInput(autoResumeDelayInput.value);
+      autoResumeDelayInput.value = delayMinutes; // reflect the clamped value immediately, don't wait for the round-trip
+
+      try {
+        await db.ref(`devices/${selectedId}/autoResume/delayMinutes`).set(delayMinutes);
+        autoResumeStatus.textContent = `Delay updated to ${delayMinutes} minute${delayMinutes === 1 ? '' : 's'}.`;
+      } catch (err) {
+        console.error('Failed to update auto-resume delay', err);
+        autoResumeStatus.textContent = 'Failed to save delay: ' + err.message;
+      }
+    });
   }
 </script>
 

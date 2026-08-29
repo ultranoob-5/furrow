@@ -29,9 +29,13 @@ assert(typeof mod.onMotorCommandFailed === "function", "index.js failed to expor
 assert(typeof mod.sendTestNotification === "function", "index.js failed to export sendTestNotification as a function");
 assert(typeof mod.firmwareProxy === "function", "index.js failed to export firmwareProxy as a function");
 assert(typeof mod.isValidFirmwareAssetRequest === "function", "index.js failed to export isValidFirmwareAssetRequest as a function");
+assert(typeof mod.autoResumeWatchdog === "function", "index.js failed to export autoResumeWatchdog as a function");
+assert(typeof mod.runAutoResumeWatchdog === "function", "index.js failed to export runAutoResumeWatchdog as a function");
+assert(typeof mod.shouldAutoResume === "function", "index.js failed to export shouldAutoResume as a function");
+assert(typeof mod.clampAutoResumeDelayMinutes === "function", "index.js failed to export clampAutoResumeDelayMinutes as a function");
 console.log("Module load check: PASS (this is the exact check that would have caught the admin.database() bug)\n");
 
-const { runWatchdog, isValidFirmwareAssetRequest } = mod;
+const { runWatchdog, runAutoResumeWatchdog, isValidFirmwareAssetRequest } = mod;
 
 // Security-relevant: firmwareProxy builds an outbound GitHub URL from
 // these two query params, so a validation bug here is a real open-
@@ -78,12 +82,115 @@ function testFirmwareAssetValidation() {
 
 testFirmwareAssetValidation();
 
+// Safety-relevant: this decides whether a physical motor auto-starts
+// with no human confirming in the moment. Tested directly rather than
+// trusted from reading the code - silence (missing settings, wrong
+// type, anything not exactly the expected shape) must always resolve
+// to "don't resume," never accidentally to "do."
+function testShouldAutoResume() {
+  const cases = [
+    // [autoResumeSettings, motorStateBeforeOutage, expected, description]
+    [{ enabled: true }, "RUNNING", true, "enabled + was running -> resumes"],
+    [{ enabled: true }, "OFF", false, "enabled + was off -> does not resume"],
+    [{ enabled: true }, undefined, false, "enabled + no snapshot at all -> does not resume"],
+    [{ enabled: true }, null, false, "enabled + null snapshot -> does not resume"],
+    [{ enabled: false }, "RUNNING", false, "disabled + was running -> does not resume"],
+    [null, "RUNNING", false, "no settings object at all -> does not resume"],
+    [undefined, "RUNNING", false, "undefined settings -> does not resume"],
+    [{}, "RUNNING", false, "settings object with no enabled field -> does not resume"],
+    [{ enabled: "true" }, "RUNNING", false, "enabled as a string, not boolean true -> does not resume"],
+    [{ enabled: 1 }, "RUNNING", false, "enabled as a truthy number, not boolean true -> does not resume"],
+  ];
+
+  let failures = 0;
+  for (const [settings, stateBefore, expected, description] of cases) {
+    const actual = mod.shouldAutoResume(settings, stateBefore);
+    const pass = actual === expected;
+    console.log(`[${pass ? "PASS" : "FAIL"}] ${description} -> ${actual}`);
+    if (!pass) failures++;
+  }
+
+  assert(failures === 0, `${failures} shouldAutoResume case(s) failed - see above`);
+  console.log("\nshouldAutoResume: ALL 10 CASES PASS\n");
+}
+
+function testClampAutoResumeDelayMinutes() {
+  const cases = [
+    [5, 5, "within range, unchanged"],
+    [1, 1, "lower bound, unchanged"],
+    [10, 10, "upper bound, unchanged"],
+    [0, 1, "below range, clamped up to 1"],
+    [15, 10, "above range, clamped down to 10"],
+    [-5, 1, "negative, clamped up to 1"],
+    [undefined, 1, "undefined, falls back to 1"],
+    [null, 1, "null, falls back to 1"],
+    ["abc", 1, "non-numeric string, falls back to 1"],
+    ["7", 7, "numeric string, coerced correctly"],
+  ];
+
+  let failures = 0;
+  for (const [input, expected, description] of cases) {
+    const actual = mod.clampAutoResumeDelayMinutes(input);
+    const pass = actual === expected;
+    console.log(`[${pass ? "PASS" : "FAIL"}] ${description}: clampAutoResumeDelayMinutes(${JSON.stringify(input)}) -> ${actual}`);
+    if (!pass) failures++;
+  }
+
+  assert(failures === 0, `${failures} clampAutoResumeDelayMinutes case(s) failed - see above`);
+  console.log("\nclampAutoResumeDelayMinutes: ALL 10 CASES PASS\n");
+}
+
+testShouldAutoResume();
+testClampAutoResumeDelayMinutes();
+
+async function testRunAutoResumeWatchdog() {
+  const nowMs = Date.now();
+
+  const fakeDevices = {
+    "dev-due":        { autoResume: { enabled: true, dueAt: nowMs - 1000 } },  // 1s in the past - due
+    "dev-not-yet":    { autoResume: { enabled: true, dueAt: nowMs + 60000 } }, // 1min in the future - not due yet
+    "dev-nothing":    { status: { name: "Nothing scheduled" } },               // no autoResume field at all
+    "dev-send-fails": { autoResume: { enabled: true, dueAt: nowMs - 1000 } },  // due, but the send will throw
+  };
+
+  const started = [];
+  const cleared = [];
+
+  const resumed = await runAutoResumeWatchdog({
+    fetchDevices: async () => fakeDevices,
+    sendStartCommand: async (deviceId) => {
+      if (deviceId === "dev-send-fails") {
+        throw new Error("simulated send failure");
+      }
+      started.push(deviceId);
+    },
+    clearDueAt: async (deviceId) => {
+      cleared.push(deviceId);
+    },
+    nowMs,
+  });
+
+  console.log("=== runAutoResumeWatchdog results ===");
+  console.log("Resumed:", resumed);
+  console.log("Start commands sent:", started);
+  console.log("dueAt cleared:", cleared);
+
+  assert(resumed.length === 1 && resumed[0] === "dev-due", `Expected only dev-due to be resumed, got ${JSON.stringify(resumed)}`);
+  assert(started.includes("dev-due"), "Expected a start command sent for dev-due");
+  assert(!started.includes("dev-not-yet"), "Expected no start command for dev-not-yet (delay hasn't elapsed)");
+  assert(!started.includes("dev-nothing"), "Expected no start command for dev-nothing (nothing scheduled)");
+  assert(cleared.includes("dev-due"), "Expected dueAt cleared for dev-due after a successful send");
+  assert(!cleared.includes("dev-send-fails"), "Expected dueAt NOT cleared for dev-send-fails - a failed send should retry next run, not be silently dropped");
+
+  console.log("\nrunAutoResumeWatchdog: ALL ASSERTIONS PASS\n");
+}
+
 async function main() {
   const nowMs = Date.now();
 
   const fakeDevices = {
     "dev-fresh":     { status: { lastSeen: nowMs - 5000,  name: "Fresh",     whatsappPhone: "111", powerAlertSent: false } },
-    "dev-stale-new": { status: { lastSeen: nowMs - 45000, name: "StaleNew",  whatsappPhone: "222", powerAlertSent: false } },
+    "dev-stale-new": { status: { lastSeen: nowMs - 45000, name: "StaleNew",  whatsappPhone: "222", powerAlertSent: false }, motor: { state: "RUNNING" } },
     "dev-stale-old": { status: { lastSeen: nowMs - 90000, name: "StaleOld",  whatsappPhone: "333", powerAlertSent: true } },
     "dev-no-phone":  { status: { lastSeen: nowMs - 60000, name: "NoPhone",   powerAlertSent: false } },
     "dev-push-only": { status: { lastSeen: nowMs - 70000, name: "PushOnly",  powerAlertSent: false } },
@@ -93,6 +200,7 @@ async function main() {
   const sent = [];
   const pushSent = [];
   const flagsSet = [];
+  const motorStatesSnapshotted = {};
 
   // Devices that "have push tokens registered" in this fake - everyone
   // except dev-no-phone (whose whole point is testing "neither channel
@@ -112,8 +220,9 @@ async function main() {
       pushSent.push([deviceId, title, body]);
       return { sent: 1, pruned: 0 };
     },
-    setDedupFlag: async (deviceId) => {
+    setDedupFlag: async (deviceId, motorStateAtOutage) => {
       flagsSet.push(deviceId);
+      motorStatesSnapshotted[deviceId] = motorStateAtOutage;
     },
     nowMs,
   });
@@ -139,6 +248,11 @@ async function main() {
   assert(flagsSet.length === 2 && flagsSet.includes("dev-stale-new") && flagsSet.includes("dev-push-only"),
     "Expected dedup flags set for both alerted devices");
 
+  assert(motorStatesSnapshotted["dev-stale-new"] === "RUNNING",
+    `Expected dev-stale-new's motor state (RUNNING) to be snapshotted at outage detection, got ${motorStatesSnapshotted["dev-stale-new"]}`);
+  assert(motorStatesSnapshotted["dev-push-only"] === undefined,
+    `Expected dev-push-only (no motor field at all in the fake) to snapshot as undefined, got ${motorStatesSnapshotted["dev-push-only"]}`);
+
   console.log("\nALL ASSERTIONS PASS:");
   console.log("- dev-fresh (5s): correctly skipped, too recent");
   console.log("- dev-stale-new (45s, WhatsApp + push configured): correctly alerted via both, flagged");
@@ -148,7 +262,9 @@ async function main() {
   console.log("- dev-never (no lastSeen ever): correctly skipped, no crash");
 }
 
-main().catch((err) => {
-  console.error("Test run failed:", err);
-  process.exit(1);
-});
+main()
+  .then(testRunAutoResumeWatchdog)
+  .catch((err) => {
+    console.error("Test run failed:", err);
+    process.exit(1);
+  });
