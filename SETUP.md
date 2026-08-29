@@ -109,6 +109,9 @@ keeps the two in sync automatically.
         },
         "fcmTokens": {
           ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+        },
+        "autoResume": {
+          ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
         }
       }
     }
@@ -331,6 +334,44 @@ current-sensor feedback everything else uses). The easiest way to
 confirm the whole pipeline works after setup is just pressing
 Start/Stop from the dashboard and watching for the motor push to
 arrive within a few seconds.
+
+---
+
+## 12. Auto-resume after power loss (optional)
+
+If a pump was actually running right before the power went out,
+automatically starts it again once the device reconnects - after a
+delay you set (1-10 minutes), so it doesn't restart the instant power
+returns. Off by default, per device - restores previous state, not an
+unconditional "always turn on"; if it was off before the outage, it
+stays off. No new deploy needed for the dashboard side, but two
+backend pieces need to actually be live first:
+
+1. **If you already deployed RTDB rules before this feature existed**,
+   redeploy them: `firebase deploy --only database`. The rules gained
+   a new `autoResume` field (owner-writable, alongside `displayName`
+   and `fcmTokens` - see step 3) - without redeploying, the dashboard's
+   write when you enable this fails with a permissions error, same
+   failure mode step 11's own rules note describes.
+2. Deploy the new Cloud Functions: `firebase deploy --only functions`.
+   This adds a new scheduled function, `autoResumeWatchdog` (runs
+   every minute, same as `powerWatchdog`), and extends the existing
+   `onPowerRestored` - both need to actually be live for this to do
+   anything at all.
+3. Open the dashboard, sign in, select a device, and use the
+   "Auto-resume after power loss" section in Advanced settings:
+   **Enable auto-resume** turns it on for that specific device, and
+   the delay input next to it sets how long to wait (defaults to 5
+   minutes if left alone). Per-device, same as WhatsApp/push - enabling
+   it here doesn't affect any other device.
+
+There's no button to test this the way step 11 has "Send test
+notification" - the only real test is an actual power-loss-and-
+recovery cycle with the motor running beforehand, which needs real
+hardware and can't be simulated from the dashboard. Worth watching
+Cloud Functions logs (`autoResumeWatchdog` and `onPowerRestored`) the
+first time it's expected to fire, to confirm the whole chain actually
+worked rather than just trusting it silently.
 
 ---
 
