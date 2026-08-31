@@ -1034,6 +1034,23 @@
           <div id="autoResumeStatus" style="font-size:12px; margin-top:8px; opacity:0.8;"></div>
         </div>
 
+        <div class="settings-section" id="scheduleZone">
+          <div class="settings-label">Scheduled on/off</div>
+          <p class="settings-desc">Automatically starts this pump at a set time every day, and stops it at another. Off (default) means nothing runs on a schedule; you're always in direct control. If you manually stop it during the "on" window, it stays off until tomorrow's cycle - the schedule never overrides a manual stop the same day.</p>
+          <button class="notify-toggle-btn state-off" id="scheduleToggleBtn">Enable schedule</button>
+          <div id="scheduleTimesRow" style="margin-top:12px; display:flex; gap:16px;">
+            <div>
+              <label for="scheduleOnTimeInput" style="font-size:12px; color:var(--muted); display:block; margin-bottom:6px;">Turn on at</label>
+              <input type="time" id="scheduleOnTimeInput" value="06:00" style="background:var(--panel-raised); border:1px solid var(--border); color:var(--text); border-radius:var(--radius-sm); padding:10px 12px; font-family:var(--sans); font-size:14px;">
+            </div>
+            <div>
+              <label for="scheduleOffTimeInput" style="font-size:12px; color:var(--muted); display:block; margin-bottom:6px;">Turn off at</label>
+              <input type="time" id="scheduleOffTimeInput" value="08:00" style="background:var(--panel-raised); border:1px solid var(--border); color:var(--text); border-radius:var(--radius-sm); padding:10px 12px; font-family:var(--sans); font-size:14px;">
+            </div>
+          </div>
+          <div id="scheduleStatus" style="font-size:12px; margin-top:8px; opacity:0.8;"></div>
+        </div>
+
         <div class="settings-section">
           <div class="settings-label">Restart device</div>
           <p class="settings-desc">Reboots the ESP32 - back online in about 10-20 seconds. The motor itself isn't affected either way; it keeps running or stays off exactly as it was, since that's controlled by the starter panel's own hardware, not the device.</p>
@@ -1406,6 +1423,10 @@
   const autoResumeDelayRow = document.getElementById('autoResumeDelayRow');
   const autoResumeDelayInput = document.getElementById('autoResumeDelayInput');
   const autoResumeStatus = document.getElementById('autoResumeStatus');
+  const scheduleToggleBtn = document.getElementById('scheduleToggleBtn');
+  const scheduleOnTimeInput = document.getElementById('scheduleOnTimeInput');
+  const scheduleOffTimeInput = document.getElementById('scheduleOffTimeInput');
+  const scheduleStatus = document.getElementById('scheduleStatus');
   const rRssiBars = document.getElementById('rRssiBars').children;
   const logoutBtn = document.getElementById('logoutBtn');
 
@@ -1617,6 +1638,7 @@
 
     refreshNotifyUi();
     refreshAutoResumeUi(data.autoResume || {});
+    refreshScheduleUi(data.schedule || {});
   }
 
   // RSSI roughly: > -60 great, -60 to -70 good, -70 to -80 weak, < -80 poor
@@ -2374,6 +2396,125 @@
         autoResumeStatus.textContent = 'Failed to save delay: ' + err.message;
       }
     });
+  }
+
+  // ---- Scheduled on/off ---------------------------------------------
+  // Opt-in, off by default, per device - same reasoning as auto-resume:
+  // a physical motor turning on with no one confirming it in the
+  // moment is safety-relevant, so silence (never touched this setting)
+  // always means "do nothing." "Manual control wins until the next
+  // scheduled cycle" (the behavior explicitly asked for) is enforced
+  // entirely server-side, by scheduleWatchdog only ever firing each of
+  // today's on/off events once (functions/index.js's
+  // computeScheduleActions) - this dashboard only ever writes the
+  // enabled/onTime/offTime settings, never decides or acts on them.
+  let scheduleBusy = false;
+
+  // preserveStatus=true skips resetting scheduleStatus - same
+  // clobbering bug already found and fixed once for both notify and
+  // auto-resume (the ~1s periodic renderDetail() tick would otherwise
+  // immediately clear a just-set confirmation message), applied here
+  // from the start instead of re-discovering it a third time.
+  function refreshScheduleUi(schedule, preserveStatus){
+    if (!scheduleToggleBtn || scheduleBusy) return;
+
+    scheduleToggleBtn.disabled = false;
+
+    const enabled = schedule.enabled === true;
+    scheduleToggleBtn.textContent = enabled ? 'Disable schedule' : 'Enable schedule';
+    scheduleToggleBtn.classList.toggle('state-on', enabled);
+    scheduleToggleBtn.classList.toggle('state-off', !enabled);
+
+    // Only overwrite from remote data if the person isn't actively
+    // focused on the field right now - avoids clobbering an
+    // in-progress edit on the next periodic refresh.
+    if (document.activeElement !== scheduleOnTimeInput) {
+      scheduleOnTimeInput.value = schedule.onTime || '06:00';
+    }
+    if (document.activeElement !== scheduleOffTimeInput) {
+      scheduleOffTimeInput.value = schedule.offTime || '08:00';
+    }
+
+    if (!preserveStatus) {
+      scheduleStatus.textContent = '';
+    }
+  }
+
+  async function toggleSchedule(){
+    if (!selectedId || scheduleBusy) return;
+
+    const currentSettings = (devices[selectedId] && devices[selectedId].schedule) || {};
+    const currentlyEnabled = currentSettings.enabled === true;
+
+    scheduleBusy = true;
+    scheduleToggleBtn.disabled = true;
+    scheduleStatus.textContent = currentlyEnabled ? 'Disabling\u2026' : 'Enabling\u2026';
+
+    try {
+      if (currentlyEnabled) {
+        // Only flips enabled off - keeps the last onTime/offTime
+        // values, so re-enabling later remembers the previous
+        // schedule rather than resetting to the defaults.
+        await db.ref(`devices/${selectedId}/schedule/enabled`).set(false);
+        scheduleStatus.textContent = 'Schedule disabled.';
+      } else {
+        const onTime = scheduleOnTimeInput.value || '06:00';
+        const offTime = scheduleOffTimeInput.value || '08:00';
+
+        if (onTime === offTime) {
+          scheduleStatus.textContent = 'On and off times can\u2019t be the same.';
+          return; // finally below still runs and resets the button
+        }
+
+        await db.ref(`devices/${selectedId}/schedule`).update({ enabled: true, onTime, offTime });
+        scheduleStatus.textContent = `Enabled - will turn on at ${onTime} and off at ${offTime}, every day.`;
+      }
+    } catch (err) {
+      console.error('Failed to update schedule setting', err);
+      scheduleStatus.textContent = 'Failed: ' + err.message;
+    } finally {
+      scheduleBusy = false;
+      const latest = (devices[selectedId] && devices[selectedId].schedule) || {};
+      refreshScheduleUi(latest, true);
+    }
+  }
+
+  async function updateScheduleTime(field, value){
+    if (!selectedId || scheduleBusy) return;
+
+    const data = devices[selectedId] || {};
+    // Same reasoning as auto-resume's delay input: only writes a live
+    // update while already enabled. Changing a time before ever
+    // enabling just sits in the input locally - toggleSchedule()'s own
+    // enable branch reads whatever's currently there when it writes
+    // enabled:true, so nothing is lost either way.
+    if (!(data.schedule && data.schedule.enabled === true)) return;
+
+    const otherField = field === 'onTime' ? 'offTime' : 'onTime';
+    if (value === data.schedule[otherField]) {
+      scheduleStatus.textContent = 'On and off times can\u2019t be the same.';
+      return;
+    }
+
+    try {
+      await db.ref(`devices/${selectedId}/schedule/${field}`).set(value);
+      scheduleStatus.textContent = 'Schedule updated.';
+    } catch (err) {
+      console.error('Failed to update schedule time', err);
+      scheduleStatus.textContent = 'Failed to save: ' + err.message;
+    }
+  }
+
+  if (scheduleToggleBtn) {
+    scheduleToggleBtn.addEventListener('click', toggleSchedule);
+  }
+
+  if (scheduleOnTimeInput) {
+    scheduleOnTimeInput.addEventListener('change', () => updateScheduleTime('onTime', scheduleOnTimeInput.value));
+  }
+
+  if (scheduleOffTimeInput) {
+    scheduleOffTimeInput.addEventListener('change', () => updateScheduleTime('offTime', scheduleOffTimeInput.value));
   }
 </script>
 

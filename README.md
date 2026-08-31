@@ -179,6 +179,12 @@ port, relay cables, and serial pins. ~1.2h print time.
   than always turning on - if it was off before the outage, it stays
   off. Enabled from the same Advanced settings panel as push
   notifications, on the dashboard.
+- **Scheduled on/off** (optional, off by default, per device): turns
+  the pump on at a set time every day, and off at another - a normal
+  daily irrigation schedule. Manual control always wins - stopping it
+  yourself during the "on" window keeps it off until tomorrow's cycle,
+  the schedule never overrides a same-day manual stop. Same Advanced
+  settings panel as auto-resume and push notifications.
 
 **Releases**
 - Every version is documented in [CHANGELOG.md](CHANGELOG.md)

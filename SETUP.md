@@ -112,6 +112,9 @@ keeps the two in sync automatically.
         },
         "autoResume": {
           ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+        },
+        "schedule": {
+          ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
         }
       }
     }
@@ -372,6 +375,35 @@ hardware and can't be simulated from the dashboard. Worth watching
 Cloud Functions logs (`autoResumeWatchdog` and `onPowerRestored`) the
 first time it's expected to fire, to confirm the whole chain actually
 worked rather than just trusting it silently.
+
+---
+
+## 13. Scheduled on/off (optional)
+
+Turns the pump on at a set time every day, and off at another - a
+normal daily irrigation schedule. Off by default, per device. Manual
+control always wins: stopping it yourself during the "on" window
+keeps it off until tomorrow's cycle - the schedule never re-fires the
+same on-event twice in one calendar day.
+
+1. **If you already deployed RTDB rules before this feature existed**,
+   redeploy them: `firebase deploy --only database`. The rules gained
+   a new `schedule` field (owner-writable, same pattern as
+   `autoResume` in step 12) - without redeploying, enabling this from
+   the dashboard fails with a permissions error.
+2. Deploy the new Cloud Functions: `firebase deploy --only functions`.
+   This adds `scheduleWatchdog` (runs every minute, same shape as
+   `powerWatchdog`/`autoResumeWatchdog`) - needs to actually be live
+   for a schedule to do anything.
+3. Open the dashboard, select a device, and use the "Scheduled on/off"
+   section in Advanced settings (right below auto-resume): set a turn-
+   on time and a turn-off time, then **Enable schedule**. Per-device,
+   same as everything else in this panel.
+
+Schedule times are interpreted in IST (India Standard Time, UTC+5:30),
+fixed - not read from the device's own clock or the browser's
+timezone. If devices are ever deployed outside India, this needs to
+become configurable rather than assumed.
 
 ---
 

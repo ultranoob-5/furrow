@@ -470,6 +470,136 @@ exports.autoResumeWatchdog = onSchedule("every 1 minutes", async () => {
   });
 });
 
+// Daily on/off schedule (e.g. "start irrigation at 06:00, stop at
+// 08:00, every day"). Same shape as auto-resume above: a scheduled
+// function checking every device once a minute, writing the same
+// command/action a person clicking Start/Stop on the dashboard
+// already writes - reuses the existing remote-command pipeline
+// entirely, no new firmware code needed, same failed-start alerting
+// applies automatically.
+//
+// India-specific assumption, made explicit rather than silently
+// baked in: schedule times are interpreted in IST (UTC+5:30), fixed,
+// no DST (India doesn't observe it, so no seasonal correction
+// needed). If this project's devices are ever deployed somewhere
+// else, this offset needs to become configurable rather than fixed.
+const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
+
+// Pure - given a UTC timestamp, returns that moment's IST time-of-day
+// ("HH:MM") and calendar date ("YYYY-MM-DD"), both needed to decide
+// whether a schedule should fire right now and whether it already
+// has today. Separated from the Date-object plumbing so the actual
+// decision logic below can be tested without faking a clock.
+function getIstTimeAndDate(nowMs) {
+  const d = new Date(nowMs + IST_OFFSET_MS);
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  const yyyy = d.getUTCFullYear();
+  const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return { time: `${hh}:${mm}`, date: `${yyyy}-${mo}-${dd}` };
+}
+module.exports.getIstTimeAndDate = getIstTimeAndDate; // exported for test.js
+
+const TIME_STRING_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+function isValidTimeString(t) {
+  return typeof t === "string" && TIME_STRING_PATTERN.test(t);
+}
+module.exports.isValidTimeString = isValidTimeString; // exported for test.js
+
+// Pure decision logic - given a device's schedule settings and the
+// current IST time/date, decides whether the on-command or the
+// off-command should fire right now. Deliberately never fires either
+// one twice on the same calendar date (lastOnFiredDate/
+// lastOffFiredDate), which is what makes "manual control wins until
+// the next scheduled cycle" true for free: once today's on-event has
+// fired, nothing here fires start again today, however many more
+// times this function runs before midnight - a manual stop in
+// between is never overridden by this watchdog re-noticing the clock
+// is still within the on-window.
+function computeScheduleActions(schedule, nowTime, nowDate) {
+  if (!schedule || schedule.enabled !== true) {
+    return { fireOn: false, fireOff: false };
+  }
+
+  if (!isValidTimeString(schedule.onTime) || !isValidTimeString(schedule.offTime)) {
+    return { fireOn: false, fireOff: false };
+  }
+
+  // Guards against a nonsensical/misconfigured schedule (on time ==
+  // off time) rather than firing both commands back to back with an
+  // undefined outcome.
+  if (schedule.onTime === schedule.offTime) {
+    return { fireOn: false, fireOff: false };
+  }
+
+  return {
+    fireOn: schedule.onTime === nowTime && schedule.lastOnFiredDate !== nowDate,
+    fireOff: schedule.offTime === nowTime && schedule.lastOffFiredDate !== nowDate,
+  };
+}
+module.exports.computeScheduleActions = computeScheduleActions; // exported for test.js
+
+// Companion runner to computeScheduleActions - same
+// fetch/act/mark-done shape as runAutoResumeWatchdog, separated from
+// the real Firestore/RTDB calls so it's testable without faking a
+// database.
+async function runScheduleWatchdog({ fetchDevices, sendCommand, markFired, nowMs }) {
+  const devices = (await fetchDevices()) || {};
+  const { time: nowTime, date: nowDate } = getIstTimeAndDate(nowMs);
+  const fired = [];
+
+  for (const [deviceId, data] of Object.entries(devices)) {
+    const schedule = (data && data.schedule) || {};
+    const { fireOn, fireOff } = computeScheduleActions(schedule, nowTime, nowDate);
+
+    if (fireOn) {
+      try {
+        await sendCommand(deviceId, "start");
+        await markFired(deviceId, "on", nowDate);
+        fired.push({ deviceId, action: "start" });
+      } catch (err) {
+        logger.error(`[ScheduleWatchdog] ${deviceId}: failed to fire scheduled start: ${err}`);
+      }
+    }
+
+    if (fireOff) {
+      try {
+        await sendCommand(deviceId, "stop");
+        await markFired(deviceId, "off", nowDate);
+        fired.push({ deviceId, action: "stop" });
+      } catch (err) {
+        logger.error(`[ScheduleWatchdog] ${deviceId}: failed to fire scheduled stop: ${err}`);
+      }
+    }
+  }
+
+  return fired;
+}
+module.exports.runScheduleWatchdog = runScheduleWatchdog; // exported for test.js
+
+exports.scheduleWatchdog = onSchedule("every 1 minutes", async () => {
+  const db = getDatabase();
+
+  await runScheduleWatchdog({
+    fetchDevices: async () => {
+      const snapshot = await db.ref("devices").once("value");
+      return snapshot.val();
+    },
+    sendCommand: async (deviceId, action) => {
+      // Same command/action path a person clicking Start/Stop on the
+      // dashboard already writes to.
+      await db.ref(`devices/${deviceId}/command/action`).set(action);
+    },
+    markFired: async (deviceId, which, dateStr) => {
+      const field = which === "on" ? "lastOnFiredDate" : "lastOffFiredDate";
+      await db.ref(`devices/${deviceId}/schedule/${field}`).set(dateStr);
+    },
+    nowMs: Date.now(),
+  });
+});
+
 // Fires a push when a remote start/stop command doesn't actually take
 // effect within 30s - see src/cloud.cpp's checkCommandConfirmation(),
 // which is what writes devices/{id}/motor/commandFailure in the first
