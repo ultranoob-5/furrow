@@ -1005,20 +1005,12 @@
     </div>
 
     <div class="advanced-settings">
-      <button type="button" class="advanced-toggle" id="advancedToggle" aria-expanded="false" aria-controls="advancedBody">
-        <span>Advanced settings</span>
+      <button type="button" class="advanced-toggle" id="automationToggle" aria-expanded="false" aria-controls="automationBody">
+        <span>Automation</span>
         <svg class="advanced-chevron" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
 
-      <div class="advanced-body" id="advancedBody">
-
-        <div class="settings-section" id="notifyZone">
-          <div class="settings-label">Push notifications</div>
-          <p class="settings-desc">Get an alert on this browser/device when this pump's motor starts or stops, or it loses power. Enabled separately per device - turning this on here doesn't affect any other device.</p>
-          <button class="notify-toggle-btn state-off" id="notifyEnableBtn">Enable notifications</button>
-          <button class="notify-test-btn" id="notifyTestBtn" style="margin-top:8px; display:none;">Send test notification</button>
-          <div id="notifyStatus" style="font-size:12px; margin-top:8px; opacity:0.8;"></div>
-        </div>
+      <div class="advanced-body" id="automationBody">
 
         <div class="settings-section" id="autoResumeZone">
           <div class="settings-label">Auto-resume after power loss</div>
@@ -1049,6 +1041,25 @@
             </div>
           </div>
           <div id="scheduleStatus" style="font-size:12px; margin-top:8px; opacity:0.8;"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="advanced-settings">
+      <button type="button" class="advanced-toggle" id="advancedToggle" aria-expanded="false" aria-controls="advancedBody">
+        <span>Advanced settings</span>
+        <svg class="advanced-chevron" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+
+      <div class="advanced-body" id="advancedBody">
+
+        <div class="settings-section" id="notifyZone">
+          <div class="settings-label">Push notifications</div>
+          <p class="settings-desc">Get an alert on this browser/device when this pump's motor starts or stops, or it loses power. Enabled separately per device - turning this on here doesn't affect any other device.</p>
+          <button class="notify-toggle-btn state-off" id="notifyEnableBtn">Enable notifications</button>
+          <button class="notify-test-btn" id="notifyTestBtn" style="margin-top:8px; display:none;">Send test notification</button>
+          <div id="notifyStatus" style="font-size:12px; margin-top:8px; opacity:0.8;"></div>
         </div>
 
         <div class="settings-section">
@@ -1413,6 +1424,15 @@
     advancedToggle.addEventListener('click', () => {
       const isOpen = advancedBody.classList.toggle('open');
       advancedToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+  }
+
+  const automationToggle = document.getElementById('automationToggle');
+  const automationBody = document.getElementById('automationBody');
+  if (automationToggle && automationBody) {
+    automationToggle.addEventListener('click', () => {
+      const isOpen = automationBody.classList.toggle('open');
+      automationToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     });
   }
 
