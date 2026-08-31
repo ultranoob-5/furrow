@@ -362,6 +362,279 @@
 
   .settings-select:focus{ outline: none; border-color: var(--amber); }
 
+  /* ---- Modern Stepper & Quick-Select Chips ---------------------- */
+  .stepper-control{
+    display: inline-flex;
+    align-items: center;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+    user-select: none;
+  }
+
+  .stepper-btn{
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 700;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .stepper-btn:hover:not(:disabled){
+    background: rgba(255,255,255,0.08);
+    color: var(--amber);
+  }
+
+  .stepper-btn:active:not(:disabled){
+    transform: scale(0.95);
+  }
+
+  .stepper-btn:disabled{
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .stepper-value{
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    min-width: 28px;
+    text-align: center;
+    padding: 0 4px;
+  }
+
+  .stepper-unit{
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 600;
+    margin-right: 8px;
+  }
+
+  .preset-chips{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .preset-chip{
+    appearance: none;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 5px 11px;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .preset-chip:hover{
+    border-color: var(--amber);
+    color: var(--text);
+    background: var(--amber-soft);
+  }
+
+  .preset-chip.active{
+    background: var(--amber-soft);
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+
+  /* ---- Custom Segmented Time Cards ------------------------------ */
+  .schedule-grid{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  @media (max-width: 440px){
+    .schedule-grid{
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+  }
+
+  .time-card{
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .time-card:focus-within, .time-card:hover{
+    border-color: rgba(232,163,61,0.35);
+  }
+
+  .time-card-header{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+
+  .time-card-header .icon-dot{
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-right: 6px;
+    display: inline-block;
+  }
+
+  .dot-start{ background: var(--green); box-shadow: 0 0 8px rgba(73,182,117,0.5); }
+  .dot-stop{ background: var(--amber); box-shadow: 0 0 8px rgba(232,163,61,0.5); }
+
+  .time-picker-row{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .time-digits-group{
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .time-unit-box{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .time-unit-btn{
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    width: 30px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 0;
+    transition: all 0.15s ease;
+  }
+
+  .time-unit-btn:hover{
+    background: rgba(255,255,255,0.1);
+    color: var(--text);
+  }
+
+  .time-unit-btn:active{
+    transform: scale(0.92);
+  }
+
+  .time-unit-btn svg{
+    width: 12px;
+    height: 12px;
+  }
+
+  .time-val-display{
+    font-family: var(--mono);
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--text);
+    min-width: 28px;
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .time-colon{
+    font-family: var(--mono);
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--muted);
+    margin: 0 1px;
+  }
+
+  .ampm-toggle{
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .ampm-btn{
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 11px;
+    padding: 5px 7px;
+    border-radius: 6px;
+    cursor: pointer;
+    line-height: 1;
+    transition: all 0.15s ease;
+  }
+
+  .ampm-btn.active{
+    background: var(--panel-raised);
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+
+  .time-card.start .ampm-btn.active{
+    color: var(--green);
+    border-color: rgba(73,182,117,0.35);
+  }
+
+  .time-card.stop .ampm-btn.active{
+    color: var(--amber);
+    border-color: rgba(232,163,61,0.35);
+  }
+
+  .schedule-duration-badge{
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    line-height: 1.3;
+  }
+
+  .schedule-duration-badge svg{
+    width: 14px;
+    height: 14px;
+    color: var(--amber);
+    flex-shrink: 0;
+  }
+
   .notify-toggle-btn:disabled{
     cursor: not-allowed;
     opacity: 0.45;
@@ -1042,11 +1315,25 @@
           <div class="settings-label">Auto-resume after power loss</div>
           <p class="settings-desc">If this pump was running when the power went out, automatically start it again once the device reconnects - after the delay below, so it doesn't restart the instant power returns. Off (default) means nothing restarts on its own; you'd start it yourself from here or the panel.</p>
           <button class="notify-toggle-btn state-off" id="autoResumeToggleBtn">Enable auto-resume</button>
-          <div id="autoResumeDelayRow" style="margin-top:12px;">
-            <label for="autoResumeDelayInput" style="font-size:12px; color:var(--muted); display:block; margin-bottom:6px;">Delay before restarting (1&ndash;10 minutes)</label>
-            <div style="display:flex; align-items:center; gap:10px;">
-              <select id="autoResumeDelayInput" class="settings-select" style="width:100px;"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option></select>
-              <span style="font-size:13px; color:var(--muted);">minutes</span>
+          <div id="autoResumeDelayRow" style="margin-top:14px;">
+            <label style="font-size:11px; color:var(--muted); display:block; margin-bottom:8px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">Delay before restarting</label>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <div class="stepper-control">
+                <button type="button" class="stepper-btn" id="autoResumeDelayMinus" aria-label="Decrease delay">&minus;</button>
+                <span class="stepper-value" id="autoResumeDelayVal">5</span>
+                <span class="stepper-unit">min</span>
+                <button type="button" class="stepper-btn" id="autoResumeDelayPlus" aria-label="Increase delay">&plus;</button>
+              </div>
+              <div class="preset-chips" id="autoResumeChips">
+                <button type="button" class="preset-chip" data-min="2">2 min</button>
+                <button type="button" class="preset-chip" data-min="3">3 min</button>
+                <button type="button" class="preset-chip active" data-min="5">5 min</button>
+                <button type="button" class="preset-chip" data-min="10">10 min</button>
+              </div>
+            </div>
+            <input type="hidden" id="autoResumeDelayInput" value="5">
+            <div id="autoResumeExplain" style="font-size:12px; color:var(--muted); margin-top:8px; line-height:1.4;">
+              Waits 5 minutes after power returns before restarting the pump.
             </div>
           </div>
           <div id="autoResumeStatus" style="font-size:12px; margin-top:8px; opacity:0.8;"></div>
@@ -1056,17 +1343,89 @@
           <div class="settings-label">Scheduled on/off</div>
           <p class="settings-desc">Automatically starts this pump at a set time every day, and stops it at another. Off (default) means nothing runs on a schedule; you're always in direct control. If you manually stop it during the "on" window, it stays off until tomorrow's cycle - the schedule never overrides a manual stop the same day.</p>
           <button class="notify-toggle-btn state-off" id="scheduleToggleBtn">Enable schedule</button>
-          <div id="scheduleTimesRow" style="margin-top:12px; display:flex; gap:16px;">
-            <div>
-              <label for="scheduleOnTimeInput" style="font-size:12px; color:var(--muted); display:block; margin-bottom:6px;">Turn on at</label>
-              <select id="scheduleOnTimeInput" class="settings-select"><option value="00:00">12:00 AM</option><option value="00:15">12:15 AM</option><option value="00:30">12:30 AM</option><option value="00:45">12:45 AM</option><option value="01:00">1:00 AM</option><option value="01:15">1:15 AM</option><option value="01:30">1:30 AM</option><option value="01:45">1:45 AM</option><option value="02:00">2:00 AM</option><option value="02:15">2:15 AM</option><option value="02:30">2:30 AM</option><option value="02:45">2:45 AM</option><option value="03:00">3:00 AM</option><option value="03:15">3:15 AM</option><option value="03:30">3:30 AM</option><option value="03:45">3:45 AM</option><option value="04:00">4:00 AM</option><option value="04:15">4:15 AM</option><option value="04:30">4:30 AM</option><option value="04:45">4:45 AM</option><option value="05:00">5:00 AM</option><option value="05:15">5:15 AM</option><option value="05:30">5:30 AM</option><option value="05:45">5:45 AM</option><option value="06:00" selected>6:00 AM</option><option value="06:15">6:15 AM</option><option value="06:30">6:30 AM</option><option value="06:45">6:45 AM</option><option value="07:00">7:00 AM</option><option value="07:15">7:15 AM</option><option value="07:30">7:30 AM</option><option value="07:45">7:45 AM</option><option value="08:00">8:00 AM</option><option value="08:15">8:15 AM</option><option value="08:30">8:30 AM</option><option value="08:45">8:45 AM</option><option value="09:00">9:00 AM</option><option value="09:15">9:15 AM</option><option value="09:30">9:30 AM</option><option value="09:45">9:45 AM</option><option value="10:00">10:00 AM</option><option value="10:15">10:15 AM</option><option value="10:30">10:30 AM</option><option value="10:45">10:45 AM</option><option value="11:00">11:00 AM</option><option value="11:15">11:15 AM</option><option value="11:30">11:30 AM</option><option value="11:45">11:45 AM</option><option value="12:00">12:00 PM</option><option value="12:15">12:15 PM</option><option value="12:30">12:30 PM</option><option value="12:45">12:45 PM</option><option value="13:00">1:00 PM</option><option value="13:15">1:15 PM</option><option value="13:30">1:30 PM</option><option value="13:45">1:45 PM</option><option value="14:00">2:00 PM</option><option value="14:15">2:15 PM</option><option value="14:30">2:30 PM</option><option value="14:45">2:45 PM</option><option value="15:00">3:00 PM</option><option value="15:15">3:15 PM</option><option value="15:30">3:30 PM</option><option value="15:45">3:45 PM</option><option value="16:00">4:00 PM</option><option value="16:15">4:15 PM</option><option value="16:30">4:30 PM</option><option value="16:45">4:45 PM</option><option value="17:00">5:00 PM</option><option value="17:15">5:15 PM</option><option value="17:30">5:30 PM</option><option value="17:45">5:45 PM</option><option value="18:00">6:00 PM</option><option value="18:15">6:15 PM</option><option value="18:30">6:30 PM</option><option value="18:45">6:45 PM</option><option value="19:00">7:00 PM</option><option value="19:15">7:15 PM</option><option value="19:30">7:30 PM</option><option value="19:45">7:45 PM</option><option value="20:00">8:00 PM</option><option value="20:15">8:15 PM</option><option value="20:30">8:30 PM</option><option value="20:45">8:45 PM</option><option value="21:00">9:00 PM</option><option value="21:15">9:15 PM</option><option value="21:30">9:30 PM</option><option value="21:45">9:45 PM</option><option value="22:00">10:00 PM</option><option value="22:15">10:15 PM</option><option value="22:30">10:30 PM</option><option value="22:45">10:45 PM</option><option value="23:00">11:00 PM</option><option value="23:15">11:15 PM</option><option value="23:30">11:30 PM</option><option value="23:45">11:45 PM</option></select>
+          <div id="scheduleTimesRow" style="margin-top:14px;">
+            <div class="schedule-grid">
+              <!-- Start Time Card -->
+              <div class="time-card start">
+                <div class="time-card-header">
+                  <span><span class="icon-dot dot-start"></span>Turn On</span>
+                  <span style="font-size:10px; color:var(--green); font-weight:700;">START</span>
+                </div>
+                <div class="time-picker-row">
+                  <div class="time-digits-group">
+                    <div class="time-unit-box">
+                      <button type="button" class="time-unit-btn" id="schedOnHourUp" aria-label="Increase hour">
+                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                      <span class="time-val-display" id="schedOnHourVal">06</span>
+                      <button type="button" class="time-unit-btn" id="schedOnHourDown" aria-label="Decrease hour">
+                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                    </div>
+                    <span class="time-colon">:</span>
+                    <div class="time-unit-box">
+                      <button type="button" class="time-unit-btn" id="schedOnMinUp" aria-label="Increase minutes">
+                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                      <span class="time-val-display" id="schedOnMinVal">00</span>
+                      <button type="button" class="time-unit-btn" id="schedOnMinDown" aria-label="Decrease minutes">
+                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="ampm-toggle">
+                    <button type="button" class="ampm-btn active" id="schedOnAmBtn">AM</button>
+                    <button type="button" class="ampm-btn" id="schedOnPmBtn">PM</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Stop Time Card -->
+              <div class="time-card stop">
+                <div class="time-card-header">
+                  <span><span class="icon-dot dot-stop"></span>Turn Off</span>
+                  <span style="font-size:10px; color:var(--amber); font-weight:700;">STOP</span>
+                </div>
+                <div class="time-picker-row">
+                  <div class="time-digits-group">
+                    <div class="time-unit-box">
+                      <button type="button" class="time-unit-btn" id="schedOffHourUp" aria-label="Increase hour">
+                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                      <span class="time-val-display" id="schedOffHourVal">08</span>
+                      <button type="button" class="time-unit-btn" id="schedOffHourDown" aria-label="Decrease hour">
+                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                    </div>
+                    <span class="time-colon">:</span>
+                    <div class="time-unit-box">
+                      <button type="button" class="time-unit-btn" id="schedOffMinUp" aria-label="Increase minutes">
+                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                      <span class="time-val-display" id="schedOffMinVal">00</span>
+                      <button type="button" class="time-unit-btn" id="schedOffMinDown" aria-label="Decrease minutes">
+                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="ampm-toggle">
+                    <button type="button" class="ampm-btn active" id="schedOffAmBtn">AM</button>
+                    <button type="button" class="ampm-btn" id="schedOffPmBtn">PM</button>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div>
-              <label for="scheduleOffTimeInput" style="font-size:12px; color:var(--muted); display:block; margin-bottom:6px;">Turn off at</label>
-              <select id="scheduleOffTimeInput" class="settings-select"><option value="00:00">12:00 AM</option><option value="00:15">12:15 AM</option><option value="00:30">12:30 AM</option><option value="00:45">12:45 AM</option><option value="01:00">1:00 AM</option><option value="01:15">1:15 AM</option><option value="01:30">1:30 AM</option><option value="01:45">1:45 AM</option><option value="02:00">2:00 AM</option><option value="02:15">2:15 AM</option><option value="02:30">2:30 AM</option><option value="02:45">2:45 AM</option><option value="03:00">3:00 AM</option><option value="03:15">3:15 AM</option><option value="03:30">3:30 AM</option><option value="03:45">3:45 AM</option><option value="04:00">4:00 AM</option><option value="04:15">4:15 AM</option><option value="04:30">4:30 AM</option><option value="04:45">4:45 AM</option><option value="05:00">5:00 AM</option><option value="05:15">5:15 AM</option><option value="05:30">5:30 AM</option><option value="05:45">5:45 AM</option><option value="06:00">6:00 AM</option><option value="06:15">6:15 AM</option><option value="06:30">6:30 AM</option><option value="06:45">6:45 AM</option><option value="07:00">7:00 AM</option><option value="07:15">7:15 AM</option><option value="07:30">7:30 AM</option><option value="07:45">7:45 AM</option><option value="08:00" selected>8:00 AM</option><option value="08:15">8:15 AM</option><option value="08:30">8:30 AM</option><option value="08:45">8:45 AM</option><option value="09:00">9:00 AM</option><option value="09:15">9:15 AM</option><option value="09:30">9:30 AM</option><option value="09:45">9:45 AM</option><option value="10:00">10:00 AM</option><option value="10:15">10:15 AM</option><option value="10:30">10:30 AM</option><option value="10:45">10:45 AM</option><option value="11:00">11:00 AM</option><option value="11:15">11:15 AM</option><option value="11:30">11:30 AM</option><option value="11:45">11:45 AM</option><option value="12:00">12:00 PM</option><option value="12:15">12:15 PM</option><option value="12:30">12:30 PM</option><option value="12:45">12:45 PM</option><option value="13:00">1:00 PM</option><option value="13:15">1:15 PM</option><option value="13:30">1:30 PM</option><option value="13:45">1:45 PM</option><option value="14:00">2:00 PM</option><option value="14:15">2:15 PM</option><option value="14:30">2:30 PM</option><option value="14:45">2:45 PM</option><option value="15:00">3:00 PM</option><option value="15:15">3:15 PM</option><option value="15:30">3:30 PM</option><option value="15:45">3:45 PM</option><option value="16:00">4:00 PM</option><option value="16:15">4:15 PM</option><option value="16:30">4:30 PM</option><option value="16:45">4:45 PM</option><option value="17:00">5:00 PM</option><option value="17:15">5:15 PM</option><option value="17:30">5:30 PM</option><option value="17:45">5:45 PM</option><option value="18:00">6:00 PM</option><option value="18:15">6:15 PM</option><option value="18:30">6:30 PM</option><option value="18:45">6:45 PM</option><option value="19:00">7:00 PM</option><option value="19:15">7:15 PM</option><option value="19:30">7:30 PM</option><option value="19:45">7:45 PM</option><option value="20:00">8:00 PM</option><option value="20:15">8:15 PM</option><option value="20:30">8:30 PM</option><option value="20:45">8:45 PM</option><option value="21:00">9:00 PM</option><option value="21:15">9:15 PM</option><option value="21:30">9:30 PM</option><option value="21:45">9:45 PM</option><option value="22:00">10:00 PM</option><option value="22:15">10:15 PM</option><option value="22:30">10:30 PM</option><option value="22:45">10:45 PM</option><option value="23:00">11:00 PM</option><option value="23:15">11:15 PM</option><option value="23:30">11:30 PM</option><option value="23:45">11:45 PM</option></select>
+
+            <input type="hidden" id="scheduleOnTimeInput" value="06:00">
+            <input type="hidden" id="scheduleOffTimeInput" value="08:00">
+
+            <div class="schedule-duration-badge" id="scheduleDurationBadge">
+              <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/><path d="M8 4.5v3.8l2.5 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              <span id="scheduleDurationText">Runs for 2h 00m daily (6:00 AM &rarr; 8:00 AM)</span>
             </div>
+
+            <div id="scheduleStatus" style="font-size:12px; margin-top:8px; opacity:0.8;"></div>
           </div>
-          <div id="scheduleStatus" style="font-size:12px; margin-top:8px; opacity:0.8;"></div>
         </div>
 
       </div>
@@ -2345,19 +2704,74 @@
   // settings, never decides or acts on them itself).
   let autoResumeBusy = false;
 
+  const autoResumeDelayMinus = document.getElementById('autoResumeDelayMinus');
+  const autoResumeDelayPlus = document.getElementById('autoResumeDelayPlus');
+  const autoResumeDelayVal = document.getElementById('autoResumeDelayVal');
+  const autoResumeChips = document.getElementById('autoResumeChips');
+  const autoResumeExplain = document.getElementById('autoResumeExplain');
+
   function clampDelayInput(value){
     const n = Number(value);
     if (!Number.isFinite(n)) return 5;
     return Math.min(10, Math.max(1, Math.round(n)));
   }
 
-  // preserveStatus=true skips resetting autoResumeStatus - same
-  // reasoning as refreshNotifyUi's own preserveStatus flag: without
-  // it, this function's own call from renderDetail() (which runs on
-  // every ~1s periodic refresh) would immediately clobber whatever
-  // confirmation message an action just set, before anyone could
-  // read it - a bug already found and fixed once for the notify
-  // toggle, applied here from the start instead of repeating it.
+  function setAutoResumeDelay(minutes, shouldSave){
+    const clamped = clampDelayInput(minutes);
+    if (autoResumeDelayInput) autoResumeDelayInput.value = clamped;
+    if (autoResumeDelayVal) autoResumeDelayVal.textContent = clamped;
+    if (autoResumeDelayMinus) autoResumeDelayMinus.disabled = (clamped <= 1);
+    if (autoResumeDelayPlus) autoResumeDelayPlus.disabled = (clamped >= 10);
+    if (autoResumeExplain) {
+      autoResumeExplain.textContent = `Waits ${clamped} minute${clamped === 1 ? '' : 's'} after power returns before restarting the pump.`;
+    }
+
+    if (autoResumeChips) {
+      const chips = autoResumeChips.querySelectorAll('.preset-chip');
+      chips.forEach(chip => {
+        const val = Number(chip.getAttribute('data-min'));
+        chip.classList.toggle('active', val === clamped);
+      });
+    }
+
+    if (shouldSave && selectedId && !autoResumeBusy) {
+      const data = devices[selectedId] || {};
+      if (data.autoResume && data.autoResume.enabled === true) {
+        db.ref(`devices/${selectedId}/autoResume/delayMinutes`).set(clamped)
+          .then(() => {
+            autoResumeStatus.textContent = `Delay updated to ${clamped} minute${clamped === 1 ? '' : 's'}.`;
+          })
+          .catch(err => {
+            console.error('Failed to update auto-resume delay', err);
+            autoResumeStatus.textContent = 'Failed to save delay: ' + err.message;
+          });
+      }
+    }
+  }
+
+  if (autoResumeDelayMinus) {
+    autoResumeDelayMinus.addEventListener('click', () => {
+      const current = clampDelayInput(autoResumeDelayInput ? autoResumeDelayInput.value : 5);
+      setAutoResumeDelay(current - 1, true);
+    });
+  }
+
+  if (autoResumeDelayPlus) {
+    autoResumeDelayPlus.addEventListener('click', () => {
+      const current = clampDelayInput(autoResumeDelayInput ? autoResumeDelayInput.value : 5);
+      setAutoResumeDelay(current + 1, true);
+    });
+  }
+
+  if (autoResumeChips) {
+    autoResumeChips.addEventListener('click', (e) => {
+      const btn = e.target.closest('.preset-chip');
+      if (!btn) return;
+      const min = Number(btn.getAttribute('data-min'));
+      if (min) setAutoResumeDelay(min, true);
+    });
+  }
+
   function refreshAutoResumeUi(settings, preserveStatus){
     if (!autoResumeToggleBtn || autoResumeBusy) return;
 
@@ -2367,14 +2781,10 @@
     autoResumeToggleBtn.textContent = enabled ? 'Disable auto-resume' : 'Enable auto-resume';
     autoResumeToggleBtn.classList.toggle('state-on', enabled);
     autoResumeToggleBtn.classList.toggle('state-off', !enabled);
-    autoResumeDelayRow.style.display = 'block';
+    if (autoResumeDelayRow) autoResumeDelayRow.style.display = 'block';
 
-    // Only overwrite the delay input from remote data if the person
-    // isn't actively focused on it right now - avoids clobbering an
-    // in-progress edit on the next periodic refresh.
-    if (document.activeElement !== autoResumeDelayInput) {
-      autoResumeDelayInput.value = settings.delayMinutes || 5;
-    }
+    const delay = settings.delayMinutes || 5;
+    setAutoResumeDelay(delay, false);
 
     if (!preserveStatus) {
       autoResumeStatus.textContent = '';
@@ -2393,13 +2803,10 @@
 
     try {
       if (currentlyEnabled) {
-        // Only flips enabled off - keeps the last delayMinutes value,
-        // so re-enabling later remembers the previous preference
-        // rather than resetting to the default every time.
         await db.ref(`devices/${selectedId}/autoResume/enabled`).set(false);
         autoResumeStatus.textContent = 'Auto-resume disabled.';
       } else {
-        const delayMinutes = clampDelayInput(autoResumeDelayInput.value);
+        const delayMinutes = clampDelayInput(autoResumeDelayInput ? autoResumeDelayInput.value : 5);
         await db.ref(`devices/${selectedId}/autoResume`).update({ enabled: true, delayMinutes });
         autoResumeStatus.textContent = `Enabled - will restart ${delayMinutes} minute${delayMinutes === 1 ? '' : 's'} after power returns, only if it was running before the outage.`;
       }
@@ -2417,33 +2824,6 @@
     autoResumeToggleBtn.addEventListener('click', toggleAutoResume);
   }
 
-  if (autoResumeDelayInput) {
-    autoResumeDelayInput.addEventListener('change', async () => {
-      if (!selectedId || autoResumeBusy) return;
-
-      const data = devices[selectedId] || {};
-      // The delay input is always visible (even while disabled, so
-      // someone can set their preferred value before ever turning
-      // this on) - but only writes delayMinutes as its own update
-      // while already enabled. Changing it before enabling just sits
-      // in the input locally; toggleAutoResume()'s own enable branch
-      // reads whatever's currently there and writes it together with
-      // enabled:true in one update, so nothing is lost either way.
-      if (!(data.autoResume && data.autoResume.enabled === true)) return;
-
-      const delayMinutes = clampDelayInput(autoResumeDelayInput.value);
-      autoResumeDelayInput.value = delayMinutes; // reflect the clamped value immediately, don't wait for the round-trip
-
-      try {
-        await db.ref(`devices/${selectedId}/autoResume/delayMinutes`).set(delayMinutes);
-        autoResumeStatus.textContent = `Delay updated to ${delayMinutes} minute${delayMinutes === 1 ? '' : 's'}.`;
-      } catch (err) {
-        console.error('Failed to update auto-resume delay', err);
-        autoResumeStatus.textContent = 'Failed to save delay: ' + err.message;
-      }
-    });
-  }
-
   // ---- Scheduled on/off ---------------------------------------------
   // Opt-in, off by default, per device - same reasoning as auto-resume:
   // a physical motor turning on with no one confirming it in the
@@ -2456,11 +2836,164 @@
   // enabled/onTime/offTime settings, never decides or acts on them.
   let scheduleBusy = false;
 
-  // preserveStatus=true skips resetting scheduleStatus - same
-  // clobbering bug already found and fixed once for both notify and
-  // auto-resume (the ~1s periodic renderDetail() tick would otherwise
-  // immediately clear a just-set confirmation message), applied here
-  // from the start instead of re-discovering it a third time.
+  const schedOnHourUp = document.getElementById('schedOnHourUp');
+  const schedOnHourDown = document.getElementById('schedOnHourDown');
+  const schedOnHourVal = document.getElementById('schedOnHourVal');
+  const schedOnMinUp = document.getElementById('schedOnMinUp');
+  const schedOnMinDown = document.getElementById('schedOnMinDown');
+  const schedOnMinVal = document.getElementById('schedOnMinVal');
+  const schedOnAmBtn = document.getElementById('schedOnAmBtn');
+  const schedOnPmBtn = document.getElementById('schedOnPmBtn');
+
+  const schedOffHourUp = document.getElementById('schedOffHourUp');
+  const schedOffHourDown = document.getElementById('schedOffHourDown');
+  const schedOffHourVal = document.getElementById('schedOffHourVal');
+  const schedOffMinUp = document.getElementById('schedOffMinUp');
+  const schedOffMinDown = document.getElementById('schedOffMinDown');
+  const schedOffMinVal = document.getElementById('schedOffMinVal');
+  const schedOffAmBtn = document.getElementById('schedOffAmBtn');
+  const schedOffPmBtn = document.getElementById('schedOffPmBtn');
+
+  const scheduleDurationText = document.getElementById('scheduleDurationText');
+
+  function parse24hTime(timeStr) {
+    if (!timeStr || typeof timeStr !== 'string') timeStr = '06:00';
+    const parts = timeStr.split(':');
+    let h = parseInt(parts[0], 10);
+    let m = parseInt(parts[1], 10);
+    if (isNaN(h) || h < 0 || h > 23) h = 6;
+    if (isNaN(m) || m < 0 || m > 59) m = 0;
+    const isPm = h >= 12;
+    let h12 = h % 12;
+    if (h12 === 0) h12 = 12;
+    return {
+      h24: h,
+      h12: h12,
+      min: m,
+      isPm: isPm,
+      displayHour: String(h12).padStart(2, '0'),
+      displayMin: String(m).padStart(2, '0'),
+      ampm: isPm ? 'PM' : 'AM'
+    };
+  }
+
+  function format24hTime(h12, min, isPm) {
+    let h = h12 % 12;
+    if (isPm) h += 12;
+    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+  }
+
+  function updateScheduleDisplay(onStr, offStr) {
+    const on = parse24hTime(onStr);
+    const off = parse24hTime(offStr);
+
+    if (schedOnHourVal) schedOnHourVal.textContent = on.displayHour;
+    if (schedOnMinVal) schedOnMinVal.textContent = on.displayMin;
+    if (schedOnAmBtn) schedOnAmBtn.classList.toggle('active', !on.isPm);
+    if (schedOnPmBtn) schedOnPmBtn.classList.toggle('active', on.isPm);
+
+    if (schedOffHourVal) schedOffHourVal.textContent = off.displayHour;
+    if (schedOffMinVal) schedOffMinVal.textContent = off.displayMin;
+    if (schedOffAmBtn) schedOffAmBtn.classList.toggle('active', !off.isPm);
+    if (schedOffPmBtn) schedOffPmBtn.classList.toggle('active', off.isPm);
+
+    if (scheduleOnTimeInput) scheduleOnTimeInput.value = format24hTime(on.h12, on.min, on.isPm);
+    if (scheduleOffTimeInput) scheduleOffTimeInput.value = format24hTime(off.h12, off.min, off.isPm);
+
+    // Duration calculation
+    const onTotal = on.h24 * 60 + on.min;
+    const offTotal = off.h24 * 60 + off.min;
+
+    if (scheduleDurationText) {
+      if (onTotal === offTotal) {
+        scheduleDurationText.textContent = 'On and off times can\u2019t be the same.';
+      } else {
+        let diff = offTotal - onTotal;
+        if (diff < 0) diff += 24 * 60; // Overnight
+        const hours = Math.floor(diff / 60);
+        const mins = diff % 60;
+        let durStr = '';
+        if (hours > 0) durStr += `${hours}h`;
+        if (mins > 0) durStr += `${hours > 0 ? ' ' : ''}${mins}m`;
+        if (!durStr) durStr = '0m';
+
+        const onFmt = `${on.h12}:${on.displayMin} ${on.ampm}`;
+        const offFmt = `${off.h12}:${off.displayMin} ${off.ampm}`;
+        scheduleDurationText.innerHTML = `Runs for <strong>${durStr}</strong> daily (${onFmt} &rarr; ${offFmt})`;
+      }
+    }
+  }
+
+  async function adjustScheduleTime(which, changeType, deltaOrVal, shouldSave) {
+    const isStart = (which === 'onTime');
+    const currentStr = isStart
+      ? (scheduleOnTimeInput ? scheduleOnTimeInput.value : '06:00')
+      : (scheduleOffTimeInput ? scheduleOffTimeInput.value : '08:00');
+    const otherStr = isStart
+      ? (scheduleOffTimeInput ? scheduleOffTimeInput.value : '08:00')
+      : (scheduleOnTimeInput ? scheduleOnTimeInput.value : '06:00');
+
+    let parsed = parse24hTime(currentStr);
+
+    if (changeType === 'hour') {
+      let h = parsed.h12 + deltaOrVal;
+      if (h > 12) h = 1;
+      if (h < 1) h = 12;
+      parsed.h12 = h;
+    } else if (changeType === 'min') {
+      let m = parsed.min + deltaOrVal;
+      if (m >= 60) m = 0;
+      if (m < 0) m = 45;
+      parsed.min = m;
+    } else if (changeType === 'ampm') {
+      parsed.isPm = !!deltaOrVal;
+    } else if (changeType === 'set') {
+      parsed = parse24hTime(deltaOrVal);
+    }
+
+    const newTimeStr = format24hTime(parsed.h12, parsed.min, parsed.isPm);
+
+    if (isStart) {
+      updateScheduleDisplay(newTimeStr, otherStr);
+    } else {
+      updateScheduleDisplay(otherStr, newTimeStr);
+    }
+
+    if (shouldSave && selectedId && !scheduleBusy) {
+      const data = devices[selectedId] || {};
+      if (!(data.schedule && data.schedule.enabled === true)) return;
+
+      if (newTimeStr === otherStr) {
+        scheduleStatus.textContent = 'On and off times can\u2019t be the same.';
+        return;
+      }
+
+      try {
+        await db.ref(`devices/${selectedId}/schedule/${which}`).set(newTimeStr);
+        scheduleStatus.textContent = 'Schedule updated.';
+      } catch (err) {
+        console.error('Failed to update schedule time', err);
+        scheduleStatus.textContent = 'Failed to save: ' + err.message;
+      }
+    }
+  }
+
+  // Bind Start Time Controls
+  if (schedOnHourUp) schedOnHourUp.addEventListener('click', () => adjustScheduleTime('onTime', 'hour', 1, true));
+  if (schedOnHourDown) schedOnHourDown.addEventListener('click', () => adjustScheduleTime('onTime', 'hour', -1, true));
+  if (schedOnMinUp) schedOnMinUp.addEventListener('click', () => adjustScheduleTime('onTime', 'min', 15, true));
+  if (schedOnMinDown) schedOnMinDown.addEventListener('click', () => adjustScheduleTime('onTime', 'min', -15, true));
+  if (schedOnAmBtn) schedOnAmBtn.addEventListener('click', () => adjustScheduleTime('onTime', 'ampm', false, true));
+  if (schedOnPmBtn) schedOnPmBtn.addEventListener('click', () => adjustScheduleTime('onTime', 'ampm', true, true));
+
+  // Bind Stop Time Controls
+  if (schedOffHourUp) schedOffHourUp.addEventListener('click', () => adjustScheduleTime('offTime', 'hour', 1, true));
+  if (schedOffHourDown) schedOffHourDown.addEventListener('click', () => adjustScheduleTime('offTime', 'hour', -1, true));
+  if (schedOffMinUp) schedOffMinUp.addEventListener('click', () => adjustScheduleTime('offTime', 'min', 15, true));
+  if (schedOffMinDown) schedOffMinDown.addEventListener('click', () => adjustScheduleTime('offTime', 'min', -15, true));
+  if (schedOffAmBtn) schedOffAmBtn.addEventListener('click', () => adjustScheduleTime('offTime', 'ampm', false, true));
+  if (schedOffPmBtn) schedOffPmBtn.addEventListener('click', () => adjustScheduleTime('offTime', 'ampm', true, true));
+
   function refreshScheduleUi(schedule, preserveStatus){
     if (!scheduleToggleBtn || scheduleBusy) return;
 
@@ -2471,15 +3004,9 @@
     scheduleToggleBtn.classList.toggle('state-on', enabled);
     scheduleToggleBtn.classList.toggle('state-off', !enabled);
 
-    // Only overwrite from remote data if the person isn't actively
-    // focused on the field right now - avoids clobbering an
-    // in-progress edit on the next periodic refresh.
-    if (document.activeElement !== scheduleOnTimeInput) {
-      scheduleOnTimeInput.value = schedule.onTime || '06:00';
-    }
-    if (document.activeElement !== scheduleOffTimeInput) {
-      scheduleOffTimeInput.value = schedule.offTime || '08:00';
-    }
+    const onTime = schedule.onTime || '06:00';
+    const offTime = schedule.offTime || '08:00';
+    updateScheduleDisplay(onTime, offTime);
 
     if (!preserveStatus) {
       scheduleStatus.textContent = '';
@@ -2498,22 +3025,24 @@
 
     try {
       if (currentlyEnabled) {
-        // Only flips enabled off - keeps the last onTime/offTime
-        // values, so re-enabling later remembers the previous
-        // schedule rather than resetting to the defaults.
         await db.ref(`devices/${selectedId}/schedule/enabled`).set(false);
         scheduleStatus.textContent = 'Schedule disabled.';
       } else {
-        const onTime = scheduleOnTimeInput.value || '06:00';
-        const offTime = scheduleOffTimeInput.value || '08:00';
+        const onTime = (scheduleOnTimeInput && scheduleOnTimeInput.value) || '06:00';
+        const offTime = (scheduleOffTimeInput && scheduleOffTimeInput.value) || '08:00';
 
         if (onTime === offTime) {
           scheduleStatus.textContent = 'On and off times can\u2019t be the same.';
-          return; // finally below still runs and resets the button
+          return;
         }
 
+        const onParsed = parse24hTime(onTime);
+        const offParsed = parse24hTime(offTime);
+        const onFmt = `${onParsed.h12}:${onParsed.displayMin} ${onParsed.ampm}`;
+        const offFmt = `${offParsed.h12}:${offParsed.displayMin} ${offParsed.ampm}`;
+
         await db.ref(`devices/${selectedId}/schedule`).update({ enabled: true, onTime, offTime });
-        scheduleStatus.textContent = `Enabled - will turn on at ${onTime} and off at ${offTime}, every day.`;
+        scheduleStatus.textContent = `Enabled - will turn on at ${onFmt} and off at ${offFmt}, every day.`;
       }
     } catch (err) {
       console.error('Failed to update schedule setting', err);
@@ -2525,42 +3054,8 @@
     }
   }
 
-  async function updateScheduleTime(field, value){
-    if (!selectedId || scheduleBusy) return;
-
-    const data = devices[selectedId] || {};
-    // Same reasoning as auto-resume's delay input: only writes a live
-    // update while already enabled. Changing a time before ever
-    // enabling just sits in the input locally - toggleSchedule()'s own
-    // enable branch reads whatever's currently there when it writes
-    // enabled:true, so nothing is lost either way.
-    if (!(data.schedule && data.schedule.enabled === true)) return;
-
-    const otherField = field === 'onTime' ? 'offTime' : 'onTime';
-    if (value === data.schedule[otherField]) {
-      scheduleStatus.textContent = 'On and off times can\u2019t be the same.';
-      return;
-    }
-
-    try {
-      await db.ref(`devices/${selectedId}/schedule/${field}`).set(value);
-      scheduleStatus.textContent = 'Schedule updated.';
-    } catch (err) {
-      console.error('Failed to update schedule time', err);
-      scheduleStatus.textContent = 'Failed to save: ' + err.message;
-    }
-  }
-
   if (scheduleToggleBtn) {
     scheduleToggleBtn.addEventListener('click', toggleSchedule);
-  }
-
-  if (scheduleOnTimeInput) {
-    scheduleOnTimeInput.addEventListener('change', () => updateScheduleTime('onTime', scheduleOnTimeInput.value));
-  }
-
-  if (scheduleOffTimeInput) {
-    scheduleOffTimeInput.addEventListener('change', () => updateScheduleTime('offTime', scheduleOffTimeInput.value));
   }
 </script>
 
