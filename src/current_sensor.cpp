@@ -20,9 +20,9 @@ void CurrentSensor::begin()
 
     // The schematic biases the AC waveform around 1.65 V, so starting
     // close to the corresponding ADC midpoint avoids a long warm-up.
-    offsetI = ADC_COUNTS / 2.0;
+    offsetI = ADC_COUNTS / 2.0f;
     samplesTaken = 0;
-    sumI = 0.0;
+    sumI = 0.0f;
     irms = 0.0f;
     readingReady = false;
     running = false;
@@ -51,9 +51,9 @@ void CurrentSensor::update()
 
     // Same adaptive DC-offset filter used by the Mottramlabs firmware.
     // It tracks the 1.65 V bias and leaves only the AC component.
-    offsetI += (sampleI - offsetI) / 1024.0;
+    offsetI += (sampleI - offsetI) / 1024.0f;
 
-    const double filteredI = sampleI - offsetI;
+    const float filteredI = (float)sampleI - offsetI;
     sumI += filteredI * filteredI;
     samplesTaken++;
 
@@ -75,10 +75,10 @@ void CurrentSensor::finishSample()
 
     // Mottramlabs-style RMS conversion:
     //   ADC RMS counts -> volts -> amps using the CT calibration.
-    const double adcRms = sqrt(sumI / SAMPLES);
-    const double voltsRms = adcRms * (SUPPLY_VOLTAGE / ADC_COUNTS);
+    const float adcRms = sqrtf(sumI / SAMPLES);
+    const float voltsRms = adcRms * (SUPPLY_VOLTAGE / ADC_COUNTS);
 
-    irms = (float)(voltsRms * ICAL);
+    irms = voltsRms * ICAL;
 
     // Clamp tiny ADC noise to zero. This is not the running threshold;
     // it only keeps the reported value from bouncing around at idle.

@@ -17,8 +17,8 @@ private:
 
     uint32_t nextSampleUs = 0;
     uint16_t samplesTaken = 0;
-    double sumI = 0.0;
-    double offsetI = 2048.0;
+    float sumI = 0.0f;
+    float offsetI = 2048.0f;
 
     // Tracks how long a 400-sample window actually takes in real
     // wall-clock time, logged once per window in finishSample() - not

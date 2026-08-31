@@ -259,27 +259,28 @@ exports.onMotorStateChanged = onValueWritten(
 
     const deviceId = event.params.deviceId;
     const db = getDatabase();
-    const nameSnap = await db.ref(`devices/${deviceId}/status/name`).once("value");
-    const name = nameSnap.val() || deviceId;
 
     try {
       let body = after === "RUNNING" ? "Motor started." : "Motor stopped.";
+      let name = deviceId;
 
-      // startedVia only ever applies to a transition into RUNNING (see
-      // src/cloud.h's comment on remoteStartWasPending() for why a
-      // stop can't be attributed the same safe way) - a separate read
-      // since this trigger only sees the motor/state leaf itself, not
-      // its sibling fields. Absent for OFF transitions and for the
-      // rare case a RUNNING transition happened without it (falls
-      // back to the plain message, same as before this existed).
+      // Parallelize name and startedVia reads when transitioning into RUNNING -
+      // cuts round-trip network latency in half before sending push.
       if (after === "RUNNING") {
-        const viaSnap = await db.ref(`devices/${deviceId}/motor/startedVia`).once("value");
+        const [nameSnap, viaSnap] = await Promise.all([
+          db.ref(`devices/${deviceId}/status/name`).once("value"),
+          db.ref(`devices/${deviceId}/motor/startedVia`).once("value")
+        ]);
+        name = nameSnap.val() || deviceId;
         const via = viaSnap.val();
         if (via === "remote") {
           body = "Motor started via remote command.";
         } else if (via === "manual") {
           body = "Motor started manually at the panel.";
         }
+      } else {
+        const nameSnap = await db.ref(`devices/${deviceId}/status/name`).once("value");
+        name = nameSnap.val() || deviceId;
       }
 
       const result = await sendPushToDevice(deviceId, `${name} is now ${after}`, body);
