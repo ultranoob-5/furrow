@@ -216,12 +216,16 @@ exports.powerWatchdog = onSchedule(
       sendWhatsApp: sendWhatsAppReal,
       sendPush: sendPushToDevice,
       setDedupFlag: async (deviceId, motorStateAtOutage) => {
-        // Multi-path update, not two separate .set() calls - both
-        // fields should land together atomically, and this is also
-        // just one round-trip instead of two.
+        // Multi-path update, not two separate .set() calls - all
+        // fields land together atomically in one round-trip.
+        // Sets motor/state to "OFF" in the database so the dashboard
+        // reflects that the pump is no longer running while unpowered,
+        // while preserving motor/stateBeforeOutage so autoResume knows
+        // to resume when power is restored.
         await db.ref(`devices/${deviceId}`).update({
           "status/powerAlertSent": true,
           "motor/stateBeforeOutage": motorStateAtOutage || null,
+          "motor/state": "OFF",
         });
       },
       nowMs: Date.now(),
