@@ -67,7 +67,7 @@ cp database.rules.example.json database.rules.json
 
 Edit `database.rules.json` and replace every
 `device@your-project-id.local` with the real device account email you
-just created in step 2 (all four occurrences need to match). Then:
+just created in step 2 (all five occurrences need to match). Then:
 
 ```
 firebase deploy --only database
@@ -91,7 +91,10 @@ keeps the two in sync automatically.
           ".write": "auth.token.email == 'device@your-project-id.local'"
         },
         "motor": {
-          ".write": "auth.token.email == 'device@your-project-id.local'"
+          ".write": "auth.token.email == 'device@your-project-id.local'",
+          "stateBeforeOutage": {
+            ".write": "auth.token.email == 'device@your-project-id.local' || auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+          }
         },
         "ota": {
           ".write": "auth.token.email == 'device@your-project-id.local'"

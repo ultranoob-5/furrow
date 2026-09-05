@@ -52,6 +52,11 @@ public:
     // loss, a trip, an overload) - that asymmetry is why this exists
     // for starts only, never stops.
     bool remoteStartWasPending();
+
+    // Auto-resume state inspection and cancellation
+    bool isAutoResumePending();
+    bool autoResumeStartWasPending();
+    void cancelAutoResume();
 };
 
 extern Cloud cloud;

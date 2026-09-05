@@ -281,6 +281,8 @@ exports.onMotorStateChanged = onValueWritten(
           body = "Motor started via remote command.";
         } else if (via === "manual") {
           body = "Motor started manually at the panel.";
+        } else if (via === "auto-resume") {
+          body = "Motor auto-resumed after power restoration.";
         }
       } else {
         const nameSnap = await db.ref(`devices/${deviceId}/status/name`).once("value");
@@ -350,130 +352,34 @@ exports.onPowerRestored = onValueWritten(
       return;
     }
 
-    const deviceId = event.params.deviceId;
-    const db = getDatabase();
-    const nameSnap = await db.ref(`devices/${deviceId}/status/name`).once("value");
-    const name = nameSnap.val() || deviceId;
-
     try {
-      const result = await sendPushToDevice(deviceId, `${name} power restored`, "Back online after a power loss.");
-      logger.info(`[PowerRestoredPush] ${deviceId} (${name}): sent to ${result.sent} token(s)`);
-    } catch (err) {
-      logger.error(`[PowerRestoredPush] ${deviceId} (${name}): send failed: ${err}`);
-    }
-
-    // Auto-resume, entirely separate from the push notification above
-    // (which has already gone out either way by this point) - reads
-    // this device's own opt-in settings and the motor-state snapshot
-    // runWatchdog took at outage detection, not anything live.
-    //
-    // Deliberately does NOT sleep inline here to wait out the delay -
-    // event-handling functions (this trigger type) have a hard 540s
-    // (9 min) timeoutSeconds ceiling, confirmed directly by actually
-    // trying to load this function with a longer timeout configured
-    // (it threw immediately) - a 10-minute requested delay alone
-    // already exceeds that cap before any buffer for the work around
-    // it, so a single long-running invocation genuinely can't do
-    // this. Instead just writes a scheduling record; the actual
-    // delayed start is autoResumeWatchdog below - a periodic scheduled
-    // function, the same pattern powerWatchdog already uses
-    // successfully - checking once a minute for delays that have
-    // elapsed, which has no such ceiling since the waiting happens
-    // across many short, independent runs instead of one long one.
-    try {
-      const [autoResumeSnap, stateBeforeSnap] = await Promise.all([
+      const [nameSnap, autoResumeSnap, stateBeforeSnap] = await Promise.all([
+        db.ref(`devices/${deviceId}/status/name`).once("value"),
         db.ref(`devices/${deviceId}/autoResume`).once("value"),
         db.ref(`devices/${deviceId}/motor/stateBeforeOutage`).once("value"),
       ]);
 
-      const autoResumeSettings = autoResumeSnap.val();
-      const stateBeforeOutage = stateBeforeSnap.val();
+      const name = nameSnap.val() || deviceId;
+      const autoResume = autoResumeSnap.val() || {};
+      const stateBefore = stateBeforeSnap.val();
 
-      if (shouldAutoResume(autoResumeSettings, stateBeforeOutage)) {
-        const delayMinutes = clampAutoResumeDelayMinutes(autoResumeSettings.delayMinutes);
-        const dueAt = Date.now() + delayMinutes * 60 * 1000;
-
-        await db.ref(`devices/${deviceId}/autoResume/dueAt`).set(dueAt);
-        logger.info(`[AutoResume] ${deviceId} (${name}): was RUNNING before the outage, auto-resume enabled - scheduled for ${delayMinutes}m from now (${new Date(dueAt).toISOString()})`);
+      let body = "Back online after a power loss.";
+      if (autoResume.enabled === true && stateBefore === "RUNNING") {
+        const delay = autoResume.delayMinutes || 5;
+        body = `Back online. Motor was running before outage - auto-resume starting in ${delay} min.`;
       }
 
-      // Clear the snapshot either way, once this outage's recovery has
-      // been fully handled - avoids a stale value lingering and being
-      // misread at some unrelated future outage if auto-resume gets
-      // disabled in between.
-      await db.ref(`devices/${deviceId}/motor/stateBeforeOutage`).remove();
+      const result = await sendPushToDevice(deviceId, `${name} power restored`, body);
+      logger.info(`[PowerRestoredPush] ${deviceId} (${name}): sent to ${result.sent} token(s)`);
     } catch (err) {
-      logger.error(`[AutoResume] ${deviceId} (${name}): failed: ${err}`);
+      logger.error(`[PowerRestoredPush] ${deviceId}: send failed: ${err}`);
     }
+
+    // Auto-resume countdown and relay triggering are now handled
+    // directly on-device by the ESP32 firmware upon reconnect, eliminating
+    // the need for a 1-minute Cloud Function cron watchdog.
   }
 );
-
-// Companion to onPowerRestored above - that function only ever
-// schedules an auto-resume (writes autoResume/dueAt), it never sends
-// the start command itself, since a single event-handling invocation
-// can't safely sleep out a delay that can be up to 10 real minutes
-// (hard 540s timeout ceiling on that trigger type - see its own
-// comment). This is what actually acts once a scheduled delay has
-// elapsed - same "run every minute, check every device" shape as
-// powerWatchdog, just checking a different condition.
-async function runAutoResumeWatchdog({ fetchDevices, sendStartCommand, clearDueAt, nowMs }) {
-  const devices = (await fetchDevices()) || {};
-  const results = [];
-
-  for (const [deviceId, data] of Object.entries(devices)) {
-    const autoResume = (data && data.autoResume) || {};
-    const dueAt = autoResume.dueAt;
-
-    if (dueAt === undefined || dueAt === null) {
-      continue; // nothing scheduled for this device right now
-    }
-
-    if (nowMs < dueAt) {
-      continue; // scheduled, but the delay hasn't elapsed yet
-    }
-
-    try {
-      await sendStartCommand(deviceId);
-      results.push(deviceId);
-    } catch (err) {
-      logger.error(`[AutoResumeWatchdog] ${deviceId}: failed to send start command: ${err}`);
-      continue; // don't clear dueAt if the send itself failed - retry next run
-    }
-
-    try {
-      await clearDueAt(deviceId);
-    } catch (err) {
-      logger.error(`[AutoResumeWatchdog] ${deviceId}: start sent but failed to clear dueAt (may re-send next run): ${err}`);
-    }
-  }
-
-  return results; // list of device IDs actually resumed, useful for tests
-}
-module.exports.runAutoResumeWatchdog = runAutoResumeWatchdog; // exported for test.js
-
-exports.autoResumeWatchdog = onSchedule("every 1 minutes", async () => {
-  const db = getDatabase();
-
-  await runAutoResumeWatchdog({
-    fetchDevices: async () => {
-      const snapshot = await db.ref("devices").once("value");
-      return snapshot.val();
-    },
-    sendStartCommand: async (deviceId) => {
-      // Same command/action path a person clicking Start on the
-      // dashboard already writes to - the device's own
-      // checkCommandConfirmation() (src/cloud.cpp) and the existing
-      // failed-start alert both apply automatically, no special-
-      // casing needed for this being automated rather than a human
-      // click.
-      await db.ref(`devices/${deviceId}/command/action`).set("start");
-    },
-    clearDueAt: async (deviceId) => {
-      await db.ref(`devices/${deviceId}/autoResume/dueAt`).remove();
-    },
-    nowMs: Date.now(),
-  });
-});
 
 // Daily on/off schedule (e.g. "start irrigation at 06:00, stop at
 // 08:00, every day"). Same shape as auto-resume above: a scheduled

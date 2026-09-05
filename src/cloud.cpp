@@ -53,8 +53,21 @@ namespace
     String commandPath;
     String firmwareUrlPath;
     String otaStatusPath;
+    String autoResumePath;
+    String stateBeforeOutagePath;
 
     bool streamStarted = false;
+
+    // Auto-resume state: handled locally on ESP32 without requiring Cloud Function polling
+    bool autoResumeChecked = false;
+    bool autoResumePending = false;
+    bool autoResumeStartPending = false;
+    unsigned long autoResumeDueMs = 0;
+    uint8_t autoResumeDelayMinutes = 5;
+    bool autoResumeEnabled = false;
+    bool autoResumeDataReceived = false;
+    bool stateBeforeOutageReceived = false;
+    String stateBeforeOutage = "";
 
     unsigned long lastHeartbeat = 0;
     constexpr unsigned long HEARTBEAT_INTERVAL_MS = 10000;
@@ -91,6 +104,36 @@ namespace
     unsigned long commandConfirmSince = 0;
     constexpr unsigned long COMMAND_CONFIRM_TIMEOUT_MS = 30000;
 
+    void processData(AsyncResult &result);
+
+    void checkTriggerAutoResume()
+    {
+        if (!autoResumeDataReceived || !stateBeforeOutageReceived)
+            return;
+
+        if (autoResumeEnabled && stateBeforeOutage == "RUNNING")
+        {
+            Logger::warn(TAG, "Auto-resume: pump was RUNNING before outage. Scheduling start in " +
+                                String(autoResumeDelayMinutes) + " minute(s)");
+
+            autoResumePending = true;
+            autoResumeDueMs = millis() + (autoResumeDelayMinutes * 60000UL);
+
+            // Clear stateBeforeOutage in RTDB immediately so it won't re-trigger on subsequent reboots
+            database.set<String>(aClientMain, stateBeforeOutagePath, "", processData, "clearStateBeforeOutage");
+
+            Notify::sendWhatsApp("\u26a1 " + device.name() + " power restored - motor was running before outage. Auto-resume in " +
+                                  String(autoResumeDelayMinutes) + " min.");
+        }
+        else
+        {
+            if (stateBeforeOutage.length() > 0 && stateBeforeOutage != "null")
+            {
+                database.set<String>(aClientMain, stateBeforeOutagePath, "", processData, "clearStateBeforeOutage");
+            }
+        }
+    }
+
     void processData(AsyncResult &result)
     {
         if (result.isError())
@@ -123,6 +166,36 @@ namespace
             return;
         }
 
+        if (result.uid() == "fetchAutoResume")
+        {
+            RealtimeDatabaseResult &rtdb = result.to<RealtimeDatabaseResult>();
+            String json = rtdb.to<String>();
+            autoResumeEnabled = (json.indexOf("\"enabled\":true") >= 0);
+            int idx = json.indexOf("\"delayMinutes\":");
+            if (idx >= 0)
+            {
+                int delay = json.substring(idx + 15).toInt();
+                if (delay >= 1 && delay <= 10)
+                    autoResumeDelayMinutes = delay;
+                else
+                    autoResumeDelayMinutes = 5;
+            }
+            autoResumeDataReceived = true;
+            checkTriggerAutoResume();
+            return;
+        }
+
+        if (result.uid() == "fetchStateBeforeOutage")
+        {
+            RealtimeDatabaseResult &rtdb = result.to<RealtimeDatabaseResult>();
+            stateBeforeOutage = rtdb.to<String>();
+            stateBeforeOutage.replace("\"", "");
+            stateBeforeOutage.trim();
+            stateBeforeOutageReceived = true;
+            checkTriggerAutoResume();
+            return;
+        }
+
         // Only the command stream task carries remote commands.
         if (result.uid() != "commandStream")
             return;
@@ -134,7 +207,7 @@ namespace
 
         String value = rtdb.to<String>();
 
-        if (value == "start" || value == "stop" || value == "restart" || value == "shutdown" || value == "update" || value == "factory_reset")
+        if (value == "start" || value == "stop" || value == "restart" || value == "shutdown" || value == "update" || value == "factory_reset" || value == "cancel_auto_resume")
             pendingCommand = value;
     }
 
@@ -142,6 +215,15 @@ namespace
     {
         if (pendingCommand.length() == 0)
             return;
+
+        if (pendingCommand == "cancel_auto_resume")
+        {
+            Logger::warn(TAG, "Remote command: CANCEL AUTO-RESUME");
+            autoResumePending = false;
+            pendingCommand = "";
+            database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
+            return;
+        }
 
         if (pendingCommand == "restart")
         {
@@ -213,6 +295,7 @@ namespace
         else if (pendingCommand == "stop")
         {
             Logger::info(TAG, "Remote command: STOP");
+            autoResumePending = false; // Stop cancels any active auto-resume timer
             motor.stop();
             commandConfirmPending = "stop";
             commandConfirmSince = millis();
@@ -233,6 +316,30 @@ namespace
         // Acknowledge / clear the command so it isn't re-applied on the
         // next stream reconnect.
         database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
+    }
+
+    void checkAutoResume()
+    {
+        if (!autoResumePending)
+            return;
+
+        // If the motor is already running, cancel auto-resume
+        if (motor.isRunning())
+        {
+            Logger::info(TAG, "Auto-resume cancelled - motor already running");
+            autoResumePending = false;
+            return;
+        }
+
+        if ((long)(millis() - autoResumeDueMs) >= 0)
+        {
+            autoResumePending = false;
+            autoResumeStartPending = true;
+            Logger::warn(TAG, "Auto-resume delay elapsed - starting motor");
+            motor.start();
+            cloud.publishMotor("auto-resume");
+            Notify::sendWhatsApp("\u26a1 " + device.name() + " auto-resumed successfully after power restoration.");
+        }
     }
 
     // Checked every Cloud::loop() iteration - cheap no-op when nothing's
@@ -436,6 +543,8 @@ void Cloud::begin()
     commandPath = "/devices/" + device.id() + "/command/action";
     firmwareUrlPath = "/devices/" + device.id() + "/command/firmwareUrl";
     otaStatusPath = "/devices/" + device.id() + "/ota";
+    autoResumePath = "/devices/" + device.id() + "/autoResume";
+    stateBeforeOutagePath = "/devices/" + device.id() + "/motor/stateBeforeOutage";
 
     // Skip TLS certificate verification for simplicity in v1.0.
     // Consider pinning Google's root CA for production use.
@@ -467,6 +576,9 @@ void Cloud::loop()
         Logger::info(TAG, "WiFi reconnected - restarting Firebase stream");
         streamStarted = false;
         lastHeartbeat = 0;
+        autoResumeChecked = false;
+        autoResumeDataReceived = false;
+        stateBeforeOutageReceived = false;
 
         unsigned long downtimeMs = Network::lastDisconnectDurationMs();
 
@@ -500,6 +612,15 @@ void Cloud::loop()
         Logger::info(TAG, "Listening for remote commands");
     }
 
+    if (!autoResumeChecked)
+    {
+        autoResumeChecked = true;
+        autoResumeDataReceived = false;
+        stateBeforeOutageReceived = false;
+        database.get(aClientMain, autoResumePath, processData, false, "fetchAutoResume");
+        database.get(aClientMain, stateBeforeOutagePath, processData, false, "fetchStateBeforeOutage");
+    }
+
     if (!otaStatusReset)
     {
         // Clears any leftover OTA status from before this boot (whether
@@ -513,6 +634,8 @@ void Cloud::loop()
     handlePendingCommand();
 
     checkCommandConfirmation();
+
+    checkAutoResume();
 
     if (otaRequested)
     {
@@ -679,4 +802,24 @@ void Cloud::publishMotor(const char *startedVia)
 bool Cloud::remoteStartWasPending()
 {
     return commandConfirmPending == "start";
+}
+
+bool Cloud::isAutoResumePending()
+{
+    return autoResumePending;
+}
+
+bool Cloud::autoResumeStartWasPending()
+{
+    return autoResumeStartPending;
+}
+
+void Cloud::cancelAutoResume()
+{
+    if (autoResumePending)
+    {
+        Logger::info(TAG, "Auto-resume cancelled");
+        autoResumePending = false;
+    }
+    autoResumeStartPending = false;
 }

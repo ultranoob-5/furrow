@@ -2889,7 +2889,11 @@
 
     try {
       if (currentlyEnabled) {
-        await db.ref(`devices/${selectedId}/autoResume/enabled`).set(false);
+        await Promise.all([
+          db.ref(`devices/${selectedId}/autoResume/enabled`).set(false),
+          db.ref(`devices/${selectedId}/command/action`).set('cancel_auto_resume'),
+          db.ref(`devices/${selectedId}/motor/stateBeforeOutage`).remove().catch(() => {})
+        ]);
         autoResumeStatus.textContent = 'Auto-resume disabled.';
       } else {
         const delayMinutes = clampDelayInput(autoResumeDelayInput ? autoResumeDelayInput.value : 5);

@@ -28,11 +28,6 @@ assert(typeof mod.onPowerRestored === "function", "index.js failed to export onP
 assert(typeof mod.onMotorCommandFailed === "function", "index.js failed to export onMotorCommandFailed as a function");
 assert(typeof mod.sendTestNotification === "function", "index.js failed to export sendTestNotification as a function");
 assert(typeof mod.firmwareProxy === "function", "index.js failed to export firmwareProxy as a function");
-assert(typeof mod.isValidFirmwareAssetRequest === "function", "index.js failed to export isValidFirmwareAssetRequest as a function");
-assert(typeof mod.autoResumeWatchdog === "function", "index.js failed to export autoResumeWatchdog as a function");
-assert(typeof mod.runAutoResumeWatchdog === "function", "index.js failed to export runAutoResumeWatchdog as a function");
-assert(typeof mod.shouldAutoResume === "function", "index.js failed to export shouldAutoResume as a function");
-assert(typeof mod.clampAutoResumeDelayMinutes === "function", "index.js failed to export clampAutoResumeDelayMinutes as a function");
 assert(typeof mod.scheduleWatchdog === "function", "index.js failed to export scheduleWatchdog as a function");
 assert(typeof mod.runScheduleWatchdog === "function", "index.js failed to export runScheduleWatchdog as a function");
 assert(typeof mod.computeScheduleActions === "function", "index.js failed to export computeScheduleActions as a function");
@@ -40,7 +35,7 @@ assert(typeof mod.isValidTimeString === "function", "index.js failed to export i
 assert(typeof mod.getIstTimeAndDate === "function", "index.js failed to export getIstTimeAndDate as a function");
 console.log("Module load check: PASS (this is the exact check that would have caught the admin.database() bug)\n");
 
-const { runWatchdog, runAutoResumeWatchdog, isValidFirmwareAssetRequest, runScheduleWatchdog, computeScheduleActions, isValidTimeString, getIstTimeAndDate } = mod;
+const { runWatchdog, isValidFirmwareAssetRequest, runScheduleWatchdog, computeScheduleActions, isValidTimeString, getIstTimeAndDate } = mod;
 
 // Security-relevant: firmwareProxy builds an outbound GitHub URL from
 // these two query params, so a validation bug here is a real open-
@@ -291,48 +286,6 @@ async function testRunScheduleWatchdog() {
   console.log("\nrunScheduleWatchdog: ALL ASSERTIONS PASS\n");
 }
 
-async function testRunAutoResumeWatchdog() {
-  const nowMs = Date.now();
-
-  const fakeDevices = {
-    "dev-due":        { autoResume: { enabled: true, dueAt: nowMs - 1000 } },  // 1s in the past - due
-    "dev-not-yet":    { autoResume: { enabled: true, dueAt: nowMs + 60000 } }, // 1min in the future - not due yet
-    "dev-nothing":    { status: { name: "Nothing scheduled" } },               // no autoResume field at all
-    "dev-send-fails": { autoResume: { enabled: true, dueAt: nowMs - 1000 } },  // due, but the send will throw
-  };
-
-  const started = [];
-  const cleared = [];
-
-  const resumed = await runAutoResumeWatchdog({
-    fetchDevices: async () => fakeDevices,
-    sendStartCommand: async (deviceId) => {
-      if (deviceId === "dev-send-fails") {
-        throw new Error("simulated send failure");
-      }
-      started.push(deviceId);
-    },
-    clearDueAt: async (deviceId) => {
-      cleared.push(deviceId);
-    },
-    nowMs,
-  });
-
-  console.log("=== runAutoResumeWatchdog results ===");
-  console.log("Resumed:", resumed);
-  console.log("Start commands sent:", started);
-  console.log("dueAt cleared:", cleared);
-
-  assert(resumed.length === 1 && resumed[0] === "dev-due", `Expected only dev-due to be resumed, got ${JSON.stringify(resumed)}`);
-  assert(started.includes("dev-due"), "Expected a start command sent for dev-due");
-  assert(!started.includes("dev-not-yet"), "Expected no start command for dev-not-yet (delay hasn't elapsed)");
-  assert(!started.includes("dev-nothing"), "Expected no start command for dev-nothing (nothing scheduled)");
-  assert(cleared.includes("dev-due"), "Expected dueAt cleared for dev-due after a successful send");
-  assert(!cleared.includes("dev-send-fails"), "Expected dueAt NOT cleared for dev-send-fails - a failed send should retry next run, not be silently dropped");
-
-  console.log("\nrunAutoResumeWatchdog: ALL ASSERTIONS PASS\n");
-}
-
 async function main() {
   const nowMs = Date.now();
 
@@ -411,7 +364,6 @@ async function main() {
 }
 
 main()
-  .then(testRunAutoResumeWatchdog)
   .then(testRunScheduleWatchdog)
   .catch((err) => {
     console.error("Test run failed:", err);

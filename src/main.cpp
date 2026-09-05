@@ -194,9 +194,21 @@ void loop()
         // command involved at all, so "no remote command pending"
         // doesn't mean "manual" the way it does for a start).
         if (runningNow)
-            cloud.publishMotor(cloud.remoteStartWasPending() ? "remote" : "manual");
+        {
+            const char *via = "manual";
+            if (cloud.autoResumeStartWasPending())
+                via = "auto-resume";
+            else if (cloud.remoteStartWasPending())
+                via = "remote";
+
+            cloud.cancelAutoResume();
+            cloud.publishMotor(via);
+        }
         else
+        {
+            cloud.cancelAutoResume();
             cloud.publishMotor();
+        }
     }
 
     cloud.loop();

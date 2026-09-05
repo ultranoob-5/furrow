@@ -1,4 +1,17 @@
 
+## [1.3.6] - 2026-09-05
+
+- **Autonomous On-Device Auto-Resume**: Moved post-outage motor auto-resume
+  countdown and relay triggering directly onto the ESP32 firmware upon boot.
+  Eliminated the 1-minute `autoResumeWatchdog` Cloud Function cron job, saving
+  1,440 daily cloud function executions (~43,200 runs/month).
+- **Dynamic RTDB Delay & Live Cancellation**: Fetches user-configured delay
+  (1–10 minutes) directly from `/devices/{id}/autoResume` on boot. Listens
+  for live `cancel_auto_resume` commands from the dashboard and immediately
+  aborts pending timers on manual panel stop, remote stop, or motor state change.
+- **Hardware FPU Float Operations**: Switched current sensor math to native
+  32-bit `float` (`sqrtf`) leveraging ESP32 Xtensa LX6 hardware FPU.
+
 ## [1.3.5] - 2026-08-26
 
 No firmware code changes - identical firmware.bin to v1.3.4. Re-tagged

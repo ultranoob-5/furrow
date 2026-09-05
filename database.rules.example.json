@@ -7,7 +7,10 @@
           ".write": "auth.token.email == 'device@your-project-id.local'"
         },
         "motor": {
-          ".write": "auth.token.email == 'device@your-project-id.local'"
+          ".write": "auth.token.email == 'device@your-project-id.local'",
+          "stateBeforeOutage": {
+            ".write": "auth.token.email == 'device@your-project-id.local' || auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+          }
         },
         "ota": {
           ".write": "auth.token.email == 'device@your-project-id.local'"
