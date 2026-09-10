@@ -2293,11 +2293,6 @@
     throw new Error('Firebase SDK or config unavailable - stopping before firebase.initializeApp()');
   }
 
-  // Clean up any stale IndexedDB instances with version > 1 from previous Firebase compat versions
-  if (window.FurrowFirebase && typeof window.FurrowFirebase.purgeLegacyDatabases === 'function') {
-    window.FurrowFirebase.purgeLegacyDatabases(false).catch(() => {});
-  }
-
   // ---- Firebase init ---------------------------------------------------
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
@@ -2520,7 +2515,33 @@
   // ---- DOM refs ----------------------------------------------------------
   const overviewEl = document.getElementById('overview');
   if (overviewEl) {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let isTouchScroll = false;
+
+    overviewEl.addEventListener('touchstart', (e) => {
+      if (e.touches && e.touches[0]) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        isTouchScroll = false;
+      }
+    }, { passive: true });
+
+    overviewEl.addEventListener('touchmove', (e) => {
+      if (e.touches && e.touches[0]) {
+        const dx = Math.abs(e.touches[0].clientX - touchStartX);
+        const dy = Math.abs(e.touches[0].clientY - touchStartY);
+        if (dx > 8 || dy > 8) {
+          isTouchScroll = true;
+        }
+      }
+    }, { passive: true });
+
     overviewEl.addEventListener('click', (e) => {
+      if (isTouchScroll) {
+        isTouchScroll = false;
+        return;
+      }
       const chip = e.target.closest('.chip');
       if (chip && chip.dataset.deviceId) {
         vibrate(12);
@@ -2846,7 +2867,16 @@
     selectedId = id;
     pendingAction = null;
     try {
-      if (id) localStorage.setItem('furrow_selected_device', id);
+      if (id) {
+        localStorage.setItem('furrow_selected_device', id);
+        if (window.history && window.history.replaceState) {
+          const url = new URL(window.location);
+          if (url.searchParams.get('device') !== id) {
+            url.searchParams.set('device', id);
+            window.history.replaceState({}, '', url);
+          }
+        }
+      }
     } catch (_) {}
 
     panelEl.style.display = 'block';
@@ -3384,12 +3414,13 @@
         savedDevice = localStorage.getItem('furrow_selected_device');
       } catch (_) {}
 
-      if (targetDevice && devices[targetDevice]) {
-        selectDevice(targetDevice);
-      } else if (selectedId && devices[selectedId]) {
+      if (selectedId && devices[selectedId]) {
         // Keep currently viewed device active across realtime data updates
         renderOverview();
         renderDetail();
+      } else if (targetDevice && devices[targetDevice]) {
+        // First-time load with ?device= in URL (e.g. from push notification click)
+        selectDevice(targetDevice);
       } else if (savedDevice && devices[savedDevice]) {
         // Restore last selected device on page reload / reopening app
         selectDevice(savedDevice);
@@ -3643,12 +3674,6 @@
   // token under whichever devices you've enabled it for).
   async function getCurrentPushToken() {
     const registration = await navigator.serviceWorker.ready;
-
-    // Proactively check and purge any legacy IndexedDB databases with version > 1 before getToken
-    if (window.FurrowFirebase && typeof window.FurrowFirebase.purgeLegacyDatabases === 'function') {
-      await window.FurrowFirebase.purgeLegacyDatabases(false);
-    }
-
     const messaging = firebase.messaging();
 
     if (!notifyMessagingReady) {
@@ -3683,30 +3708,10 @@
       notifyMessagingReady = true;
     }
 
-    try {
-      return await messaging.getToken({
-        vapidKey: firebaseConfig.vapidKey,
-        serviceWorkerRegistration: registration
-      });
-    } catch (err) {
-      // Handle edge case where browser cache has legacy Firebase v8 IndexedDB instances at version > 1
-      if (err && (err.name === 'VersionError' || (err.message && (err.message.includes('VersionError') || err.message.includes('less than the existing version'))))) {
-        console.warn('[Furrow] Recovering from legacy IndexedDB VersionError in getCurrentPushToken...', err);
-        if (window.FurrowFirebase && typeof window.FurrowFirebase.purgeLegacyDatabases === 'function') {
-          await window.FurrowFirebase.purgeLegacyDatabases(true);
-        } else {
-          ['firebase-messaging-database', 'firebase-installations-database', 'firebase-heartbeat-database', 'fcm_token_details_db'].forEach(name => {
-            try { indexedDB.deleteDatabase(name); } catch (_) {}
-          });
-        }
-        // Retry token retrieval once with cleanly re-created databases
-        return await messaging.getToken({
-          vapidKey: firebaseConfig.vapidKey,
-          serviceWorkerRegistration: registration
-        });
-      }
-      throw err;
-    }
+    return messaging.getToken({
+      vapidKey: firebaseConfig.vapidKey,
+      serviceWorkerRegistration: registration
+    });
   }
 
   async function enableNotificationsForSelectedDevice() {
