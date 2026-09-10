@@ -2981,7 +2981,10 @@
     if (stage === 'failed') {
       updateBtn.classList.add('failed');
       updateBtn.style.setProperty('--ota-fill', '100%');
-      updateBtn.innerHTML = `<span class="btn-ota-inner">${labelHtml}</span>`;
+      const inner = document.createElement('span');
+      inner.className = 'btn-ota-inner';
+      inner.textContent = labelHtml;
+      updateBtn.replaceChildren(inner);
       return;
     }
 
@@ -3030,7 +3033,7 @@
     } else if (phase === 'failed') {
       otaInProgress = false;
       const failMsg = ota.message || 'Error';
-      setUpdateBtnState('failed', 100, `&#x26A0; Update failed: ${failMsg}`);
+      setUpdateBtnState('failed', 100, `⚠ Update failed: ${failMsg}`);
       setTimeout(() => {
         setUpdateBtnState('idle', 0, 'Update firmware');
         const mState = (devices[selectedId] && devices[selectedId].motor) ? devices[selectedId].motor.state : null;
