@@ -34,9 +34,12 @@ public:
 
     float currentAmps();
 
+    bool isDevelopment() const;
+
 private:
 
     MotorState state = MotorState::OFF;
+    bool devMode = false;
 };
 
 extern Motor motor;

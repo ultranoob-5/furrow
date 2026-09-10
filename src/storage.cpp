@@ -20,6 +20,7 @@ namespace
     constexpr const char *KEY_DEV_NAME = "dev_name";
     constexpr const char *KEY_OWNER = "owner";
     constexpr const char *KEY_WA_PHONE = "wa_phone";
+    constexpr const char *KEY_DEV_MODE = "dev_mode";
     constexpr const char *TAG = "Storage";
 }
 
@@ -103,6 +104,18 @@ namespace AppStorage
         Logger::info(TAG, "WhatsApp notification recipient saved");
     }
 
+    bool isDevelopmentDevice()
+    {
+        return prefs.getBool(KEY_DEV_MODE, false);
+    }
+
+    void setDevelopmentDevice(bool enabled)
+    {
+        prefs.putBool(KEY_DEV_MODE, enabled);
+
+        Logger::info(TAG, String("Development device mode ") + (enabled ? "ENABLED" : "DISABLED"));
+    }
+
     void factoryReset()
     {
         prefs.remove(KEY_WIFI_SSID);
@@ -110,7 +123,9 @@ namespace AppStorage
         prefs.remove(KEY_DEV_NAME);
         prefs.remove(KEY_OWNER);
         prefs.remove(KEY_WA_PHONE);
+        prefs.remove(KEY_DEV_MODE);
 
         Logger::warn(TAG, "Factory reset - all stored config cleared");
     }
 }
+

@@ -35,6 +35,12 @@ namespace AppStorage
     String whatsAppPhone();
     void setWhatsAppConfig(const String &phone);
 
+    // Development device flag - when true, disables CT current sensor feedback
+    // so Start/Stop commands immediately update motor state for bench testing
+    // without requiring physical CT hardware or a motor.
+    bool isDevelopmentDevice();
+    void setDevelopmentDevice(bool enabled);
+
     // Wipes WiFi credentials, device name/owner, and WhatsApp config -
     // everything, returning the device to the same state as a freshly
     // flashed board. Unlike clearWifiCredentials() alone, this also
@@ -44,3 +50,4 @@ namespace AppStorage
     // device for someone else is exactly one real reason to use this).
     void factoryReset();
 }
+

@@ -288,17 +288,17 @@ namespace
         if (pendingCommand == "start")
         {
             Logger::info(TAG, "Remote command: START");
-            motor.start();
             commandConfirmPending = "start";
             commandConfirmSince = millis();
+            motor.start();
         }
         else if (pendingCommand == "stop")
         {
             Logger::info(TAG, "Remote command: STOP");
             autoResumePending = false; // Stop cancels any active auto-resume timer
-            motor.stop();
             commandConfirmPending = "stop";
             commandConfirmSince = millis();
+            motor.stop();
         }
 
         pendingCommand = "";
@@ -310,7 +310,8 @@ namespace
         // WiFi connect + Firebase auth + stream setup all take some
         // time too) could otherwise still hit this same "OFF" default
         // even after the setup()/heartbeat paths were fixed for it.
-        if (motor.hasReading())
+        // In devMode, main.cpp handles the state change publish directly.
+        if (motor.hasReading() && !motor.isDevelopment())
             cloud.publishMotor();
 
         // Acknowledge / clear the command so it isn't re-applied on the
@@ -369,6 +370,12 @@ namespace
 
         if (millis() - commandConfirmSince < COMMAND_CONFIRM_TIMEOUT_MS)
             return; // still within the grace window - Star-Delta transitions can take several seconds
+
+        if (motor.isDevelopment())
+        {
+            commandConfirmPending = "";
+            return;
+        }
 
         Logger::error(TAG, "Motor failed to " + commandConfirmPending + " - no confirmation within " +
                             String(COMMAND_CONFIRM_TIMEOUT_MS / 1000) + "s");
@@ -722,6 +729,12 @@ void Cloud::publishDevice()
         snprintf(waPhoneField, sizeof(waPhoneField), ",\"whatsappPhone\":\"%s\"", escapedPhone.c_str());
     }
 
+    char devModeField[24] = "";
+    if (AppStorage::isDevelopmentDevice())
+    {
+        snprintf(devModeField, sizeof(devModeField), ",\"isDevelopment\":true");
+    }
+
     char json[640];
     int len = snprintf(json, sizeof(json),
         "{\"id\":\"%s\",\"name\":\"%s\",\"owner\":\"%s\",\"firmware\":\"%s\",\"ip\":\"%s\","
@@ -733,7 +746,7 @@ void Cloud::publishDevice()
         // in the database itself, rather than something only true if
         // some browser happened to be open and watching at the right
         // moment to observe it.
-        "\"lastSeen\":{\".sv\":\"timestamp\"}%s,"
+        "\"lastSeen\":{\".sv\":\"timestamp\"}%s%s,"
         // Resets the power-watchdog's dedup flag every single
         // heartbeat this device is alive to send one - the watchdog
         // only sets this true when it detects an outage, so as long
@@ -749,7 +762,8 @@ void Cloud::publishDevice()
         device.rssi(),
         device.online() ? "true" : "false",
         device.uptime(),
-        waPhoneField);
+        waPhoneField,
+        devModeField);
 
     if (len < 0 || len >= (int)sizeof(json))
         Logger::error(TAG, "publishDevice: JSON truncated - name/owner/phone unusually long? Buffer is " + String(sizeof(json)) + " bytes");

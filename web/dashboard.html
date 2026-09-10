@@ -279,6 +279,20 @@
 
   .chip-state.running{ color: var(--green); font-weight: 600; }
 
+  .chip-dev-badge{
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(232, 163, 61, 0.15);
+    color: var(--amber);
+    border: 1px solid rgba(232, 163, 61, 0.35);
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    display: inline-block;
+  }
+
   .chip-empty{
     font-size: 13px;
     color: var(--muted);
@@ -1338,7 +1352,7 @@
 
     <div class="readout">
       <div class="readout-row"><span class="k">Device ID</span><span class="v" id="rId">&mdash;</span></div>
-      <div class="readout-row"><span class="k">Firmware</span><span class="v"><span id="rFw">&mdash;</span><span class="update-badge" id="rFwBadge" style="display:none;">Update available</span></span></div>
+      <div class="readout-row"><span class="k">Firmware</span><span class="v"><span id="rFw">&mdash;</span><span class="chip-dev-badge" id="rDevBadge" style="display:none; margin-left:6px;" title="Development device (CT feedback bypassed)">DEV</span><span class="update-badge" id="rFwBadge" style="display:none;">Update available</span></span></div>
       <div class="readout-row"><span class="k">Signal</span><span class="v" id="rRssi">
         <span class="signal-bars" id="rRssiBars"><span></span><span></span><span></span><span></span></span>
         <span id="rRssiText">&mdash;</span>
@@ -1852,6 +1866,7 @@
   const otaProgressFill = document.getElementById('otaProgressFill');
   const rId = document.getElementById('rId');
   const rFw = document.getElementById('rFw');
+  const rDevBadge = document.getElementById('rDevBadge');
   const rFwBadge = document.getElementById('rFwBadge');
   const rLastOnline = document.getElementById('rLastOnline');
   const rRssiText = document.getElementById('rRssiText');
@@ -2031,6 +2046,13 @@
         nameEl.className = 'chip-name';
         top.appendChild(nameEl);
 
+        const devBadge = document.createElement('span');
+        devBadge.className = 'chip-dev-badge';
+        devBadge.title = 'Development device (CT feedback bypassed)';
+        devBadge.textContent = 'DEV';
+        devBadge.style.display = 'none';
+        top.appendChild(devBadge);
+
         const badge = document.createElement('span');
         badge.className = 'update-badge';
         badge.title = 'Update available';
@@ -2057,6 +2079,13 @@
       const nameEl = chip.querySelector('.chip-name');
       const expectedName = deviceLabelFor(id, data);
       if (nameEl && nameEl.textContent !== expectedName) nameEl.textContent = expectedName;
+
+      const isDev = data.status && data.status.isDevelopment === true;
+      const devBadge = chip.querySelector('.chip-dev-badge');
+      if (devBadge) {
+        const expectedDevDisplay = isDev ? 'inline-block' : 'none';
+        if (devBadge.style.display !== expectedDevDisplay) devBadge.style.display = expectedDevDisplay;
+      }
 
       const badge = chip.querySelector('.update-badge');
       if (badge) {
@@ -2107,6 +2136,7 @@
 
     rId.textContent = fwStatus.id || selectedId;
     rFw.textContent = fwStatus.firmware ?? '\u2014';
+    rDevBadge.style.display = fwStatus.isDevelopment === true ? 'inline-block' : 'none';
     rFwBadge.style.display = isNewerVersion(fwStatus.firmware, latestFirmwareVersion) ? 'inline-block' : 'none';
 
     const connStatus = connectionStatus(selectedId);

@@ -3,6 +3,7 @@
 #include "motor.h"
 #include "button.h"
 #include "current_sensor.h"
+#include "storage.h"
 #include "logger.h"
 
 Motor motor;
@@ -14,23 +15,39 @@ namespace
 
 void Motor::begin()
 {
+    devMode = AppStorage::isDevelopmentDevice();
     buttonInit();
-    currentSensor.begin();
 
-    Logger::info(TAG, "Ready - state will follow current feedback");
+    if (devMode)
+    {
+        Logger::warn(TAG, "Ready [DEV MODE] - current feedback disabled, state is command-driven");
+    }
+    else
+    {
+        currentSensor.begin();
+        Logger::info(TAG, "Ready - state will follow current feedback");
+    }
 }
 
 void Motor::start()
 {
-    // Do not set state here. The current sensor must confirm that the
-    // motor actually started. This also means a failed starter does not
-    // appear as RUNNING on the dashboard.
+    // In production, do not set state here. The current sensor must confirm
+    // that the motor actually started. In devMode, CT feedback is bypassed
+    // so state transitions directly to RUNNING.
     if (state == MotorState::RUNNING)
         return;
 
     pressStartButton();
 
-    Logger::info(TAG, "Start commanded - waiting for current feedback");
+    if (devMode)
+    {
+        state = MotorState::RUNNING;
+        Logger::info(TAG, "Start commanded [DEV MODE] - state set to RUNNING");
+    }
+    else
+    {
+        Logger::info(TAG, "Start commanded - waiting for current feedback");
+    }
 }
 
 void Motor::stop()
@@ -49,15 +66,26 @@ void Motor::stop()
     // pressing Stop twice.
     pressStopButton();
 
-    Logger::info(TAG, "Stop commanded - waiting for current feedback");
+    if (devMode)
+    {
+        state = MotorState::OFF;
+        Logger::info(TAG, "Stop commanded [DEV MODE] - state set to OFF");
+    }
+    else
+    {
+        Logger::info(TAG, "Stop commanded - waiting for current feedback");
+    }
 }
 
 void Motor::update()
 {
     buttonUpdate();
-    currentSensor.update();
 
-    state = currentSensor.isRunning() ? MotorState::RUNNING : MotorState::OFF;
+    if (!devMode)
+    {
+        currentSensor.update();
+        state = currentSensor.isRunning() ? MotorState::RUNNING : MotorState::OFF;
+    }
 }
 
 bool Motor::isRunning()
@@ -67,10 +95,20 @@ bool Motor::isRunning()
 
 bool Motor::hasReading()
 {
+    if (devMode)
+        return true;
     return currentSensor.hasReading();
 }
 
 float Motor::currentAmps()
 {
+    if (devMode)
+        return state == MotorState::RUNNING ? 5.5f : 0.0f;
     return currentSensor.currentAmps();
 }
+
+bool Motor::isDevelopment() const
+{
+    return devMode;
+}
+

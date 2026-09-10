@@ -46,6 +46,10 @@ namespace
   select, input { width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid #2E333B; background:#21252B; color:#ECE9E2; font-size:14px; }
   button { width:100%; margin-top:20px; padding:12px 0; border:none; border-radius:8px; background:#E8A33D; color:#241804; font-weight:700; font-size:14px; cursor:pointer; }
   .status { margin-top:14px; font-size:13px; color:#49B675; }
+  .check-row { display:flex; align-items:flex-start; gap:10px; margin-top:16px; cursor:pointer; }
+  .check-row input[type="checkbox"] { width:18px; height:18px; margin-top:2px; flex-shrink:0; accent-color:#E8A33D; cursor:pointer; }
+  .check-row-text { font-size:13px; color:#ECE9E2; }
+  .check-row-sub { font-size:11px; color:#868C97; margin-top:2px; text-transform:none; letter-spacing:normal; }
 </style>
 </head>
 <body>
@@ -65,6 +69,18 @@ namespace
       <input type="email" name="owner" placeholder="you@example.com" maxlength="60">
       <label>WhatsApp Alerts (optional)</label>
       <input type="text" name="wa_phone" placeholder="Your number, digits only e.g. 919876543210" maxlength="20">
+      <label class="check-row">
+        <input type="checkbox" name="dev_mode" value="1")HTML";
+        if (AppStorage::isDevelopmentDevice())
+        {
+            html += " checked";
+        }
+        html += R"HTML(>
+        <div>
+          <div class="check-row-text">Development Device</div>
+          <div class="check-row-sub">Bypass CT current feedback for bench testing without a motor</div>
+        </div>
+      </label>
       <button type="submit">Save &amp; Connect</button>
     </form>
     <div class="status">)HTML";
@@ -159,6 +175,9 @@ namespace
         {
             AppStorage::setWhatsAppConfig(waPhone);
         }
+
+        bool isDevMode = server.hasArg("dev_mode");
+        AppStorage::setDevelopmentDevice(isDevMode);
 
         server.send(200, "text/html", htmlPage("Saved. Restarting and connecting..."));
 
