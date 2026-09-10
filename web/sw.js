@@ -1,24 +1,30 @@
-// Minimal service worker: makes the dashboard installable and gives it a
-// fast-loading app shell. Deliberately NOT trying to make the dashboard
-// work offline for live data - it needs a real connection to Firebase to
-// be useful at all. This only caches the static shell (HTML/manifest/
-// icons) and always prefers a fresh network copy when online, falling
-// back to cache only if the network request actually fails.
+// Furrow Service Worker
+// Provides an offline-first app shell, intelligent CDN caching for libraries/fonts,
+// background push notifications via FCM, and seamless in-app update workflows.
 
-const CACHE_NAME = 'furrow-dashboard-v2';
+const CACHE_NAME = 'furrow-dashboard-v3';
 
 const APP_SHELL = [
   './dashboard.html',
+  './flash.html',
   './manifest.json',
   './icons/icon-192.png',
-  './icons/icon-512.png'
+  './icons/icon-512.png',
+  './icons/apple-touch-icon.png'
+];
+
+// Pinned third-party CDNs used by Furrow that can be safely cached for offline reliability
+const TRUSTED_CDN_HOSTS = [
+  'cdnjs.cloudflare.com',
+  'fonts.googleapis.com',
+  'fonts.gstatic.com',
+  'unpkg.com'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -30,26 +36,75 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
+// Allows the client UI to trigger immediate activation of an updated service worker
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
 
-  // Only ever handle same-origin GET requests for the app shell itself -
-  // never intercept Firebase's own API/websocket traffic (different
-  // origin anyway) or anything else. Live dashboard data always goes
-  // straight to the network, completely unaffected by this cache.
-  if (event.request.method !== 'GET' || url.origin !== self.location.origin) {
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') {
     return;
   }
 
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-        return response;
+  const url = new URL(event.request.url);
+
+  // 1. Same-origin assets (app shell, styles, icons, pages)
+  if (url.origin === self.location.origin) {
+    if (event.request.mode === 'navigate') {
+      // Navigation: Network-first, fall back to matching cached page, then dashboard shell
+      event.respondWith(
+        fetch(event.request)
+          .then((response) => {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+            return response;
+          })
+          .catch(() =>
+            caches.match(event.request).then((matched) => matched || caches.match('./dashboard.html'))
+          )
+      );
+      return;
+    }
+
+    // Static resources: Network-first with cache update and cache fallback
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // 2. Trusted CDN libraries and fonts (Firebase SDK, Google Fonts, ESP Web Tools)
+  // Stale-While-Revalidate: Return cached version instantly, fetch and update in background
+  if (TRUSTED_CDN_HOSTS.includes(url.hostname)) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cachedResponse = await cache.match(event.request);
+        const networkFetch = fetch(event.request)
+          .then((networkResponse) => {
+            if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
+              cache.put(event.request, networkResponse.clone());
+            }
+            return networkResponse;
+          })
+          .catch(() => null);
+
+        return cachedResponse || networkFetch;
       })
-      .catch(() => caches.match(event.request))
-  );
+    );
+    return;
+  }
+
+  // 3. All other requests (Firebase RTDB, Auth APIs, WebSockets) go straight to network
 });
 
 // Handles notification clicks: focuses an existing dashboard tab or opens a new one
@@ -78,17 +133,7 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// Firebase Cloud Messaging (browser push) background-message handler,
-// see dashboard.html's enableNotificationsForSelectedDevice() for the
-// enable flow and functions/index.js for what actually triggers a
-// send (power loss, motor state changes, power restored). This only
-// handles messages that arrive while the dashboard tab isn't in the
-// foreground - foreground messages are delivered straight to the page
-// instead and are handled there (messaging.onMessage() in
-// dashboard.html), not here. Loaded conditionally: if firebase-config.js
-// doesn't define a vapidKey, firebase.initializeApp() below still runs
-// harmlessly (same public-ish config values already loaded on the page),
-// it just never receives anything since no token was ever requested.
+// Firebase Cloud Messaging (browser push) background-message handler
 try {
   importScripts(
     'https://cdnjs.cloudflare.com/ajax/libs/firebase/12.17.1/firebase-app-compat.min.js',
@@ -100,12 +145,6 @@ try {
   const messaging = firebase.messaging();
 
   messaging.onBackgroundMessage((payload) => {
-    // data, not notification - see functions/index.js's
-    // sendPushToDevice() for why (a notification-field message gets
-    // auto-displayed by the browser/SDK in addition to this handler's
-    // own showNotification() call below, producing a duplicate -
-    // confirmed on real hardware, one with the real icon from here,
-    // one generic/iconless from the SDK's own fallback display).
     const title = (payload.data && payload.data.title) || 'Furrow';
     const body = (payload.data && payload.data.body) || '';
     const url = (payload.data && (payload.data.url || payload.data.click_action)) || './dashboard.html';
@@ -118,7 +157,6 @@ try {
     });
   });
 } catch (err) {
-  // Non-fatal: the rest of this service worker (app-shell caching,
-  // installability) still works fine without push support.
+  // Non-fatal: app-shell caching and installability continue working without push support
   console.error('FCM background handler setup failed', err);
 }

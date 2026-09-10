@@ -8,6 +8,10 @@
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#14161A">
+<meta name="color-scheme" content="dark">
+<meta name="application-name" content="Furrow">
+<meta name="description" content="Remote start/stop, status, and OTA updates for 3-phase motor starters.">
+<meta name="format-detection" content="telephone=no">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="mobile-web-app-capable" content="yes">
@@ -40,7 +44,7 @@
     --panel-raised: #21252B;
     --border: #2E333B;
     --text: #ECE9E2;
-    --muted: #868C97;
+    --muted: #9DA3AF;
     --amber: #E8A33D;
     --amber-soft: rgba(232,163,61,0.14);
     --green: #49B675;
@@ -204,6 +208,48 @@
 
   .install-banner-dismiss:hover{ color: var(--text); }
 
+  /* ---- Update available banner - prompts user to refresh when a new SW version is waiting ---- */
+  .update-banner{
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    border-radius: var(--radius-sm);
+    background: rgba(73,182,117,0.14);
+    border: 1px solid rgba(73,182,117,0.35);
+    animation: connectionBannerIn 0.25s ease;
+  }
+
+  .update-banner-text{
+    flex: 1;
+    font-size: 12.5px;
+    color: var(--text);
+    line-height: 1.4;
+  }
+
+  .update-banner-btn{
+    appearance: none;
+    background: var(--green);
+    color: #0e1210;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .update-banner-btn:hover{
+    opacity: 0.9;
+  }
+
   /* ---- Overview strip ------------------------------------------------ */
 
   .overview{
@@ -275,9 +321,29 @@
     font-size: 12px;
     font-weight: 500;
     color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
   }
 
   .chip-state.running{ color: var(--green); font-weight: 600; }
+  .chip-state.no-power{ color: var(--red); font-weight: 600; }
+  .chip-state.updating{ color: var(--amber); font-weight: 600; }
+
+  .chip-state-icon{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .chip-state-icon.spin{
+    animation: motorSpin 2s linear infinite;
+  }
+
+  @keyframes motorSpin{
+    100% { transform: rotate(360deg); }
+  }
 
   .chip-dev-badge{
     font-size: 9px;
@@ -354,9 +420,12 @@
     color: var(--muted);
     cursor: pointer;
     font-size: 13px;
-    padding: 2px 4px;
+    padding: 3px 5px;
     border-radius: 6px;
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     transition: color 0.15s ease, background 0.15s ease;
   }
 
@@ -1242,6 +1311,10 @@
     font-weight: 500;
   }
 
+  .conn-text.online{ color: var(--green); font-weight: 600; }
+  .conn-text.offline{ color: var(--red); font-weight: 600; }
+  .conn-text.updating, .conn-text.connecting{ color: var(--amber); font-weight: 600; }
+
   /* ---- Status block, with a soft leaf-glow signature ------------------ */
 
   .status-block{
@@ -1270,6 +1343,7 @@
 
   .status-block.is-running{ --leaf-glow-color: var(--green); --leaf-glow-opacity: 0.16; }
   .status-block.is-pending{ --leaf-glow-color: var(--amber); --leaf-glow-opacity: 0.16; }
+  .status-block.is-offline{ --leaf-glow-color: var(--red); --leaf-glow-opacity: 0.16; }
 
   .status-label{
     position: relative;
@@ -1286,11 +1360,27 @@
     font-weight: 900;
     letter-spacing: -0.01em;
     transition: color 0.25s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
   }
 
   .status-value.running{ color: var(--green); text-shadow: 0 0 30px rgba(73,182,117,0.4); }
   .status-value.off{ color: var(--text); opacity: 0.55; }
   .status-value.pending{ color: var(--amber); text-shadow: 0 0 30px rgba(232,163,61,0.4); }
+  .status-value.no-power{ color: var(--red); text-shadow: 0 0 30px rgba(225,82,65,0.4); }
+
+  .status-icon{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .status-icon.spin{
+    animation: motorSpin 2s linear infinite;
+  }
 
   .status-sub{
     position: relative;
@@ -1381,26 +1471,6 @@
     align-items: center;
     gap: 6px;
     font-size: 12.5px;
-  }
-
-  .ota-progress-track{
-    width: 100%;
-    height: 8px;
-    background: var(--panel-raised);
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    overflow: hidden;
-  }
-
-  .ota-progress-fill{
-    height: 100%;
-    background: linear-gradient(90deg, var(--amber), #5fd18a);
-    border-radius: 5px 0 0 5px;
-    transition: width 0.3s ease;
-  }
-
-  .ota-progress-fill.failed{
-    background: var(--red);
   }
 
   .update-badge{
@@ -1551,6 +1621,69 @@
     border-color: var(--red);
     color: var(--red);
     background: var(--red-soft);
+  }
+
+  /* ---- Interactive OTA Progress Button Styles -------------------- */
+  .btn-ota-progress{
+    position: relative;
+    overflow: hidden;
+    background: var(--panel-raised) !important;
+    border-color: rgba(73,182,117,0.45) !important;
+    color: #ECE9E2 !important;
+    opacity: 1 !important;
+    cursor: wait !important;
+    user-select: none;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  }
+
+  .btn-ota-progress::before{
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: var(--ota-fill, 0%);
+    background: linear-gradient(90deg, #1b4d31, #49B675);
+    border-radius: inherit;
+    transition: width 0.35s ease;
+    z-index: 0;
+  }
+
+  .btn-ota-progress.failed::before{
+    background: linear-gradient(90deg, #5A2E29, #A33B30);
+  }
+
+  .btn-ota-progress.pulsing::before{
+    animation: otaPulseBar 1.4s ease-in-out infinite alternate;
+  }
+
+  @keyframes otaPulseBar{
+    from{ opacity: 0.55; }
+    to{ opacity: 0.95; }
+  }
+
+  .btn-ota-inner{
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    font-weight: 700;
+  }
+
+  .ota-spinner{
+    width: 13px;
+    height: 13px;
+    border: 2px solid rgba(255,255,255,0.35);
+    border-top-color: #ECE9E2;
+    border-radius: 50%;
+    animation: otaSpin 0.75s linear infinite;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  @keyframes otaSpin{
+    to{ transform: rotate(360deg); }
   }
 
   .app-content{
@@ -1754,6 +1887,12 @@
        power", since the dashboard would just look stale either way. -->
   <div class="connection-banner" id="connectionBanner" style="display:none;"></div>
 
+  <!-- Shown when a new version of the PWA has been downloaded in the background -->
+  <div class="update-banner" id="updateBanner" style="display:none;">
+    <div class="update-banner-text">A new version of Furrow is available.</div>
+    <button class="update-banner-btn" id="updateAppBtn">Update</button>
+  </div>
+
   <!-- Hidden by default. Two different real paths, not one: Chrome/
        Android supports a real programmatic install (beforeinstallprompt),
        iOS Safari has no such API at all - the only way there is the
@@ -1763,7 +1902,7 @@
        see maybeShowInstallBanner(). -->
   <div class="install-banner" id="installBanner" style="display:none;"></div>
 
-  <div class="overview" id="overview">
+  <div class="overview" id="overview" role="tablist" aria-label="Connected devices">
     <div class="chip-empty">Loading devices&hellip;</div>
   </div>
 
@@ -1778,13 +1917,13 @@
       </div>
       <div class="conn">
         <span class="led" id="connLed"></span>
-        <span id="connLabel">connecting</span>
+        <span id="connLabel" aria-live="polite">connecting</span>
       </div>
     </div>
 
     <div class="status-block" id="statusBlock">
       <div class="status-label">Motor status</div>
-      <div class="status-value off" id="motorStatus">&mdash;</div>
+      <div class="status-value off" id="motorStatus" aria-live="polite" aria-atomic="true">&mdash;</div>
       <div class="status-sub" id="motorSub">waiting for data</div>
     </div>
 
@@ -1925,15 +2064,6 @@
           <div class="settings-label">Firmware update</div>
           <p class="settings-desc">Always installs the latest published release.</p>
           <button class="btn-danger" id="updateBtn" disabled style="width:100%;">Update firmware</button>
-          <div id="otaProgressBlock" style="display:none; margin-top:14px;">
-            <div style="display:flex; justify-content:space-between; font-family:var(--mono); font-size:11px; color:var(--muted); margin-bottom:6px;">
-              <span id="otaPhaseLabel">&mdash;</span>
-              <span id="otaPercentLabel">0%</span>
-            </div>
-            <div class="ota-progress-track">
-              <div class="ota-progress-fill" id="otaProgressFill" style="width:0%;"></div>
-            </div>
-          </div>
         </div>
 
         <div class="settings-section">
@@ -2308,13 +2438,39 @@
     maybeShowInstallBanner();
   });
 
+  // Tactile haptic feedback helper (safe no-op when unsupported or disabled)
+  function vibrate(pattern = 18){
+    try {
+      if ('vibrate' in navigator) navigator.vibrate(pattern);
+    } catch (_) {}
+  }
+
   // ---- DOM refs ----------------------------------------------------------
   const overviewEl = document.getElementById('overview');
   if (overviewEl) {
     overviewEl.addEventListener('click', (e) => {
       const chip = e.target.closest('.chip');
       if (chip && chip.dataset.deviceId) {
+        vibrate(12);
         selectDevice(chip.dataset.deviceId);
+      }
+    });
+    overviewEl.addEventListener('keydown', (e) => {
+      const chips = Array.from(overviewEl.querySelectorAll('.chip'));
+      if (chips.length === 0) return;
+      const activeIdx = chips.findIndex(c => c.dataset.deviceId === selectedId);
+      let targetIdx = -1;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        targetIdx = activeIdx >= 0 ? (activeIdx + 1) % chips.length : 0;
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        targetIdx = activeIdx >= 0 ? (activeIdx - 1 + chips.length) % chips.length : chips.length - 1;
+      }
+      if (targetIdx >= 0 && chips[targetIdx]) {
+        vibrate(12);
+        selectDevice(chips[targetIdx].dataset.deviceId);
+        chips[targetIdx].focus();
       }
     });
   }
@@ -2334,10 +2490,6 @@
   const restartBtn = document.getElementById('restartBtn');
   const factoryResetBtn = document.getElementById('factoryResetBtn');
   const updateBtn = document.getElementById('updateBtn');
-  const otaProgressBlock = document.getElementById('otaProgressBlock');
-  const otaPhaseLabel = document.getElementById('otaPhaseLabel');
-  const otaPercentLabel = document.getElementById('otaPercentLabel');
-  const otaProgressFill = document.getElementById('otaProgressFill');
   const rId = document.getElementById('rId');
   const rFw = document.getElementById('rFw');
   const rDevBadge = document.getElementById('rDevBadge');
@@ -2380,6 +2532,8 @@
   let devices = {};          // id -> { status, motor, command }
   let latestFirmwareVersion = null; // fetched once from GitHub, e.g. "0.3.0"
   let otaInProgress = false;
+  let otaPendingInitiation = false;
+  let otaInitiationTimer = null;
 
   // Real semver comparison, not string inequality - a device running
   // something NEWER than the latest release (e.g. a locally-flashed
@@ -2476,6 +2630,7 @@
     const ids = Object.keys(devices);
 
     if (ids.length === 0){
+      if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => {});
       if (!overviewEl.querySelector('.chip-empty')) {
         overviewEl.innerHTML = '<div class="chip-empty">No devices yet\u2026</div>';
       }
@@ -2509,11 +2664,13 @@
       if (!chip) {
         chip = document.createElement('div');
         chip.dataset.deviceId = id;
+        chip.setAttribute('role', 'tab');
 
         const top = document.createElement('div');
         top.className = 'chip-top';
 
         const led = document.createElement('span');
+        led.className = `led ${status}`;
         top.appendChild(led);
 
         const nameEl = document.createElement('span');
@@ -2545,6 +2702,8 @@
       // In-place property updates (only mutates if changed)
       const expectedClass = 'chip' + (isSelected ? ' active' : '');
       if (chip.className !== expectedClass) chip.className = expectedClass;
+      chip.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+      chip.setAttribute('tabindex', isSelected ? '0' : '-1');
 
       const led = chip.querySelector('.led');
       const expectedLedClass = `led ${status}`;
@@ -2569,12 +2728,45 @@
 
       const stateEl = chip.querySelector('.chip-state');
       if (stateEl) {
-        const expectedStateClass = `chip-state ${running ? 'running' : ''}`;
+        let stateKey = 'idle';
+        if (running) {
+          stateKey = 'running';
+        } else if (status === 'offline') {
+          stateKey = 'no-power';
+        } else if (status === 'updating' || status === 'connecting') {
+          stateKey = 'updating';
+        }
+
+        const expectedStateClass = `chip-state ${stateKey}`;
         if (stateEl.className !== expectedStateClass) stateEl.className = expectedStateClass;
-        const expectedText = running ? 'Running' : (online ? 'Idle' : STATUS_LABELS[status] || status);
-        if (stateEl.textContent !== expectedText) stateEl.textContent = expectedText;
+
+        if (stateEl.dataset.key !== stateKey) {
+          stateEl.dataset.key = stateKey;
+          if (stateKey === 'running') {
+            stateEl.innerHTML = `<svg class="chip-state-icon spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M10.827 16.379a6.082 6.082 0 0 1-8.618-7.002l5.412 1.45a6.082 6.082 0 0 1 7.002-8.618l-1.45 5.412a6.082 6.082 0 0 1 8.618 7.002l-5.412-1.45a6.082 6.082 0 0 1-7.002 8.618l1.45-5.412Z"/><circle cx="12" cy="12" r="2"/></svg> <span>Running</span>`;
+          } else if (stateKey === 'no-power') {
+            stateEl.innerHTML = `<svg class="chip-state-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="12.41 6.75 13 2 10.57 4.92"></polyline><polyline points="18.57 12.91 21 10 15.66 10"></polyline><polyline points="18.57 12.91 21 10 15.66 10"></polyline><line x1="2" y1="2" x2="22" y2="22"></line></svg> <span>No Power</span>`;
+          } else {
+            const text = online ? 'Idle' : (STATUS_LABELS[status] || status);
+            stateEl.innerHTML = `<span>${text}</span>`;
+          }
+        }
       }
     });
+    // PWA Badging: Reflect count of running motors on the OS app icon
+    let runningCount = 0;
+    ids.forEach((devId) => {
+      const dev = devices[devId];
+      if (dev && dev.motor && dev.motor.state === 'RUNNING') runningCount++;
+    });
+
+    if ('setAppBadge' in navigator) {
+      if (runningCount > 0) {
+        navigator.setAppBadge(runningCount).catch(() => {});
+      } else if ('clearAppBadge' in navigator) {
+        navigator.clearAppBadge().catch(() => {});
+      }
+    }
   }
 
   // ---- Selecting a device --------------------------------------------------
@@ -2615,6 +2807,7 @@
 
     const connStatus = connectionStatus(selectedId);
     connLed.className = 'led ' + connStatus;
+    connLabel.className = 'conn-text ' + connStatus;
     connLabel.textContent = STATUS_LABELS[connStatus] || connStatus;
 
     // The last-written RSSI just sits in Firebase forever until the
@@ -2652,37 +2845,93 @@
   }
 
   const OTA_PHASE_LABELS = {
-    downloading: 'Downloading & flashing\u2026',
+    downloading: 'Downloading firmware\u2026',
     restarting: 'Restarting into new firmware\u2026',
     failed: 'Update failed'
   };
+
+  function setUpdateBtnState(stage, percent, labelHtml) {
+    if (!updateBtn) return;
+
+    if (stage === 'idle') {
+      updateBtn.classList.remove('btn-ota-progress', 'pulsing', 'failed');
+      updateBtn.style.removeProperty('--ota-fill');
+      updateBtn.textContent = 'Update firmware';
+      return;
+    }
+
+    updateBtn.classList.add('btn-ota-progress');
+    updateBtn.disabled = true;
+
+    if (stage === 'initializing') {
+      updateBtn.classList.add('pulsing');
+      updateBtn.classList.remove('failed');
+      updateBtn.style.setProperty('--ota-fill', `${percent}%`);
+      updateBtn.innerHTML = `<span class="btn-ota-inner"><span class="ota-spinner"></span> ${labelHtml}</span>`;
+      return;
+    }
+
+    updateBtn.classList.remove('pulsing');
+
+    if (stage === 'failed') {
+      updateBtn.classList.add('failed');
+      updateBtn.style.setProperty('--ota-fill', '100%');
+      updateBtn.innerHTML = `<span class="btn-ota-inner">${labelHtml}</span>`;
+      return;
+    }
+
+    // downloading, flashing, restarting
+    updateBtn.classList.remove('failed');
+    updateBtn.style.setProperty('--ota-fill', `${percent}%`);
+    updateBtn.innerHTML = `<span class="btn-ota-inner">${stage === 'restarting' ? '' : '<span class="ota-spinner"></span> '}${labelHtml}</span>`;
+  }
 
   function renderOtaProgress(ota){
     const phase = ota.phase || 'idle';
 
     if (phase === 'idle' || !phase) {
-      otaProgressBlock.style.display = 'none';
+      if (otaPendingInitiation) {
+        // Keep showing initializing state until device responds
+        return;
+      }
+      if (otaInProgress) {
+        otaInProgress = false;
+        setUpdateBtnState('idle', 0, 'Update firmware');
+      } else {
+        setUpdateBtnState('idle', 0, 'Update firmware');
+      }
       return;
     }
 
-    otaProgressBlock.style.display = 'block';
-
+    if (otaInitiationTimer) {
+      clearTimeout(otaInitiationTimer);
+      otaInitiationTimer = null;
+    }
+    otaPendingInitiation = false;
     const percent = typeof ota.percent === 'number' ? ota.percent : 0;
 
-    otaPhaseLabel.textContent = OTA_PHASE_LABELS[phase] || phase;
-    otaPercentLabel.textContent = `${percent}%`;
-    otaProgressFill.style.width = `${percent}%`;
-    otaProgressFill.classList.toggle('failed', phase === 'failed');
-
-    if (ota.message) {
-      otaPhaseLabel.textContent += ` \u2014 ${ota.message}`;
+    if (phase === 'downloading') {
+      otaInProgress = true;
+      if (percent < 80) {
+        setUpdateBtnState('downloading', Math.max(percent, 12), `Downloading&hellip; ${percent}%`);
+      } else if (percent < 100) {
+        setUpdateBtnState('flashing', percent, `Flashing&hellip; ${percent}%`);
+      } else {
+        setUpdateBtnState('flashing', 100, `Flashing&hellip; 100%`);
+      }
+    } else if (phase === 'restarting') {
+      otaInProgress = true;
+      setUpdateBtnState('restarting', 100, '&#x2714; Rebooting device&hellip;');
+    } else if (phase === 'failed') {
+      otaInProgress = false;
+      const failMsg = ota.message || 'Error';
+      setUpdateBtnState('failed', 100, `&#x26A0; Update failed: ${failMsg}`);
+      setTimeout(() => {
+        setUpdateBtnState('idle', 0, 'Update firmware');
+        const mState = (devices[selectedId] && devices[selectedId].motor) ? devices[selectedId].motor.state : null;
+        updateButtons(mState);
+      }, 4000);
     }
-
-    // Don't let a second update be queued on top of one already running -
-    // updateButtons() (called from renderMotor, right after this) is
-    // the single place that actually sets updateBtn.disabled, so it
-    // needs to know about this too rather than fighting over it here.
-    otaInProgress = (phase === 'downloading' || phase === 'restarting');
   }
 
   // ---- Rename ---------------------------------------------------------
@@ -2746,7 +2995,11 @@
     }
 
     if (pendingAction) {
-      motorStatus.textContent = pendingAction === 'start' ? 'Starting\u2026' : 'Stopping\u2026';
+      const targetKey = 'pending_' + pendingAction;
+      if (motorStatus.dataset.statusKey !== targetKey) {
+        motorStatus.dataset.statusKey = targetKey;
+        motorStatus.innerHTML = `<span class="status-icon"><span class="ota-spinner" style="width:24px;height:24px;border-width:2.5px;"></span></span> <span>${pendingAction === 'start' ? 'Starting\u2026' : 'Stopping\u2026'}</span>`;
+      }
       motorStatus.className = 'status-value pending';
       if (statusBlock) statusBlock.className = 'status-block is-pending';
       motorSub.textContent = 'command sent, waiting for device';
@@ -2754,13 +3007,31 @@
       return;
     }
 
-    if (state === 'RUNNING') {
-      motorStatus.textContent = 'Running';
+    const connStatus = connectionStatus(selectedId);
+    if (connStatus === 'offline') {
+      const targetKey = 'offline';
+      if (motorStatus.dataset.statusKey !== targetKey) {
+        motorStatus.dataset.statusKey = targetKey;
+        motorStatus.innerHTML = `<svg class="status-icon" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="12.41 6.75 13 2 10.57 4.92"></polyline><polyline points="18.57 12.91 21 10 15.66 10"></polyline><polyline points="8 8 3 14 12 14 11 22 16 16"></polyline><line x1="2" y1="2" x2="22" y2="22"></line></svg> <span>No Power</span>`;
+      }
+      motorStatus.className = 'status-value no-power';
+      if (statusBlock) statusBlock.className = 'status-block is-offline';
+      motorSub.textContent = 'electricity cut at starter panel';
+    } else if (state === 'RUNNING') {
+      const targetKey = 'running';
+      if (motorStatus.dataset.statusKey !== targetKey) {
+        motorStatus.dataset.statusKey = targetKey;
+        motorStatus.innerHTML = `<svg class="status-icon spin" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M10.827 16.379a6.082 6.082 0 0 1-8.618-7.002l5.412 1.45a6.082 6.082 0 0 1 7.002-8.618l-1.45 5.412a6.082 6.082 0 0 1 8.618 7.002l-5.412-1.45a6.082 6.082 0 0 1-7.002 8.618l1.45-5.412Z"/><circle cx="12" cy="12" r="2"/></svg> <span>Running</span>`;
+      }
       motorStatus.className = 'status-value running';
       if (statusBlock) statusBlock.className = 'status-block is-running';
       motorSub.textContent = 'pump is on';
     } else {
-      motorStatus.textContent = 'Off';
+      const targetKey = 'off';
+      if (motorStatus.dataset.statusKey !== targetKey) {
+        motorStatus.dataset.statusKey = targetKey;
+        motorStatus.innerHTML = `<span>Off</span>`;
+      }
       motorStatus.className = 'status-value off';
       if (statusBlock) statusBlock.className = 'status-block';
       motorSub.textContent = 'pump is idle';
@@ -2795,22 +3066,36 @@
     // way to be recovered remotely rather than requiring a USB
     // reflash every time - that's exactly the situation these exist
     // to fix.
-    const hasEverReported = !!(devices[selectedId] && devices[selectedId].status);
-    restartBtn.disabled = !hasEverReported;
-    updateBtn.disabled = !hasEverReported || otaInProgress;
-    factoryResetBtn.disabled = !hasEverReported;
+    const isOnline = connectionStatus(selectedId) === 'online';
 
-    // Start/Stop stay strict - sending a motor command to a device we
-    // aren't confident is actually listening right now carries more
-    // real-world risk than a restart or update does.
-    if (connectionStatus(selectedId) !== 'online') {
+    // While device is offline, disable all action buttons:
+    // motor controls, restart, firmware update, and factory reset
+    if (!isOnline) {
       startBtn.disabled = true;
+      startBtn.title = 'Device is offline (No Power)';
       stopBtn.disabled = true;
+      stopBtn.title = 'Device is offline (No Power)';
+      restartBtn.disabled = true;
+      restartBtn.title = 'Device is offline (No Power)';
+      if (!otaInProgress && !otaPendingInitiation) {
+        updateBtn.disabled = true;
+        updateBtn.title = 'Device is offline (No Power)';
+      }
+      factoryResetBtn.disabled = true;
+      factoryResetBtn.title = 'Device is offline (No Power)';
       return;
     }
 
     startBtn.disabled = (state === 'RUNNING');
     stopBtn.disabled = (state !== 'RUNNING');
+    startBtn.title = '';
+    stopBtn.title = '';
+    restartBtn.disabled = false;
+    restartBtn.title = '';
+    updateBtn.disabled = (otaInProgress || otaPendingInitiation);
+    updateBtn.title = '';
+    factoryResetBtn.disabled = false;
+    factoryResetBtn.title = '';
   }
 
   function sendCommand(action){
@@ -2838,10 +3123,20 @@
     });
   }
 
-  startBtn.addEventListener('click', () => sendCommand('start'));
-  stopBtn.addEventListener('click', () => sendCommand('stop'));
+  startBtn.addEventListener('click', () => {
+    vibrate(25);
+    sendCommand('start');
+  });
+  stopBtn.addEventListener('click', () => {
+    vibrate([25, 45, 25]);
+    sendCommand('stop');
+  });
 
   restartBtn.addEventListener('click', () => {
+    if (connectionStatus(selectedId) !== 'online') {
+      alert('Cannot restart device while it is offline.');
+      return;
+    }
     const name = deviceLabelFor(selectedId, devices[selectedId]);
     const ok = confirm(
       `Restart "${name}" now?\n\n` +
@@ -2853,6 +3148,10 @@
   });
 
   factoryResetBtn.addEventListener('click', () => {
+    if (connectionStatus(selectedId) !== 'online') {
+      alert('Cannot factory reset device while it is offline.');
+      return;
+    }
     const name = deviceLabelFor(selectedId, devices[selectedId]);
     const typed = prompt(
       `Factory reset "${name}"?\n\n` +
@@ -2887,6 +3186,11 @@
   const FIRMWARE_URL = 'https://github.com/ultranoob-5/furrow/releases/latest/download/firmware.bin';
 
   updateBtn.addEventListener('click', () => {
+    if (connectionStatus(selectedId) !== 'online') {
+      alert('Cannot update firmware while device is offline.');
+      return;
+    }
+
     const name = deviceLabelFor(selectedId, devices[selectedId]);
     const ok = confirm(
       `Update "${name}" firmware now?\n\n` +
@@ -2900,13 +3204,35 @@
 
     if (!ok) return;
 
-    updateBtn.disabled = true;
+    otaPendingInitiation = true;
+    if (otaInitiationTimer) clearTimeout(otaInitiationTimer);
+    setUpdateBtnState('initializing', 15, 'Initializing update&hellip;');
+
+    // Timeout safety: if device doesn't respond within 45s, report failure
+    otaInitiationTimer = setTimeout(() => {
+      if (otaPendingInitiation) {
+        otaPendingInitiation = false;
+        setUpdateBtnState('failed', 100, '&#x26A0; Device did not respond');
+        setTimeout(() => {
+          setUpdateBtnState('idle', 0, 'Update firmware');
+          const mState = (devices[selectedId] && devices[selectedId].motor) ? devices[selectedId].motor.state : null;
+          updateButtons(mState);
+        }, 4000);
+      }
+    }, 45000);
 
     db.ref(`devices/${selectedId}/command/firmwareUrl`).set(FIRMWARE_URL)
       .then(() => sendDeviceCommand('update'))
       .catch((err) => {
         console.error('Failed to set firmware URL', err);
-        updateBtn.disabled = false;
+        otaPendingInitiation = false;
+        if (otaInitiationTimer) clearTimeout(otaInitiationTimer);
+        setUpdateBtnState('failed', 100, '&#x26A0; Failed to send command');
+        setTimeout(() => {
+          setUpdateBtnState('idle', 0, 'Update firmware');
+          const mState = (devices[selectedId] && devices[selectedId].motor) ? devices[selectedId].motor.state : null;
+          updateButtons(mState);
+        }, 3000);
       });
   });
 
@@ -3026,14 +3352,49 @@
     });
   });
 
-  // ---- PWA: register the service worker (app shell caching only, see
-  // sw.js - this has no effect on live dashboard data or how it loads) --
+  // ---- PWA: register the service worker & handle background updates ----
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch((err) => {
+      navigator.serviceWorker.register('sw.js').then((reg) => {
+        // If an update is already waiting, show the update prompt immediately
+        if (reg.waiting) {
+          showUpdateBanner(reg.waiting);
+        }
+
+        // Detect newly installed service worker waiting to activate
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              showUpdateBanner(newWorker);
+            }
+          });
+        });
+      }).catch((err) => {
         console.error('Service worker registration failed', err);
       });
+
+      // Reload page when new service worker takes control
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
     });
+  }
+
+  function showUpdateBanner(waitingWorker) {
+    const updateBanner = document.getElementById('updateBanner');
+    const updateAppBtn = document.getElementById('updateAppBtn');
+    if (!updateBanner || !updateAppBtn) return;
+    updateBanner.style.display = 'flex';
+    updateAppBtn.onclick = () => {
+      updateAppBtn.disabled = true;
+      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+    };
   }
 
   // ---- Push notifications (per device) --------------------------------
@@ -3375,13 +3736,20 @@
   function refreshAutoResumeUi(settings, preserveStatus){
     if (!autoResumeToggleBtn || autoResumeBusy) return;
 
-    autoResumeToggleBtn.disabled = false;
+    const isOnline = connectionStatus(selectedId) === 'online';
+    autoResumeToggleBtn.disabled = !isOnline;
+    autoResumeToggleBtn.title = isOnline ? '' : 'Device is offline (No Power)';
+
+    if (autoResumeDelayRow) {
+      autoResumeDelayRow.style.display = 'block';
+      autoResumeDelayRow.style.opacity = isOnline ? '1' : '0.45';
+      autoResumeDelayRow.style.pointerEvents = isOnline ? 'auto' : 'none';
+    }
 
     const enabled = settings.enabled === true;
     autoResumeToggleBtn.textContent = enabled ? 'Disable auto-resume' : 'Enable auto-resume';
     autoResumeToggleBtn.classList.toggle('state-on', enabled);
     autoResumeToggleBtn.classList.toggle('state-off', !enabled);
-    if (autoResumeDelayRow) autoResumeDelayRow.style.display = 'block';
 
     const delay = settings.delayMinutes || 5;
     setAutoResumeDelay(delay, false);
@@ -3393,6 +3761,10 @@
 
   async function toggleAutoResume(){
     if (!selectedId || autoResumeBusy) return;
+    if (connectionStatus(selectedId) !== 'online') {
+      alert('Cannot change auto-resume settings while device is offline.');
+      return;
+    }
 
     const currentSettings = (devices[selectedId] && devices[selectedId].autoResume) || {};
     const currentlyEnabled = currentSettings.enabled === true;
@@ -3656,17 +4028,24 @@
     if (clockPickerMode === 'hour') {
       let h = Math.round(deg / 30) % 12;
       if (h === 0) h = 12;
+      if (clockPickerHour !== h) {
+        vibrate(8);
+      }
       clockPickerHour = h;
       syncClockPickerDisplay();
 
       if (isEnd) {
         if (clockAutoAdvanceTimer) clearTimeout(clockAutoAdvanceTimer);
         clockAutoAdvanceTimer = setTimeout(() => {
+          vibrate(14);
           setClockPickerMode('min');
         }, 220);
       }
     } else {
       let m = Math.round(deg / 6) % 60;
+      if (clockPickerMin !== m) {
+        vibrate(6);
+      }
       clockPickerMin = m;
       syncClockPickerDisplay();
     }
@@ -3766,20 +4145,24 @@
 
   // Bind AM/PM
   if (clockAmBtn) clockAmBtn.addEventListener('click', () => {
+    vibrate(12);
     clockPickerIsPm = false;
     syncClockPickerDisplay();
   });
   if (clockPmBtn) clockPmBtn.addEventListener('click', () => {
+    vibrate(12);
     clockPickerIsPm = true;
     syncClockPickerDisplay();
   });
 
   // Nudge Buttons (-1m, +1m)
   if (clockNudgeMinus) clockNudgeMinus.addEventListener('click', () => {
+    vibrate(10);
     clockPickerMin = (clockPickerMin + 59) % 60;
     syncClockPickerDisplay();
   });
   if (clockNudgePlus) clockNudgePlus.addEventListener('click', () => {
+    vibrate(10);
     clockPickerMin = (clockPickerMin + 1) % 60;
     syncClockPickerDisplay();
   });
@@ -3789,6 +4172,7 @@
     chip.addEventListener('click', () => {
       const m = parseInt(chip.dataset.min, 10);
       if (!isNaN(m)) {
+        vibrate(12);
         clockPickerMin = m;
         syncClockPickerDisplay();
       }
@@ -3798,7 +4182,10 @@
   // Close & Save
   if (clockDialogClose) clockDialogClose.addEventListener('click', () => clockPickerDialog.close());
   if (clockCancelBtn) clockCancelBtn.addEventListener('click', () => clockPickerDialog.close());
-  if (clockSaveBtn) clockSaveBtn.addEventListener('click', saveClockPicker);
+  if (clockSaveBtn) clockSaveBtn.addEventListener('click', () => {
+    vibrate(20);
+    saveClockPicker();
+  });
 
   // Light dismiss on backdrop click
   if (clockPickerDialog) {
@@ -3841,22 +4228,38 @@
   // Bind Card Click Triggers
   if (schedOnCard) {
     schedOnCard.addEventListener('click', () => {
+      if (connectionStatus(selectedId) !== 'online') {
+        alert('Cannot change schedule while device is offline.');
+        return;
+      }
       openClockPicker('onTime', scheduleOnTimeInput ? scheduleOnTimeInput.value : '06:00', 'hour');
     });
     schedOnCard.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
+        if (connectionStatus(selectedId) !== 'online') {
+          alert('Cannot change schedule while device is offline.');
+          return;
+        }
         openClockPicker('onTime', scheduleOnTimeInput ? scheduleOnTimeInput.value : '06:00', 'hour');
       }
     });
   }
   if (schedOffCard) {
     schedOffCard.addEventListener('click', () => {
+      if (connectionStatus(selectedId) !== 'online') {
+        alert('Cannot change schedule while device is offline.');
+        return;
+      }
       openClockPicker('offTime', scheduleOffTimeInput ? scheduleOffTimeInput.value : '08:00', 'hour');
     });
     schedOffCard.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
+        if (connectionStatus(selectedId) !== 'online') {
+          alert('Cannot change schedule while device is offline.');
+          return;
+        }
         openClockPicker('offTime', scheduleOffTimeInput ? scheduleOffTimeInput.value : '08:00', 'hour');
       }
     });
@@ -3865,7 +4268,18 @@
   function refreshScheduleUi(schedule, preserveStatus){
     if (!scheduleToggleBtn || scheduleBusy) return;
 
-    scheduleToggleBtn.disabled = false;
+    const isOnline = connectionStatus(selectedId) === 'online';
+    scheduleToggleBtn.disabled = !isOnline;
+    scheduleToggleBtn.title = isOnline ? '' : 'Device is offline (No Power)';
+
+    if (schedOnCard) {
+      schedOnCard.style.opacity = isOnline ? '1' : '0.45';
+      schedOnCard.style.pointerEvents = isOnline ? 'auto' : 'none';
+    }
+    if (schedOffCard) {
+      schedOffCard.style.opacity = isOnline ? '1' : '0.45';
+      schedOffCard.style.pointerEvents = isOnline ? 'auto' : 'none';
+    }
 
     const enabled = schedule.enabled === true;
     scheduleToggleBtn.textContent = enabled ? 'Disable schedule' : 'Enable schedule';
@@ -3883,6 +4297,10 @@
 
   async function toggleSchedule(){
     if (!selectedId || scheduleBusy) return;
+    if (connectionStatus(selectedId) !== 'online') {
+      alert('Cannot change schedule while device is offline.');
+      return;
+    }
 
     const currentSettings = (devices[selectedId] && devices[selectedId].schedule) || {};
     const currentlyEnabled = currentSettings.enabled === true;

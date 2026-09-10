@@ -4,7 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Furrow - Flash a device</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#14161A">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Furrow">
 <link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://unpkg.com" crossorigin>
@@ -27,7 +34,7 @@
     --panel-raised: #21252B;
     --border: #2E333B;
     --text: #ECE9E2;
-    --muted: #868C97;
+    --muted: #9DA3AF;
     --amber: #E8A33D;
     --amber-soft: rgba(232,163,61,0.14);
     --green: #49B675;
@@ -451,6 +458,14 @@
       showError('Couldn\u2019t load the release list from GitHub. Check your connection and reload.');
       versionSelect.innerHTML = '<option value="">Couldn\u2019t load releases</option>';
     });
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch((err) => {
+        console.error('Service worker registration failed', err);
+      });
+    });
+  }
 </script>
 
 </body>

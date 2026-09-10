@@ -1,13 +1,27 @@
 {
+  "id": "./dashboard.html?source=pwa",
   "name": "Furrow - Motor Control",
   "short_name": "Furrow",
   "description": "Remote start/stop, status, and OTA updates for 3-phase motor starters - part of the Furrow agriculture IoT platform.",
-  "start_url": "./dashboard.html",
+  "start_url": "./dashboard.html?source=pwa",
   "scope": "./",
   "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#14161A",
   "theme_color": "#14161A",
   "orientation": "portrait-primary",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": [
+    "utilities",
+    "productivity",
+    "business"
+  ],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "icons/icon-192.png",
@@ -32,6 +46,34 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "View motor status and controls",
+      "url": "./dashboard.html?source=shortcut",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Flash Device",
+      "short_name": "Flash",
+      "description": "Flash ESP32 firmware via Web Serial",
+      "url": "./flash.html?source=shortcut",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }
