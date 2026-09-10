@@ -21,7 +21,7 @@ try {
     format: 'iife',
     globalName: 'FurrowFirebaseBundle',
     platform: 'browser',
-    target: ['es2020', 'chrome80', 'safari14', 'firefox78', 'edge88'],
+    target: ['es2022'],
     metafile: true,
     legalComments: 'none'
   });
@@ -35,7 +35,7 @@ try {
     sourcemap: false,
     format: 'iife',
     platform: 'browser',
-    target: ['es2020', 'chrome80', 'safari14', 'firefox78', 'edge88'],
+    target: ['es2022'],
     metafile: true,
     legalComments: 'none'
   });

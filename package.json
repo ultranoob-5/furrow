@@ -9,9 +9,9 @@
     "build": "npm run build:web"
   },
   "dependencies": {
-    "firebase": "^11.4.0"
+    "firebase": "^12.19.0"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.28.2"
   }
 }

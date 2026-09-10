@@ -42,6 +42,76 @@ let _db = null;
 let _messaging = null;
 let _functions = null;
 
+// Names of IndexedDB databases used by Firebase that may exist with version > 1
+// from older Firebase Compat (e.g. v8) sessions. Firebase v11 expects version 1.
+const LEGACY_FIREBASE_IDB_NAMES = [
+  'firebase-messaging-database',
+  'firebase-installations-database',
+  'firebase-heartbeat-database',
+  'fcm_token_details_db',
+  'fcm_vapid_details_db'
+];
+
+function deleteDatabasePromise(name) {
+  return new Promise((resolve) => {
+    if (typeof indexedDB === 'undefined' || !indexedDB.deleteDatabase) return resolve();
+    try {
+      const req = indexedDB.deleteDatabase(name);
+      req.onsuccess = () => resolve();
+      req.onerror = () => resolve();
+      req.onblocked = () => resolve();
+      setTimeout(resolve, 500);
+    } catch (_) {
+      resolve();
+    }
+  });
+}
+
+export async function purgeLegacyFirebaseDatabases(forceAll = false) {
+  if (typeof indexedDB === 'undefined') return;
+
+  if (!forceAll && typeof indexedDB.databases === 'function') {
+    try {
+      const dbs = await indexedDB.databases();
+      for (const db of dbs) {
+        if (!db.name) continue;
+        const isTarget = LEGACY_FIREBASE_IDB_NAMES.includes(db.name) ||
+                         db.name.startsWith('firebase-') ||
+                         db.name.includes('fcm');
+        // Firebase v11 expects schema version 1. Any version > 1 is a legacy artifact.
+        if (isTarget && db.version && db.version > 1) {
+          console.warn(`[Furrow] Purging legacy IndexedDB '${db.name}' (v${db.version} > 1) to prevent VersionError...`);
+          await deleteDatabasePromise(db.name);
+        }
+      }
+      return;
+    } catch (e) {
+      console.warn('[Furrow] indexedDB.databases check failed:', e);
+    }
+  }
+
+  if (forceAll) {
+    for (const name of LEGACY_FIREBASE_IDB_NAMES) {
+      await deleteDatabasePromise(name);
+    }
+  }
+}
+
+function isIdbVersionError(err) {
+  if (!err) return false;
+  const name = err.name || '';
+  const msg = err.message || '';
+  return name === 'VersionError' ||
+         msg.includes('VersionError') ||
+         msg.includes('less than the existing version') ||
+         msg.includes('requested version');
+}
+
+// Proactively run database cleanup on module initialization
+if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined') {
+  purgeLegacyFirebaseDatabases(false).catch(() => {});
+}
+
 class DatabaseReferenceWrapper {
   constructor(rawRef) {
     this._ref = rawRef;
@@ -157,20 +227,41 @@ const FurrowFirebase = {
   },
 
   messaging() {
-    if (!_messaging) {
-      try {
-        _messaging = getMessaging(_app);
-      } catch (err) {
-        console.warn('Firebase Messaging not available:', err);
-      }
-    }
     return {
       async getToken(options) {
-        if (!_messaging) throw new Error('Messaging not initialized');
-        return getToken(_messaging, options);
+        // Ensure any version > 1 databases from older Firebase versions are purged
+        await purgeLegacyFirebaseDatabases(false);
+
+        if (!_messaging) {
+          try {
+            _messaging = getMessaging(_app);
+          } catch (err) {
+            console.warn('Firebase Messaging not available:', err);
+            throw err;
+          }
+        }
+
+        try {
+          return await getToken(_messaging, options);
+        } catch (err) {
+          if (isIdbVersionError(err)) {
+            console.warn('[Furrow] Encountered IndexedDB VersionError in getToken. Purging legacy databases and retrying...', err);
+            await purgeLegacyFirebaseDatabases(true);
+            _messaging = getMessaging(_app);
+            return await getToken(_messaging, options);
+          }
+          throw err;
+        }
       },
       onMessage(callback) {
-        if (!_messaging) return () => {};
+        if (!_messaging) {
+          try {
+            _messaging = getMessaging(_app);
+          } catch (err) {
+            console.warn('Firebase Messaging not available:', err);
+            return () => {};
+          }
+        }
         return onMessage(_messaging, callback);
       }
     };
@@ -196,6 +287,7 @@ const FurrowFirebase = {
   getAuth: () => _auth,
   getDatabase: () => _db,
   getMessaging: () => _messaging,
+  purgeLegacyDatabases: purgeLegacyFirebaseDatabases,
   isSupported
 };
 

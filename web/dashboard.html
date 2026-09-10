@@ -208,15 +208,28 @@
     width: 100%;
     max-width: 480px;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    flex-direction: column;
+    gap: 10px;
     padding: 12px 14px;
     margin-bottom: 14px;
     border-radius: var(--radius-sm);
     background: rgba(73,182,117,0.14);
     border: 1px solid rgba(73,182,117,0.35);
     animation: connectionBannerIn 0.25s ease;
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+
+  .update-banner.updating{
+    background: rgba(73,182,117,0.20);
+    border-color: rgba(73,182,117,0.55);
+  }
+
+  .update-banner-header{
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
   }
 
   .update-banner-text{
@@ -224,6 +237,9 @@
     font-size: 12.5px;
     color: var(--text);
     line-height: 1.4;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .update-banner-btn{
@@ -238,11 +254,59 @@
     font-size: 12px;
     cursor: pointer;
     flex-shrink: 0;
-    transition: opacity 0.15s ease;
+    transition: opacity 0.15s ease, transform 0.1s ease;
   }
 
-  .update-banner-btn:hover{
+  .update-banner-btn:hover:not(:disabled){
     opacity: 0.9;
+    transform: translateY(-1px);
+  }
+
+  .update-banner-btn:disabled{
+    opacity: 0.85;
+    cursor: default;
+  }
+
+  /* Progress bar track & fill for update banner */
+  .update-progress-track{
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .update-progress-bar{
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #38a169, var(--green), #81e6d9);
+    background-size: 200% 100%;
+    border-radius: 2px;
+    transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 10px rgba(73, 182, 117, 0.6);
+  }
+
+  .update-progress-bar.indeterminate{
+    width: 40% !important;
+    animation: updateProgressIndeterminate 1.4s ease-in-out infinite;
+  }
+
+  @keyframes updateProgressIndeterminate{
+    0% { transform: translateX(-100%); }
+    50% { transform: translateX(120%); width: 60%; }
+    100% { transform: translateX(280%); width: 30%; }
+  }
+
+  .update-spinner{
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    border: 2px solid rgba(73, 182, 117, 0.3);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
   }
 
   /* ---- Overview strip ------------------------------------------------ */
@@ -1884,8 +1948,13 @@
 
   <!-- Shown when a new version of the PWA has been downloaded in the background -->
   <div class="update-banner" id="updateBanner" style="display:none;">
-    <div class="update-banner-text">A new version of Furrow is available.</div>
-    <button class="update-banner-btn" id="updateAppBtn">Update</button>
+    <div class="update-banner-header">
+      <div class="update-banner-text" id="updateBannerText">A new version of Furrow is available.</div>
+      <button class="update-banner-btn" id="updateAppBtn">Update</button>
+    </div>
+    <div class="update-progress-track" id="updateProgressTrack" style="display:none;">
+      <div class="update-progress-bar" id="updateProgressBar"></div>
+    </div>
   </div>
 
   <!-- Hidden by default. Two different real paths, not one: Chrome/
@@ -2070,7 +2139,10 @@
       </div>
     </div>
 
-    <div class="footer-note">Furrow &middot; Agriculture IoT Platform<br><a href="flash.html" style="color:var(--muted);">Set up a new device &rarr;</a></div>
+    <div class="footer-note">
+      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.4.0</span><br>
+      <a href="flash.html" style="color:var(--muted);">Set up a new device &rarr;</a>
+    </div>
     <button class="logout-btn" id="logoutBtn">Logout</button>
   </div>
 
@@ -2219,6 +2291,11 @@
     console.error('Firebase failed to load - check network requests for the firebase-*.js CDN scripts and firebase-config.js');
     showAuthError();
     throw new Error('Firebase SDK or config unavailable - stopping before firebase.initializeApp()');
+  }
+
+  // Clean up any stale IndexedDB instances with version > 1 from previous Firebase compat versions
+  if (window.FurrowFirebase && typeof window.FurrowFirebase.purgeLegacyDatabases === 'function') {
+    window.FurrowFirebase.purgeLegacyDatabases(false).catch(() => {});
   }
 
   // ---- Firebase init ---------------------------------------------------
@@ -2768,6 +2845,9 @@
   function selectDevice(id){
     selectedId = id;
     pendingAction = null;
+    try {
+      if (id) localStorage.setItem('furrow_selected_device', id);
+    } catch (_) {}
 
     panelEl.style.display = 'block';
     emptyStateEl.style.display = 'none';
@@ -3299,14 +3379,22 @@
 
       const urlParams = new URLSearchParams(window.location.search);
       const targetDevice = urlParams.get('device');
+      let savedDevice = null;
+      try {
+        savedDevice = localStorage.getItem('furrow_selected_device');
+      } catch (_) {}
 
       if (targetDevice && devices[targetDevice]) {
         selectDevice(targetDevice);
-      } else if (!selectedId || !devices[selectedId]) {
-        selectDevice(ids[0]);
-      } else {
+      } else if (selectedId && devices[selectedId]) {
+        // Keep currently viewed device active across realtime data updates
         renderOverview();
         renderDetail();
+      } else if (savedDevice && devices[savedDevice]) {
+        // Restore last selected device on page reload / reopening app
+        selectDevice(savedDevice);
+      } else {
+        selectDevice(ids[0]);
       }
     }, (err) => {
       console.error('devices listener error', err);
@@ -3360,6 +3448,7 @@
         reg.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
           if (!newWorker) return;
+          showDownloadingBanner();
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
               showUpdateBanner(newWorker);
@@ -3370,25 +3459,105 @@
         console.error('Service worker registration failed', err);
       });
 
-      // Reload page when new service worker takes control
+      // Reload page only when user explicitly confirms the update via the banner
       let refreshing = false;
+      let userRequestedUpdate = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing) {
+        if (!refreshing && userRequestedUpdate) {
           refreshing = true;
-          window.location.reload();
+          const updateProgressBar = document.getElementById('updateProgressBar');
+          const updateBannerText = document.getElementById('updateBannerText');
+          if (updateProgressBar) updateProgressBar.style.width = '100%';
+          if (updateBannerText) updateBannerText.innerHTML = '<span>✅</span> Update ready! Reloading…';
+          setTimeout(() => {
+            window.location.reload();
+          }, 300);
         }
       });
     });
   }
 
+  function showDownloadingBanner() {
+    const updateBanner = document.getElementById('updateBanner');
+    const updateBannerText = document.getElementById('updateBannerText');
+    const updateAppBtn = document.getElementById('updateAppBtn');
+    const updateProgressTrack = document.getElementById('updateProgressTrack');
+    const updateProgressBar = document.getElementById('updateProgressBar');
+    if (!updateBanner) return;
+
+    updateBanner.style.display = 'flex';
+    updateBanner.classList.add('updating');
+    if (updateBannerText) {
+      updateBannerText.innerHTML = '<span class="update-spinner"></span> Downloading update in background…';
+    }
+    if (updateAppBtn) {
+      updateAppBtn.style.display = 'none';
+    }
+    if (updateProgressTrack && updateProgressBar) {
+      updateProgressTrack.style.display = 'block';
+      updateProgressBar.classList.add('indeterminate');
+    }
+  }
+
   function showUpdateBanner(waitingWorker) {
     const updateBanner = document.getElementById('updateBanner');
+    const updateBannerText = document.getElementById('updateBannerText');
     const updateAppBtn = document.getElementById('updateAppBtn');
+    const updateProgressTrack = document.getElementById('updateProgressTrack');
+    const updateProgressBar = document.getElementById('updateProgressBar');
     if (!updateBanner || !updateAppBtn) return;
+
     updateBanner.style.display = 'flex';
+    updateBanner.classList.remove('updating');
+    if (updateBannerText) {
+      updateBannerText.innerHTML = 'A new version of Furrow is available.';
+    }
+    updateAppBtn.style.display = 'inline-block';
+    updateAppBtn.disabled = false;
+    updateAppBtn.textContent = 'Update';
+    if (updateProgressTrack && updateProgressBar) {
+      updateProgressTrack.style.display = 'none';
+      updateProgressBar.classList.remove('indeterminate');
+      updateProgressBar.style.width = '0%';
+    }
+
     updateAppBtn.onclick = () => {
+      userRequestedUpdate = true;
       updateAppBtn.disabled = true;
-      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+      updateBanner.classList.add('updating');
+
+      if (updateProgressTrack && updateProgressBar) {
+        updateProgressTrack.style.display = 'block';
+        updateProgressBar.classList.remove('indeterminate');
+        updateProgressBar.style.width = '15%';
+      }
+
+      if (updateBannerText) {
+        updateBannerText.innerHTML = '<span class="update-spinner"></span> Updating Furrow to latest version…';
+      }
+      updateAppBtn.textContent = 'Updating…';
+
+      setTimeout(() => {
+        if (updateProgressBar) updateProgressBar.style.width = '50%';
+      }, 150);
+
+      setTimeout(() => {
+        if (updateProgressBar) updateProgressBar.style.width = '85%';
+        try {
+          waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+        } catch (_) {}
+      }, 350);
+
+      setTimeout(() => {
+        if (updateProgressBar) updateProgressBar.style.width = '100%';
+        if (updateBannerText) {
+          updateBannerText.innerHTML = '<span>✅</span> Update ready! Reloading…';
+        }
+      }, 650);
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 950);
     };
   }
 
@@ -3474,6 +3643,12 @@
   // token under whichever devices you've enabled it for).
   async function getCurrentPushToken() {
     const registration = await navigator.serviceWorker.ready;
+
+    // Proactively check and purge any legacy IndexedDB databases with version > 1 before getToken
+    if (window.FurrowFirebase && typeof window.FurrowFirebase.purgeLegacyDatabases === 'function') {
+      await window.FurrowFirebase.purgeLegacyDatabases(false);
+    }
+
     const messaging = firebase.messaging();
 
     if (!notifyMessagingReady) {
@@ -3508,10 +3683,30 @@
       notifyMessagingReady = true;
     }
 
-    return messaging.getToken({
-      vapidKey: firebaseConfig.vapidKey,
-      serviceWorkerRegistration: registration
-    });
+    try {
+      return await messaging.getToken({
+        vapidKey: firebaseConfig.vapidKey,
+        serviceWorkerRegistration: registration
+      });
+    } catch (err) {
+      // Handle edge case where browser cache has legacy Firebase v8 IndexedDB instances at version > 1
+      if (err && (err.name === 'VersionError' || (err.message && (err.message.includes('VersionError') || err.message.includes('less than the existing version'))))) {
+        console.warn('[Furrow] Recovering from legacy IndexedDB VersionError in getCurrentPushToken...', err);
+        if (window.FurrowFirebase && typeof window.FurrowFirebase.purgeLegacyDatabases === 'function') {
+          await window.FurrowFirebase.purgeLegacyDatabases(true);
+        } else {
+          ['firebase-messaging-database', 'firebase-installations-database', 'firebase-heartbeat-database', 'fcm_token_details_db'].forEach(name => {
+            try { indexedDB.deleteDatabase(name); } catch (_) {}
+          });
+        }
+        // Retry token retrieval once with cleanly re-created databases
+        return await messaging.getToken({
+          vapidKey: firebaseConfig.vapidKey,
+          serviceWorkerRegistration: registration
+        });
+      }
+      throw err;
+    }
   }
 
   async function enableNotificationsForSelectedDevice() {
