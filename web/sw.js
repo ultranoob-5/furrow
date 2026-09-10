@@ -2,12 +2,14 @@
 // Provides an offline-first app shell, intelligent CDN caching for libraries/fonts,
 // background push notifications via FCM, and seamless in-app update workflows.
 
-const CACHE_NAME = 'furrow-dashboard-v3';
+const CACHE_NAME = 'furrow-dashboard-v4';
 
 const APP_SHELL = [
   './dashboard.html',
   './flash.html',
   './manifest.json',
+  './firebase-bundle.js',
+  './sw-firebase.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png'
@@ -15,7 +17,6 @@ const APP_SHELL = [
 
 // Pinned third-party CDNs used by Furrow that can be safely cached for offline reliability
 const TRUSTED_CDN_HOSTS = [
-  'cdnjs.cloudflare.com',
   'fonts.googleapis.com',
   'fonts.gstatic.com',
   'unpkg.com'
@@ -135,27 +136,22 @@ self.addEventListener('notificationclick', (event) => {
 
 // Firebase Cloud Messaging (browser push) background-message handler
 try {
-  importScripts(
-    'https://cdnjs.cloudflare.com/ajax/libs/firebase/12.17.1/firebase-app-compat.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/firebase/12.17.1/firebase-messaging-compat.min.js',
-    'firebase-config.js'
-  );
+  importScripts('./sw-firebase.js', './firebase-config.js');
 
-  firebase.initializeApp(firebaseConfig);
-  const messaging = firebase.messaging();
+  if (self.FurrowSwFirebase && typeof firebaseConfig !== 'undefined') {
+    self.FurrowSwFirebase.init(firebaseConfig, (payload) => {
+      const title = (payload.data && payload.data.title) || 'Furrow';
+      const body = (payload.data && payload.data.body) || '';
+      const url = (payload.data && (payload.data.url || payload.data.click_action)) || './dashboard.html';
 
-  messaging.onBackgroundMessage((payload) => {
-    const title = (payload.data && payload.data.title) || 'Furrow';
-    const body = (payload.data && payload.data.body) || '';
-    const url = (payload.data && (payload.data.url || payload.data.click_action)) || './dashboard.html';
-
-    self.registration.showNotification(title, {
-      body,
-      icon: './icons/icon-192.png',
-      badge: './icons/icon-192.png',
-      data: { url }
+      self.registration.showNotification(title, {
+        body,
+        icon: './icons/icon-192.png',
+        badge: './icons/icon-192.png',
+        data: { url }
+      });
     });
-  });
+  }
 } catch (err) {
   // Non-fatal: app-shell caching and installability continue working without push support
   console.error('FCM background handler setup failed', err);

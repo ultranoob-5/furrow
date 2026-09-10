@@ -29,6 +29,6 @@ database.rules.json
 # Python bytecode cache from testing the power-watchdog script locally.
 __pycache__/
 
-# Cloud Functions dependencies - reinstalled from package.json/
-# package-lock.json (both committed), never the actual node_modules.
+# Node dependencies (root and functions)
+node_modules/
 functions/node_modules/

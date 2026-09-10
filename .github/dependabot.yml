@@ -4,6 +4,15 @@
 
 version: 2
 updates:
+  # Maintain dependencies for root npm packages (web bundle, Firebase SDK, esbuild)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "web"
+
   # Maintain dependencies for npm packages in Firebase Cloud Functions
   - package-ecosystem: "npm"
     directory: "/functions"

@@ -22,6 +22,9 @@ on:
     paths:
       - 'web/**'
       - 'firebase.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'build-web.mjs'
 
 # This job only checks out code (read) and deploys via its own
 # separate Firebase service-account credential (FIREBASE_SERVICE_ACCOUNT,
@@ -37,6 +40,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build modular web bundles
+        run: npm run build
 
       - name: Generate firebase-config.js from repository secrets
         run: |

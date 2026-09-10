@@ -1,0 +1,17 @@
+{
+  "name": "furrow-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Furrow IoT Agriculture Platform - Web Dashboard & Bundler",
+  "scripts": {
+    "build:web": "node build-web.mjs",
+    "build": "npm run build:web"
+  },
+  "dependencies": {
+    "firebase": "^11.4.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
