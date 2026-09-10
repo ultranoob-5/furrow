@@ -45,7 +45,7 @@ jobs:
         # there's no reason to tempt that by printing it regardless.
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.x'
 
