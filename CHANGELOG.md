@@ -1,4 +1,16 @@
 
+## [1.3.8] - 2026-09-10
+
+- **Remote Start/Stop Attribution Decoupling**: Decoupled state transition attribution
+  flags (`remoteStartPending`, `remoteStopPending`) from the 30-second watchdog
+  confirmation timer in `src/cloud.cpp`. Resolves an issue where command confirmation
+  checks could prematurely clear the active command status before the main loop detected
+  the motor state change, ensuring remote commands triggered via web or mobile app are
+  accurately attributed as `"remote"` rather than falsely falling back to manual starter panel events.
+- **Streamlined Command Execution**: Removed premature motor state writes during
+  remote command dispatch in `handlePendingCommand()`, guaranteeing all state reporting
+  reflects confirmed sensor feedback.
+
 ## [1.3.7] - 2026-09-10
 
 - **Autonomous On-Device Irrigation Schedule**: Migrated the daily scheduled

@@ -79,6 +79,8 @@ namespace
     String lastOffFiredDate = "";
     bool scheduleStartPending = false;
     bool scheduleStopPending = false;
+    bool remoteStartPending = false;
+    bool remoteStopPending = false;
     unsigned long lastScheduleCheckMs = 0;
 
     unsigned long lastHeartbeat = 0;
@@ -349,6 +351,8 @@ namespace
         if (pendingCommand == "start")
         {
             Logger::info(TAG, "Remote command: START");
+            remoteStartPending = true;
+            remoteStopPending = false;
             scheduleStartPending = false;
             scheduleStopPending = false;
             commandConfirmPending = "start";
@@ -359,6 +363,8 @@ namespace
         {
             Logger::info(TAG, "Remote command: STOP");
             autoResumePending = false; // Stop cancels any active auto-resume timer
+            remoteStartPending = false;
+            remoteStopPending = true;
             scheduleStartPending = false;
             scheduleStopPending = false;
             commandConfirmPending = "stop";
@@ -367,17 +373,6 @@ namespace
         }
 
         pendingCommand = "";
-
-        // Gated the same way as the heartbeat below and main.cpp's
-        // first-ever publish - never publish a motor-state guess
-        // before a real CT reading exists. A remote command arriving
-        // in the first few seconds after boot (plausible, if narrow -
-        // WiFi connect + Firebase auth + stream setup all take some
-        // time too) could otherwise still hit this same "OFF" default
-        // even after the setup()/heartbeat paths were fixed for it.
-        // In devMode, main.cpp handles the state change publish directly.
-        if (motor.hasReading() && !motor.isDevelopment())
-            cloud.publishMotor();
 
         // Acknowledge / clear the command so it isn't re-applied on the
         // next stream reconnect.
@@ -527,7 +522,6 @@ namespace
             // Confirmed - the command took effect. Nothing to publish;
             // publishMotor() already covers the real state change.
             commandConfirmPending = "";
-            scheduleStopPending = false;
             return;
         }
 
@@ -537,7 +531,6 @@ namespace
         if (motor.isDevelopment())
         {
             commandConfirmPending = "";
-            scheduleStopPending = false;
             return;
         }
 
@@ -553,6 +546,8 @@ namespace
         database.set<object_t>(aClientMain, motorPath + "/commandFailure", object_t(json), processData, "commandFailure");
 
         commandConfirmPending = "";
+        remoteStartPending = false;
+        remoteStopPending = false;
         scheduleStartPending = false;
         scheduleStopPending = false;
         autoResumeStartPending = false;
@@ -998,12 +993,12 @@ void Cloud::publishMotor(const char *startedVia, const char *stoppedVia)
 
 bool Cloud::remoteStartWasPending()
 {
-    return commandConfirmPending == "start";
+    return remoteStartPending;
 }
 
 bool Cloud::remoteStopWasPending()
 {
-    return commandConfirmPending == "stop" && !scheduleStopPending;
+    return remoteStopPending;
 }
 
 bool Cloud::isAutoResumePending()
@@ -1026,6 +1021,8 @@ void Cloud::cancelAutoResume()
     autoResumeStartPending = false;
     scheduleStartPending = false;
     scheduleStopPending = false;
+    remoteStartPending = false;
+    remoteStopPending = false;
     if (stateBeforeOutage.length() > 0)
     {
         stateBeforeOutage = "";
