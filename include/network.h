@@ -16,6 +16,9 @@ public:
     // Returns true if connected
     static bool isConnected();
 
+    // Returns true if connected to Wi-Fi and public internet is reachable
+    static bool hasInternet();
+
     // Returns true exactly once, right after Wi-Fi reconnects following
     // a disconnect. Clears itself once read, so callers should call this
     // once per loop() and act on it immediately.

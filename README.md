@@ -177,14 +177,17 @@ port, relay cables, and serial pins. ~1.2h print time.
   after a delay you set (1-10 minutes), so it doesn't restart the
   instant power returns. Deliberately restores previous state rather
   than always turning on - if it was off before the outage, it stays
-  off. Enabled from the same Advanced settings panel as push
-  notifications, on the dashboard.
+  off. Handled autonomously by firmware with WhatsApp and push alerts.
+  Enabled from the same Advanced settings panel on the dashboard.
 - **Scheduled on/off** (optional, off by default, per device): turns
   the pump on at a set time every day, and off at another - a normal
-  daily irrigation schedule. Manual control always wins - stopping it
-  yourself during the "on" window keeps it off until tomorrow's cycle,
-  the schedule never overrides a same-day manual stop. Same Advanced
-  settings panel as auto-resume and push notifications.
+  daily irrigation schedule. Managed directly on-device using atomic
+  SNTP time synchronization (IST UTC+5:30) without needing scheduled
+  cloud cron jobs. Manual control always wins - stopping it yourself
+  during the "on" window keeps it off until tomorrow's cycle, the
+  schedule never overrides a same-day manual stop. Requires an
+  active internet connection to execute, preventing blind offline runs.
+  Real-time sync, WhatsApp notifications, and push notifications included.
 
 **Releases**
 - Every version is documented in [CHANGELOG.md](CHANGELOG.md)

@@ -350,34 +350,25 @@ automatically starts it again once the device reconnects - after a
 delay you set (1-10 minutes), so it doesn't restart the instant power
 returns. Off by default, per device - restores previous state, not an
 unconditional "always turn on"; if it was off before the outage, it
-stays off. No new deploy needed for the dashboard side, but two
-backend pieces need to actually be live first:
+stays off.
+
+The countdown and motor restart are handled directly on-device by
+the ESP32 firmware upon reconnect. When power returns, the device
+also sends WhatsApp alerts and triggers push notifications (`onPowerRestored`).
 
 1. **If you already deployed RTDB rules before this feature existed**,
-   redeploy them: `firebase deploy --only database`. The rules gained
-   a new `autoResume` field (owner-writable, alongside `displayName`
-   and `fcmTokens` - see step 3) - without redeploying, the dashboard's
-   write when you enable this fails with a permissions error, same
-   failure mode step 11's own rules note describes.
-2. Deploy the new Cloud Functions: `firebase deploy --only functions`.
-   This adds a new scheduled function, `autoResumeWatchdog` (runs
-   every minute, same as `powerWatchdog`), and extends the existing
-   `onPowerRestored` - both need to actually be live for this to do
-   anything at all.
+   redeploy them: `firebase deploy --only database`. The rules include
+   an `autoResume` field (owner-writable) and `motor/stateBeforeOutage`
+   (device & owner writable).
+2. Deploy Cloud Functions: `firebase deploy --only functions`.
+   This ensures `onPowerRestored` is live to send push notifications
+   when power returns.
 3. Open the dashboard, sign in, select a device, and use the
    "Auto-resume after power loss" section in Advanced settings:
    **Enable auto-resume** turns it on for that specific device, and
    the delay input next to it sets how long to wait (defaults to 5
    minutes if left alone). Per-device, same as WhatsApp/push - enabling
    it here doesn't affect any other device.
-
-There's no button to test this the way step 11 has "Send test
-notification" - the only real test is an actual power-loss-and-
-recovery cycle with the motor running beforehand, which needs real
-hardware and can't be simulated from the dashboard. Worth watching
-Cloud Functions logs (`autoResumeWatchdog` and `onPowerRestored`) the
-first time it's expected to fire, to confirm the whole chain actually
-worked rather than just trusting it silently.
 
 ---
 
@@ -389,24 +380,24 @@ control always wins: stopping it yourself during the "on" window
 keeps it off until tomorrow's cycle - the schedule never re-fires the
 same on-event twice in one calendar day.
 
-1. **If you already deployed RTDB rules before this feature existed**,
-   redeploy them: `firebase deploy --only database`. The rules gained
-   a new `schedule` field (owner-writable, same pattern as
-   `autoResume` in step 12) - without redeploying, enabling this from
-   the dashboard fails with a permissions error.
-2. Deploy the new Cloud Functions: `firebase deploy --only functions`.
-   This adds `scheduleWatchdog` (runs every minute, same shape as
-   `powerWatchdog`/`autoResumeWatchdog`) - needs to actually be live
-   for a schedule to do anything.
-3. Open the dashboard, select a device, and use the "Scheduled on/off"
-   section in Advanced settings (right below auto-resume): set a turn-
-   on time and a turn-off time, then **Enable schedule**. Per-device,
-   same as everything else in this panel.
+The schedule engine runs directly on the ESP32 firmware using hardware
+SNTP time synchronization, requiring no scheduled Cloud Function cron
+jobs (saving ~43,200 runs/month). Scheduled turn on and off actions
+require an active internet connection to execute, ensuring the device
+never runs blindly offline without cloud synchronization and alerts.
 
-Schedule times are interpreted in IST (India Standard Time, UTC+5:30),
-fixed - not read from the device's own clock or the browser's
-timezone. If devices are ever deployed outside India, this needs to
-become configurable rather than assumed.
+1. **If you already deployed RTDB rules before this feature existed**,
+   redeploy them: `firebase deploy --only database`. The rules include
+   the `schedule` field (writable by the device service account and
+   the device owner).
+2. Open the dashboard, select a device, and use the "Scheduled on/off"
+   section in Advanced settings (right below auto-resume): set a turn-
+   on time and a turn-off time, then **Enable schedule**. The dashboard
+   immediately sends a sync command to the device to update its schedule
+   in real time.
+
+Schedule times are synchronized to IST (India Standard Time, UTC+5:30)
+via atomic NTP servers (`pool.ntp.org`, `time.google.com`).
 
 ---
 

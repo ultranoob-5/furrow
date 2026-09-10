@@ -1,4 +1,36 @@
 
+## [1.3.7] - 2026-09-10
+
+- **Autonomous On-Device Irrigation Schedule**: Migrated the daily scheduled
+  on/off watchdog directly onto the ESP32 firmware using hardware SNTP time
+  synchronization in IST (UTC+5:30). Completely removed the 1-minute
+  `scheduleWatchdog` Cloud Function cron job, saving ~43,200 runs/month.
+- **Active Internet Connectivity Guard**: Ensures scheduled turn on and
+  turn off actions only fire when the device has active internet connectivity
+  (`Network::hasInternet()` via DNS reachability), preventing the pump from
+  operating blindly offline.
+- **Strict Manual-Override Protection**: Uses RTDB tracking (`lastOnFiredDate`,
+  `lastOffFiredDate`) ensuring scheduled events fire at most once per calendar
+  day. Manual start or stop at the physical starter panel stays in control and
+  is never overridden by the schedule on the same day.
+- **Elder-Friendly Unified Notifications & WhatsApp Parity**: All notifications
+  have been simplified with elder-friendly phrasing and visual status cues (🟢, 🔴, ⚡, ⚠️, ✅)
+  without technical jargon. Achieved 100% parity between Firebase Cloud Messaging
+  and WhatsApp across all channels: remote on/off via web, manual starter panel buttons,
+  daily irrigation schedule, power restoration, auto-resume, and command failures.
+- **Bi-Directional State Transition Attribution (`stoppedVia`)**: Extended firmware
+  state reporting with `stoppedVia` (`remote`, `schedule`, `manual`), allowing Cloud
+  Functions to accurately dispatch the correct context for motor stop events.
+- **Interactive Analog Clock Picker**: Replaced the 15-minute interval steppers
+  in the web dashboard with an interactive analog clock face picker dial supporting
+  smooth touch/drag, 1-minute precision, ±1m nudge buttons, and instant preset chips.
+- **Notification Click-to-Open**: Added a `notificationclick` handler in the Service
+  Worker (`sw.js`) and attached target device URLs to FCM push payloads, ensuring
+  that clicking a push notification on phone or desktop immediately brings up or
+  launches the web app and selects the alerted motor.
+- **Cloud Functions Cleanup**: Cleaned up legacy cloud watchdog helpers from
+  `functions/index.js` and fixed dormant unreferenced variables in `onPowerRestored`.
+
 ## [1.3.6] - 2026-09-05
 
 - **Autonomous On-Device Auto-Resume**: Moved post-outage motor auto-resume

@@ -522,11 +522,23 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
   }
 
-  .time-card:focus-within, .time-card:hover{
-    border-color: rgba(232,163,61,0.35);
+  .time-card:hover{
+    transform: translateY(-1px);
+  }
+
+  .time-card.start:hover, .time-card.start:focus-visible{
+    border-color: rgba(73,182,117,0.45);
+    box-shadow: 0 4px 16px rgba(73,182,117,0.12);
+  }
+
+  .time-card.stop:hover, .time-card.stop:focus-visible{
+    border-color: rgba(232,163,61,0.45);
+    box-shadow: 0 4px 16px rgba(232,163,61,0.12);
   }
 
   .time-card-header{
@@ -551,113 +563,544 @@
   .dot-start{ background: var(--green); box-shadow: 0 0 8px rgba(73,182,117,0.5); }
   .dot-stop{ background: var(--amber); box-shadow: 0 0 8px rgba(232,163,61,0.5); }
 
-  .time-picker-row{
+  .time-card-badge{
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .start-badge{
+    color: var(--green);
+    background: var(--green-soft);
+  }
+  .stop-badge{
+    color: var(--amber);
+    background: var(--amber-soft);
+  }
+
+  .time-picker-readout{
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 6px;
+    padding: 2px 0;
   }
 
-  .time-digits-group{
+  .time-readout-digits{
     display: flex;
-    align-items: center;
-    gap: 2px;
-  }
-
-  .time-unit-box{
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .time-unit-btn{
-    appearance: none;
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    width: 30px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    border-radius: 4px;
-    padding: 0;
-    transition: all 0.15s ease;
-  }
-
-  .time-unit-btn:hover{
-    background: rgba(255,255,255,0.1);
-    color: var(--text);
-  }
-
-  .time-unit-btn:active{
-    transform: scale(0.92);
-  }
-
-  .time-unit-btn svg{
-    width: 12px;
-    height: 12px;
+    align-items: baseline;
+    gap: 3px;
   }
 
   .time-val-display{
     font-family: var(--mono);
-    font-size: 19px;
+    font-size: 22px;
     font-weight: 700;
     color: var(--text);
-    min-width: 28px;
-    text-align: center;
-    line-height: 1.2;
+    line-height: 1;
   }
 
   .time-colon{
     font-family: var(--mono);
-    font-size: 19px;
+    font-size: 20px;
     font-weight: 700;
     color: var(--muted);
     margin: 0 1px;
   }
 
-  .ampm-toggle{
-    display: flex;
-    flex-direction: column;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 2px;
-    gap: 2px;
+  .time-readout-ampm{
+    font-family: var(--display);
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--muted);
+    margin-left: 5px;
+    letter-spacing: 0.05em;
   }
 
-  .ampm-btn{
+  .time-card.start .time-readout-ampm{
+    color: var(--green);
+  }
+  .time-card.stop .time-readout-ampm{
+    color: var(--amber);
+  }
+
+  .time-clock-btn{
+    appearance: none;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .time-clock-btn svg{
+    width: 17px;
+    height: 17px;
+  }
+  .time-card.start:hover .time-clock-btn{
+    color: var(--green);
+    border-color: rgba(73,182,117,0.35);
+    background: rgba(73,182,117,0.08);
+  }
+  .time-card.stop:hover .time-clock-btn{
+    color: var(--amber);
+    border-color: rgba(232,163,61,0.35);
+    background: rgba(232,163,61,0.08);
+  }
+
+  /* ---- Clock Picker Dialog Modal -------------------------------- */
+  .clock-dialog {
+    margin: auto;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.06);
+    max-width: 320px;
+    width: calc(100vw - 32px);
+    outline: none;
+    animation: clockDialogPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes clockDialogPop {
+    from { opacity: 0; transform: scale(0.94); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .clock-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+  }
+
+  .clock-dialog-shell {
+    padding: 18px 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .clock-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .clock-dialog-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text);
+  }
+
+  .clock-dialog-close {
     appearance: none;
     background: transparent;
     border: none;
     color: var(--muted);
-    font-family: var(--display);
-    font-weight: 800;
-    font-size: 11px;
-    padding: 5px 7px;
+    width: 28px;
+    height: 28px;
     border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .clock-dialog-close:hover {
+    background: rgba(255,255,255,0.08);
+    color: var(--text);
+  }
+  .clock-dialog-close svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* Digital readout row */
+  .clock-digital-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 8px 12px;
+  }
+
+  .clock-time-display {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .clock-time-segment {
+    appearance: none;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 30px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 8px;
     cursor: pointer;
     line-height: 1;
     transition: all 0.15s ease;
   }
 
-  .ampm-btn.active{
+  .clock-time-segment.active {
+    color: var(--text);
+    background: var(--panel-raised);
+    border-color: rgba(255,255,255,0.12);
+  }
+
+  .clock-dialog.theme-start .clock-time-segment.active {
+    color: var(--green);
+    border-color: rgba(73,182,117,0.4);
+    background: var(--green-soft);
+  }
+
+  .clock-dialog.theme-stop .clock-time-segment.active {
+    color: var(--amber);
+    border-color: rgba(232,163,61,0.4);
+    background: var(--amber-soft);
+  }
+
+  .clock-time-colon {
+    font-family: var(--mono);
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--muted);
+    margin: 0 1px;
+  }
+
+  .clock-ampm-col {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .clock-ampm-btn {
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 800;
+    padding: 4px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .clock-ampm-btn.active {
     background: var(--panel-raised);
     color: var(--text);
-    border: 1px solid rgba(255,255,255,0.1);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    border-color: rgba(255,255,255,0.2);
   }
 
-  .time-card.start .ampm-btn.active{
+  .clock-dialog.theme-start .clock-ampm-btn.active {
     color: var(--green);
-    border-color: rgba(73,182,117,0.35);
+    border-color: rgba(73,182,117,0.45);
+    background: var(--green-soft);
   }
 
-  .time-card.stop .ampm-btn.active{
+  .clock-dialog.theme-stop .clock-ampm-btn.active {
     color: var(--amber);
-    border-color: rgba(232,163,61,0.35);
+    border-color: rgba(232,163,61,0.45);
+    background: var(--amber-soft);
+  }
+
+  /* Mode and nudge bar */
+  .clock-mode-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2px;
+  }
+
+  .clock-mode-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+
+  .clock-nudge-tools {
+    display: flex;
+    gap: 5px;
+  }
+
+  .clock-nudge-btn {
+    appearance: none;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .clock-nudge-btn:hover {
+    border-color: rgba(255,255,255,0.2);
+    background: var(--panel-raised);
+  }
+
+  /* Clock face */
+  .clock-face-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 4px 0;
+  }
+
+  .clock-face {
+    position: relative;
+    width: 236px;
+    height: 236px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    user-select: none;
+    touch-action: none;
+    cursor: pointer;
+    box-shadow: inset 0 2px 10px rgba(0,0,0,0.55);
+  }
+
+  .clock-center-pivot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--text);
+    z-index: 10;
+  }
+
+  .clock-dialog.theme-start .clock-center-pivot { background: var(--green); }
+  .clock-dialog.theme-stop .clock-center-pivot { background: var(--amber); }
+
+  .clock-hand {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    transform: rotate(0deg);
+    transition: transform 0.14s cubic-bezier(0.2, 0, 0.2, 1);
+    z-index: 3;
+  }
+
+  .clock-face.dragging .clock-hand {
+    transition: none;
+  }
+
+  .clock-hand-arm {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 2px;
+    height: 82px;
+    transform: translateX(-50%);
+    background: var(--text);
+    border-radius: 2px;
+  }
+
+  .clock-dialog.theme-start .clock-hand-arm { background: var(--green); }
+  .clock-dialog.theme-stop .clock-hand-arm { background: var(--amber); }
+
+  .clock-hand-endpoint {
+    position: absolute;
+    left: 50%;
+    top: 36px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255,255,255,0.15);
+    border: 2px solid var(--text);
+  }
+
+  .clock-dialog.theme-start .clock-hand-endpoint {
+    background: rgba(73,182,117,0.25);
+    border-color: var(--green);
+    box-shadow: 0 0 12px rgba(73,182,117,0.35);
+  }
+
+  .clock-dialog.theme-stop .clock-hand-endpoint {
+    background: rgba(232,163,61,0.25);
+    border-color: var(--amber);
+    box-shadow: 0 0 12px rgba(232,163,61,0.35);
+  }
+
+  .clock-face-numbers {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .clock-num-elem {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--display);
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text);
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    transition: color 0.12s ease;
+    z-index: 5;
+  }
+
+  .clock-num-elem.selected {
+    color: #FFFFFF;
+    font-weight: 800;
+  }
+
+  .clock-face-ticks {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .clock-tick-dot {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--muted);
+    opacity: 0.3;
+    transform: translate(-50%, -50%);
+  }
+
+  .clock-tick-dot.major {
+    opacity: 0.6;
+    width: 4px;
+    height: 4px;
+  }
+
+  /* Minute presets */
+  .clock-presets-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding-top: 2px;
+  }
+
+  .clock-presets-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .clock-preset-chip {
+    appearance: none;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .clock-preset-chip:hover {
+    color: var(--text);
+    border-color: rgba(255,255,255,0.2);
+  }
+
+  .clock-preset-chip.active {
+    color: var(--text);
+    background: var(--panel-raised);
+    border-color: rgba(255,255,255,0.3);
+  }
+
+  /* Dialog actions */
+  .clock-dialog-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .clock-btn-cancel, .clock-btn-set {
+    appearance: none;
+    border: none;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 7px 14px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .clock-btn-cancel {
+    background: transparent;
+    color: var(--muted);
+  }
+  .clock-btn-cancel:hover {
+    color: var(--text);
+    background: rgba(255,255,255,0.06);
+  }
+
+  .clock-btn-set {
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .clock-dialog.theme-start .clock-btn-set {
+    background: var(--green);
+    color: #0A1C12;
+    border-color: var(--green);
+  }
+  .clock-dialog.theme-start .clock-btn-set:hover {
+    filter: brightness(1.1);
+  }
+
+  .clock-dialog.theme-stop .clock-btn-set {
+    background: var(--amber);
+    color: #1F1504;
+    border-color: var(--amber);
+  }
+  .clock-dialog.theme-stop .clock-btn-set:hover {
+    filter: brightness(1.1);
   }
 
   .schedule-duration-badge{
@@ -1398,77 +1841,45 @@
 
         <div class="settings-section" id="scheduleZone">
           <div class="settings-label">Scheduled on/off</div>
-          <p class="settings-desc">Automatically starts this pump at a set time every day, and stops it at another. Off (default) means nothing runs on a schedule; you're always in direct control. If you manually stop it during the "on" window, it stays off until tomorrow's cycle - the schedule never overrides a manual stop the same day.</p>
+          <p class="settings-desc">Automatically starts this pump at a set time every day, and stops it at another. Off (default) means nothing runs on a schedule; you're always in direct control. If you manually stop it during the "on" window, it stays off until tomorrow's cycle - the schedule never overrides a manual stop the same day. Requires an active internet connection to execute.</p>
           <button class="notify-toggle-btn state-off" id="scheduleToggleBtn">Enable schedule</button>
           <div id="scheduleTimesRow" style="margin-top:14px;">
             <div class="schedule-grid">
               <!-- Start Time Card -->
-              <div class="time-card start">
+              <div class="time-card start" id="schedOnCard" role="button" tabindex="0" aria-label="Set Turn On time with clock picker">
                 <div class="time-card-header">
                   <span><span class="icon-dot dot-start"></span>Turn On</span>
-                  <span style="font-size:10px; color:var(--green); font-weight:700;">START</span>
+                  <span class="time-card-badge start-badge">START</span>
                 </div>
-                <div class="time-picker-row">
-                  <div class="time-digits-group">
-                    <div class="time-unit-box">
-                      <button type="button" class="time-unit-btn" id="schedOnHourUp" aria-label="Increase hour">
-                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      </button>
-                      <span class="time-val-display" id="schedOnHourVal">06</span>
-                      <button type="button" class="time-unit-btn" id="schedOnHourDown" aria-label="Decrease hour">
-                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      </button>
-                    </div>
+                <div class="time-picker-readout">
+                  <div class="time-readout-digits">
+                    <span class="time-val-display" id="schedOnHourVal">06</span>
                     <span class="time-colon">:</span>
-                    <div class="time-unit-box">
-                      <button type="button" class="time-unit-btn" id="schedOnMinUp" aria-label="Increase minutes">
-                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      </button>
-                      <span class="time-val-display" id="schedOnMinVal">00</span>
-                      <button type="button" class="time-unit-btn" id="schedOnMinDown" aria-label="Decrease minutes">
-                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      </button>
-                    </div>
+                    <span class="time-val-display" id="schedOnMinVal">00</span>
+                    <span class="time-readout-ampm" id="schedOnAmpmVal">AM</span>
                   </div>
-                  <div class="ampm-toggle">
-                    <button type="button" class="ampm-btn active" id="schedOnAmBtn">AM</button>
-                    <button type="button" class="ampm-btn" id="schedOnPmBtn">PM</button>
-                  </div>
+                  <button type="button" class="time-clock-btn" id="schedOnClockBtn" aria-label="Open clock picker for turn on time">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  </button>
                 </div>
               </div>
 
               <!-- Stop Time Card -->
-              <div class="time-card stop">
+              <div class="time-card stop" id="schedOffCard" role="button" tabindex="0" aria-label="Set Turn Off time with clock picker">
                 <div class="time-card-header">
                   <span><span class="icon-dot dot-stop"></span>Turn Off</span>
-                  <span style="font-size:10px; color:var(--amber); font-weight:700;">STOP</span>
+                  <span class="time-card-badge stop-badge">STOP</span>
                 </div>
-                <div class="time-picker-row">
-                  <div class="time-digits-group">
-                    <div class="time-unit-box">
-                      <button type="button" class="time-unit-btn" id="schedOffHourUp" aria-label="Increase hour">
-                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      </button>
-                      <span class="time-val-display" id="schedOffHourVal">08</span>
-                      <button type="button" class="time-unit-btn" id="schedOffHourDown" aria-label="Decrease hour">
-                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      </button>
-                    </div>
+                <div class="time-picker-readout">
+                  <div class="time-readout-digits">
+                    <span class="time-val-display" id="schedOffHourVal">08</span>
                     <span class="time-colon">:</span>
-                    <div class="time-unit-box">
-                      <button type="button" class="time-unit-btn" id="schedOffMinUp" aria-label="Increase minutes">
-                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      </button>
-                      <span class="time-val-display" id="schedOffMinVal">00</span>
-                      <button type="button" class="time-unit-btn" id="schedOffMinDown" aria-label="Decrease minutes">
-                        <svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      </button>
-                    </div>
+                    <span class="time-val-display" id="schedOffMinVal">00</span>
+                    <span class="time-readout-ampm" id="schedOffAmpmVal">AM</span>
                   </div>
-                  <div class="ampm-toggle">
-                    <button type="button" class="ampm-btn active" id="schedOffAmBtn">AM</button>
-                    <button type="button" class="ampm-btn" id="schedOffPmBtn">PM</button>
-                  </div>
+                  <button type="button" class="time-clock-btn" id="schedOffClockBtn" aria-label="Open clock picker for turn off time">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  </button>
                 </div>
               </div>
             </div>
@@ -1548,7 +1959,70 @@
     Ask whoever set this up to flash one with your email as the owner.
   </div>
 
-  </div>
+  <!-- Clock Picker Dialog Modal -->
+  <dialog id="clockPickerDialog" class="clock-dialog">
+    <div class="clock-dialog-shell">
+      <div class="clock-dialog-header">
+        <div class="clock-dialog-title">
+          <span class="icon-dot" id="clockTargetDot"></span>
+          <span id="clockTargetTitle">Turn On Time</span>
+        </div>
+        <button type="button" class="clock-dialog-close" id="clockDialogClose" aria-label="Close dialog">
+          <svg viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <!-- Big digital display with mode tabs and AM/PM -->
+      <div class="clock-digital-row">
+        <div class="clock-time-display">
+          <button type="button" class="clock-time-segment active" id="clockHourSegment" aria-label="Select hour">06</button>
+          <span class="clock-time-colon">:</span>
+          <button type="button" class="clock-time-segment" id="clockMinSegment" aria-label="Select minute">00</button>
+        </div>
+        <div class="clock-ampm-col">
+          <button type="button" class="clock-ampm-btn active" id="clockAmBtn">AM</button>
+          <button type="button" class="clock-ampm-btn" id="clockPmBtn">PM</button>
+        </div>
+      </div>
+
+      <!-- Mode bar with nudge controls -->
+      <div class="clock-mode-bar">
+        <span class="clock-mode-label" id="clockModeLabel">Select Hour</span>
+        <div class="clock-nudge-tools">
+          <button type="button" class="clock-nudge-btn" id="clockNudgeMinus" aria-label="Subtract 1 minute">&minus;1m</button>
+          <button type="button" class="clock-nudge-btn" id="clockNudgePlus" aria-label="Add 1 minute">&plus;1m</button>
+        </div>
+      </div>
+
+      <!-- Circular Clock Face -->
+      <div class="clock-face-wrap">
+        <div class="clock-face" id="clockFace">
+          <div class="clock-center-pivot"></div>
+          <div class="clock-hand" id="clockHand">
+            <div class="clock-hand-arm"></div>
+            <div class="clock-hand-endpoint"></div>
+          </div>
+          <div class="clock-face-ticks" id="clockFaceTicks"></div>
+          <div class="clock-face-numbers" id="clockFaceNumbers"></div>
+        </div>
+      </div>
+
+      <!-- Quick preset chips for minutes -->
+      <div class="clock-presets-row">
+        <span class="clock-presets-label">Minutes:</span>
+        <button type="button" class="clock-preset-chip" data-min="0">:00</button>
+        <button type="button" class="clock-preset-chip" data-min="15">:15</button>
+        <button type="button" class="clock-preset-chip" data-min="30">:30</button>
+        <button type="button" class="clock-preset-chip" data-min="45">:45</button>
+      </div>
+
+      <!-- Actions footer -->
+      <div class="clock-dialog-actions">
+        <button type="button" class="clock-btn-cancel" id="clockCancelBtn">Cancel</button>
+        <button type="button" class="clock-btn-set" id="clockSaveBtn">Set Time</button>
+      </div>
+    </div>
+  </dialog>
 
 <script>
   // ---- Configuration -------------------------------------------------
@@ -2502,7 +2976,12 @@
       emptyStateEl.style.display = 'none';
       noOwnedDevicesEl.style.display = 'none';
 
-      if (!selectedId || !devices[selectedId]) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const targetDevice = urlParams.get('device');
+
+      if (targetDevice && devices[targetDevice]) {
+        selectDevice(targetDevice);
+      } else if (!selectedId || !devices[selectedId]) {
         selectDevice(ids[0]);
       } else {
         renderOverview();
@@ -2662,7 +3141,13 @@
       messaging.onMessage((payload) => {
         const title = (payload.data && payload.data.title) || 'Furrow';
         const body = (payload.data && payload.data.body) || '';
-        registration.showNotification(title, { body, icon: './icons/icon-192.png' });
+        const url = (payload.data && (payload.data.url || payload.data.click_action)) || './dashboard.html';
+        registration.showNotification(title, {
+          body,
+          icon: './icons/icon-192.png',
+          badge: './icons/icon-192.png',
+          data: { url }
+        });
       });
       notifyMessagingReady = true;
     }
@@ -2814,10 +3299,9 @@
   // setting) always means "do nothing," never "assume yes." Restores
   // to the pump's previous state, not an unconditional "always turn
   // on" - only auto-starts if it was genuinely running right before
-  // the outage (decided server-side by functions/index.js's
-  // shouldAutoResume(), using a snapshot the watchdog took at outage
-  // detection - this dashboard only ever writes the enabled/delay
-  // settings, never decides or acts on them itself).
+  // the outage (decided on-device by ESP32 firmware upon reconnect,
+  // using a snapshot the watchdog took at outage detection - this
+  // dashboard only ever writes the enabled/delay settings).
   let autoResumeBusy = false;
 
   const autoResumeDelayMinus = document.getElementById('autoResumeDelayMinus');
@@ -2950,31 +3434,51 @@
   // moment is safety-relevant, so silence (never touched this setting)
   // always means "do nothing." "Manual control wins until the next
   // scheduled cycle" (the behavior explicitly asked for) is enforced
-  // entirely server-side, by scheduleWatchdog only ever firing each of
-  // today's on/off events once (functions/index.js's
-  // computeScheduleActions) - this dashboard only ever writes the
-  // enabled/onTime/offTime settings, never decides or acts on them.
+  // directly on-device by ESP32 firmware using hardware NTP, firing
+  // each of today's on/off events at most once - this dashboard writes
+  // the enabled/onTime/offTime settings and sends sync_schedule.
   let scheduleBusy = false;
 
-  const schedOnHourUp = document.getElementById('schedOnHourUp');
-  const schedOnHourDown = document.getElementById('schedOnHourDown');
+  const schedOnCard = document.getElementById('schedOnCard');
   const schedOnHourVal = document.getElementById('schedOnHourVal');
-  const schedOnMinUp = document.getElementById('schedOnMinUp');
-  const schedOnMinDown = document.getElementById('schedOnMinDown');
   const schedOnMinVal = document.getElementById('schedOnMinVal');
-  const schedOnAmBtn = document.getElementById('schedOnAmBtn');
-  const schedOnPmBtn = document.getElementById('schedOnPmBtn');
+  const schedOnAmpmVal = document.getElementById('schedOnAmpmVal');
+  const schedOnClockBtn = document.getElementById('schedOnClockBtn');
 
-  const schedOffHourUp = document.getElementById('schedOffHourUp');
-  const schedOffHourDown = document.getElementById('schedOffHourDown');
+  const schedOffCard = document.getElementById('schedOffCard');
   const schedOffHourVal = document.getElementById('schedOffHourVal');
-  const schedOffMinUp = document.getElementById('schedOffMinUp');
-  const schedOffMinDown = document.getElementById('schedOffMinDown');
   const schedOffMinVal = document.getElementById('schedOffMinVal');
-  const schedOffAmBtn = document.getElementById('schedOffAmBtn');
-  const schedOffPmBtn = document.getElementById('schedOffPmBtn');
+  const schedOffAmpmVal = document.getElementById('schedOffAmpmVal');
+  const schedOffClockBtn = document.getElementById('schedOffClockBtn');
 
   const scheduleDurationText = document.getElementById('scheduleDurationText');
+
+  // Clock Picker Dialog Elements
+  const clockPickerDialog = document.getElementById('clockPickerDialog');
+  const clockTargetDot = document.getElementById('clockTargetDot');
+  const clockTargetTitle = document.getElementById('clockTargetTitle');
+  const clockDialogClose = document.getElementById('clockDialogClose');
+  const clockHourSegment = document.getElementById('clockHourSegment');
+  const clockMinSegment = document.getElementById('clockMinSegment');
+  const clockAmBtn = document.getElementById('clockAmBtn');
+  const clockPmBtn = document.getElementById('clockPmBtn');
+  const clockModeLabel = document.getElementById('clockModeLabel');
+  const clockNudgeMinus = document.getElementById('clockNudgeMinus');
+  const clockNudgePlus = document.getElementById('clockNudgePlus');
+  const clockFace = document.getElementById('clockFace');
+  const clockHand = document.getElementById('clockHand');
+  const clockFaceTicks = document.getElementById('clockFaceTicks');
+  const clockFaceNumbers = document.getElementById('clockFaceNumbers');
+  const clockCancelBtn = document.getElementById('clockCancelBtn');
+  const clockSaveBtn = document.getElementById('clockSaveBtn');
+
+  let clockPickerTarget = 'onTime'; // 'onTime' or 'offTime'
+  let clockPickerMode = 'hour';     // 'hour' or 'min'
+  let clockPickerHour = 6;          // 1..12
+  let clockPickerMin = 0;           // 0..59
+  let clockPickerIsPm = false;
+  let clockPointerDown = false;
+  let clockAutoAdvanceTimer = null;
 
   function parse24hTime(timeStr) {
     if (!timeStr || typeof timeStr !== 'string') timeStr = '06:00';
@@ -3009,13 +3513,11 @@
 
     if (schedOnHourVal) schedOnHourVal.textContent = on.displayHour;
     if (schedOnMinVal) schedOnMinVal.textContent = on.displayMin;
-    if (schedOnAmBtn) schedOnAmBtn.classList.toggle('active', !on.isPm);
-    if (schedOnPmBtn) schedOnPmBtn.classList.toggle('active', on.isPm);
+    if (schedOnAmpmVal) schedOnAmpmVal.textContent = on.ampm;
 
     if (schedOffHourVal) schedOffHourVal.textContent = off.displayHour;
     if (schedOffMinVal) schedOffMinVal.textContent = off.displayMin;
-    if (schedOffAmBtn) schedOffAmBtn.classList.toggle('active', !off.isPm);
-    if (schedOffPmBtn) schedOffPmBtn.classList.toggle('active', off.isPm);
+    if (schedOffAmpmVal) schedOffAmpmVal.textContent = off.ampm;
 
     if (scheduleOnTimeInput) scheduleOnTimeInput.value = format24hTime(on.h12, on.min, on.isPm);
     if (scheduleOffTimeInput) scheduleOffTimeInput.value = format24hTime(off.h12, off.min, off.isPm);
@@ -3044,75 +3546,321 @@
     }
   }
 
-  async function adjustScheduleTime(which, changeType, deltaOrVal, shouldSave) {
-    const isStart = (which === 'onTime');
-    const currentStr = isStart
-      ? (scheduleOnTimeInput ? scheduleOnTimeInput.value : '06:00')
-      : (scheduleOffTimeInput ? scheduleOffTimeInput.value : '08:00');
-    const otherStr = isStart
+  function setClockPickerMode(mode) {
+    clockPickerMode = mode;
+    if (clockHourSegment) clockHourSegment.classList.toggle('active', mode === 'hour');
+    if (clockMinSegment) clockMinSegment.classList.toggle('active', mode === 'min');
+    if (clockModeLabel) clockModeLabel.textContent = mode === 'hour' ? 'Select Hour' : 'Select Minute';
+    renderClockFace();
+    syncClockPickerDisplay();
+  }
+
+  function renderClockFace() {
+    if (!clockFaceNumbers || !clockFaceTicks) return;
+    clockFaceNumbers.innerHTML = '';
+    clockFaceTicks.innerHTML = '';
+
+    const cx = 118;
+    const cy = 118;
+    const numRadius = 82;
+    const tickRadius = 104;
+
+    if (clockPickerMode === 'hour') {
+      for (let i = 1; i <= 12; i++) {
+        const rad = (i * 30 - 90) * (Math.PI / 180);
+        const x = cx + numRadius * Math.cos(rad);
+        const y = cy + numRadius * Math.sin(rad);
+
+        const el = document.createElement('div');
+        el.className = 'clock-num-elem';
+        el.dataset.val = String(i);
+        el.textContent = String(i);
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        clockFaceNumbers.appendChild(el);
+      }
+    } else {
+      // 60 tick marks for every minute
+      for (let k = 0; k < 60; k++) {
+        const rad = (k * 6 - 90) * (Math.PI / 180);
+        const x = cx + tickRadius * Math.cos(rad);
+        const y = cy + tickRadius * Math.sin(rad);
+
+        const tick = document.createElement('div');
+        tick.className = 'clock-tick-dot' + (k % 5 === 0 ? ' major' : '');
+        tick.style.left = `${x}px`;
+        tick.style.top = `${y}px`;
+        clockFaceTicks.appendChild(tick);
+      }
+
+      // 5-minute numbers: 00, 05, 10, ... 55
+      for (let m = 0; m < 60; m += 5) {
+        const rad = (m * 6 - 90) * (Math.PI / 180);
+        const x = cx + numRadius * Math.cos(rad);
+        const y = cy + numRadius * Math.sin(rad);
+
+        const el = document.createElement('div');
+        el.className = 'clock-num-elem';
+        el.dataset.val = String(m);
+        el.textContent = String(m).padStart(2, '0');
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        clockFaceNumbers.appendChild(el);
+      }
+    }
+  }
+
+  function syncClockPickerDisplay() {
+    if (clockHourSegment) clockHourSegment.textContent = String(clockPickerHour).padStart(2, '0');
+    if (clockMinSegment) clockMinSegment.textContent = String(clockPickerMin).padStart(2, '0');
+    if (clockAmBtn) clockAmBtn.classList.toggle('active', !clockPickerIsPm);
+    if (clockPmBtn) clockPmBtn.classList.toggle('active', clockPickerIsPm);
+
+    if (clockHand) {
+      const deg = (clockPickerMode === 'hour')
+        ? (clockPickerHour % 12) * 30
+        : clockPickerMin * 6;
+      clockHand.style.transform = `rotate(${deg}deg)`;
+    }
+
+    if (clockFaceNumbers) {
+      const targetVal = (clockPickerMode === 'hour') ? String(clockPickerHour) : String(clockPickerMin);
+      const elems = clockFaceNumbers.querySelectorAll('.clock-num-elem');
+      elems.forEach(el => {
+        el.classList.toggle('selected', el.dataset.val === targetVal);
+      });
+    }
+
+    const presetChips = document.querySelectorAll('.clock-preset-chip');
+    presetChips.forEach(chip => {
+      const p = parseInt(chip.dataset.min, 10);
+      chip.classList.toggle('active', clockPickerMin === p);
+    });
+  }
+
+  function getAngleFromPointer(e) {
+    if (!clockFace) return 0;
+    const rect = clockFace.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = e.clientX - cx;
+    const dy = e.clientY - cy;
+    let deg = (Math.atan2(dy, dx) * 180 / Math.PI) + 90;
+    if (deg < 0) deg += 360;
+    return deg;
+  }
+
+  function handleClockPointer(e, isEnd) {
+    const deg = getAngleFromPointer(e);
+
+    if (clockPickerMode === 'hour') {
+      let h = Math.round(deg / 30) % 12;
+      if (h === 0) h = 12;
+      clockPickerHour = h;
+      syncClockPickerDisplay();
+
+      if (isEnd) {
+        if (clockAutoAdvanceTimer) clearTimeout(clockAutoAdvanceTimer);
+        clockAutoAdvanceTimer = setTimeout(() => {
+          setClockPickerMode('min');
+        }, 220);
+      }
+    } else {
+      let m = Math.round(deg / 6) % 60;
+      clockPickerMin = m;
+      syncClockPickerDisplay();
+    }
+  }
+
+  if (clockFace) {
+    clockFace.addEventListener('pointerdown', (e) => {
+      clockPointerDown = true;
+      clockFace.classList.add('dragging');
+      clockFace.setPointerCapture(e.pointerId);
+      handleClockPointer(e, false);
+    });
+
+    clockFace.addEventListener('pointermove', (e) => {
+      if (!clockPointerDown) return;
+      handleClockPointer(e, false);
+    });
+
+    const finishPointer = (e) => {
+      if (!clockPointerDown) return;
+      clockPointerDown = false;
+      clockFace.classList.remove('dragging');
+      try { clockFace.releasePointerCapture(e.pointerId); } catch (_) {}
+      handleClockPointer(e, true);
+    };
+
+    clockFace.addEventListener('pointerup', finishPointer);
+    clockFace.addEventListener('pointercancel', finishPointer);
+  }
+
+  function openClockPicker(target, initialTimeStr, initialMode = 'hour') {
+    clockPickerTarget = target;
+    const isStart = (target === 'onTime');
+
+    if (clockPickerDialog) {
+      clockPickerDialog.classList.toggle('theme-start', isStart);
+      clockPickerDialog.classList.toggle('theme-stop', !isStart);
+    }
+    if (clockTargetDot) {
+      clockTargetDot.className = 'icon-dot ' + (isStart ? 'dot-start' : 'dot-stop');
+    }
+    if (clockTargetTitle) {
+      clockTargetTitle.textContent = isStart ? 'Turn On Time (Start)' : 'Turn Off Time (Stop)';
+    }
+
+    const defaultTime = isStart ? '06:00' : '08:00';
+    const parsed = parse24hTime(initialTimeStr || defaultTime);
+    clockPickerHour = parsed.h12;
+    clockPickerMin = parsed.min;
+    clockPickerIsPm = parsed.isPm;
+
+    setClockPickerMode(initialMode);
+
+    if (clockPickerDialog && typeof clockPickerDialog.showModal === 'function') {
+      clockPickerDialog.showModal();
+    }
+  }
+
+  async function saveClockPicker() {
+    const newTimeStr = format24hTime(clockPickerHour, clockPickerMin, clockPickerIsPm);
+    const otherStr = (clockPickerTarget === 'onTime')
       ? (scheduleOffTimeInput ? scheduleOffTimeInput.value : '08:00')
       : (scheduleOnTimeInput ? scheduleOnTimeInput.value : '06:00');
 
-    let parsed = parse24hTime(currentStr);
-
-    if (changeType === 'hour') {
-      let h = parsed.h12 + deltaOrVal;
-      if (h > 12) h = 1;
-      if (h < 1) h = 12;
-      parsed.h12 = h;
-    } else if (changeType === 'min') {
-      let m = parsed.min + deltaOrVal;
-      if (m >= 60) m = 0;
-      if (m < 0) m = 45;
-      parsed.min = m;
-    } else if (changeType === 'ampm') {
-      parsed.isPm = !!deltaOrVal;
-    } else if (changeType === 'set') {
-      parsed = parse24hTime(deltaOrVal);
+    if (newTimeStr === otherStr) {
+      if (scheduleStatus) scheduleStatus.textContent = 'On and off times can\u2019t be the same.';
+      alert('On and off times cannot be the same.');
+      return;
     }
 
-    const newTimeStr = format24hTime(parsed.h12, parsed.min, parsed.isPm);
+    if (clockPickerDialog) clockPickerDialog.close();
 
-    if (isStart) {
+    if (clockPickerTarget === 'onTime') {
       updateScheduleDisplay(newTimeStr, otherStr);
     } else {
       updateScheduleDisplay(otherStr, newTimeStr);
     }
 
-    if (shouldSave && selectedId && !scheduleBusy) {
+    if (selectedId && !scheduleBusy) {
       const data = devices[selectedId] || {};
       if (!(data.schedule && data.schedule.enabled === true)) return;
 
-      if (newTimeStr === otherStr) {
-        scheduleStatus.textContent = 'On and off times can\u2019t be the same.';
-        return;
-      }
-
       try {
-        await db.ref(`devices/${selectedId}/schedule/${which}`).set(newTimeStr);
-        scheduleStatus.textContent = 'Schedule updated.';
+        await db.ref(`devices/${selectedId}/schedule/${clockPickerTarget}`).set(newTimeStr);
+        await db.ref(`devices/${selectedId}/command/action`).set('sync_schedule');
+        if (scheduleStatus) scheduleStatus.textContent = 'Schedule updated.';
       } catch (err) {
         console.error('Failed to update schedule time', err);
-        scheduleStatus.textContent = 'Failed to save: ' + err.message;
+        if (scheduleStatus) scheduleStatus.textContent = 'Failed to save: ' + err.message;
       }
     }
   }
 
-  // Bind Start Time Controls
-  if (schedOnHourUp) schedOnHourUp.addEventListener('click', () => adjustScheduleTime('onTime', 'hour', 1, true));
-  if (schedOnHourDown) schedOnHourDown.addEventListener('click', () => adjustScheduleTime('onTime', 'hour', -1, true));
-  if (schedOnMinUp) schedOnMinUp.addEventListener('click', () => adjustScheduleTime('onTime', 'min', 15, true));
-  if (schedOnMinDown) schedOnMinDown.addEventListener('click', () => adjustScheduleTime('onTime', 'min', -15, true));
-  if (schedOnAmBtn) schedOnAmBtn.addEventListener('click', () => adjustScheduleTime('onTime', 'ampm', false, true));
-  if (schedOnPmBtn) schedOnPmBtn.addEventListener('click', () => adjustScheduleTime('onTime', 'ampm', true, true));
+  // Bind Mode Switcher
+  if (clockHourSegment) clockHourSegment.addEventListener('click', () => setClockPickerMode('hour'));
+  if (clockMinSegment) clockMinSegment.addEventListener('click', () => setClockPickerMode('min'));
 
-  // Bind Stop Time Controls
-  if (schedOffHourUp) schedOffHourUp.addEventListener('click', () => adjustScheduleTime('offTime', 'hour', 1, true));
-  if (schedOffHourDown) schedOffHourDown.addEventListener('click', () => adjustScheduleTime('offTime', 'hour', -1, true));
-  if (schedOffMinUp) schedOffMinUp.addEventListener('click', () => adjustScheduleTime('offTime', 'min', 15, true));
-  if (schedOffMinDown) schedOffMinDown.addEventListener('click', () => adjustScheduleTime('offTime', 'min', -15, true));
-  if (schedOffAmBtn) schedOffAmBtn.addEventListener('click', () => adjustScheduleTime('offTime', 'ampm', false, true));
-  if (schedOffPmBtn) schedOffPmBtn.addEventListener('click', () => adjustScheduleTime('offTime', 'ampm', true, true));
+  // Bind AM/PM
+  if (clockAmBtn) clockAmBtn.addEventListener('click', () => {
+    clockPickerIsPm = false;
+    syncClockPickerDisplay();
+  });
+  if (clockPmBtn) clockPmBtn.addEventListener('click', () => {
+    clockPickerIsPm = true;
+    syncClockPickerDisplay();
+  });
+
+  // Nudge Buttons (-1m, +1m)
+  if (clockNudgeMinus) clockNudgeMinus.addEventListener('click', () => {
+    clockPickerMin = (clockPickerMin + 59) % 60;
+    syncClockPickerDisplay();
+  });
+  if (clockNudgePlus) clockNudgePlus.addEventListener('click', () => {
+    clockPickerMin = (clockPickerMin + 1) % 60;
+    syncClockPickerDisplay();
+  });
+
+  // Presets (:00, :15, :30, :45)
+  document.querySelectorAll('.clock-preset-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const m = parseInt(chip.dataset.min, 10);
+      if (!isNaN(m)) {
+        clockPickerMin = m;
+        syncClockPickerDisplay();
+      }
+    });
+  });
+
+  // Close & Save
+  if (clockDialogClose) clockDialogClose.addEventListener('click', () => clockPickerDialog.close());
+  if (clockCancelBtn) clockCancelBtn.addEventListener('click', () => clockPickerDialog.close());
+  if (clockSaveBtn) clockSaveBtn.addEventListener('click', saveClockPicker);
+
+  // Light dismiss on backdrop click
+  if (clockPickerDialog) {
+    clockPickerDialog.addEventListener('click', (e) => {
+      const rect = clockPickerDialog.getBoundingClientRect();
+      const isInDialog = (
+        e.clientX >= rect.left && e.clientX <= rect.right &&
+        e.clientY >= rect.top && e.clientY <= rect.bottom
+      );
+      if (!isInDialog) {
+        clockPickerDialog.close();
+      }
+    });
+
+    // Keyboard support
+    clockPickerDialog.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (clockPickerMode === 'hour') {
+          clockPickerHour = (clockPickerHour % 12) + 1;
+        } else {
+          clockPickerMin = (clockPickerMin + 1) % 60;
+        }
+        syncClockPickerDisplay();
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (clockPickerMode === 'hour') {
+          clockPickerHour = clockPickerHour === 1 ? 12 : clockPickerHour - 1;
+        } else {
+          clockPickerMin = (clockPickerMin + 59) % 60;
+        }
+        syncClockPickerDisplay();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        saveClockPicker();
+      }
+    });
+  }
+
+  // Bind Card Click Triggers
+  if (schedOnCard) {
+    schedOnCard.addEventListener('click', () => {
+      openClockPicker('onTime', scheduleOnTimeInput ? scheduleOnTimeInput.value : '06:00', 'hour');
+    });
+    schedOnCard.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openClockPicker('onTime', scheduleOnTimeInput ? scheduleOnTimeInput.value : '06:00', 'hour');
+      }
+    });
+  }
+  if (schedOffCard) {
+    schedOffCard.addEventListener('click', () => {
+      openClockPicker('offTime', scheduleOffTimeInput ? scheduleOffTimeInput.value : '08:00', 'hour');
+    });
+    schedOffCard.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openClockPicker('offTime', scheduleOffTimeInput ? scheduleOffTimeInput.value : '08:00', 'hour');
+      }
+    });
+  }
 
   function refreshScheduleUi(schedule, preserveStatus){
     if (!scheduleToggleBtn || scheduleBusy) return;
@@ -3146,6 +3894,7 @@
     try {
       if (currentlyEnabled) {
         await db.ref(`devices/${selectedId}/schedule/enabled`).set(false);
+        await db.ref(`devices/${selectedId}/command/action`).set('sync_schedule');
         scheduleStatus.textContent = 'Schedule disabled.';
       } else {
         const onTime = (scheduleOnTimeInput && scheduleOnTimeInput.value) || '06:00';
@@ -3162,6 +3911,7 @@
         const offFmt = `${offParsed.h12}:${offParsed.displayMin} ${offParsed.ampm}`;
 
         await db.ref(`devices/${selectedId}/schedule`).update({ enabled: true, onTime, offTime });
+        await db.ref(`devices/${selectedId}/command/action`).set('sync_schedule');
         scheduleStatus.textContent = `Enabled - will turn on at ${onFmt} and off at ${offFmt}, every day.`;
       }
     } catch (err) {

@@ -55,6 +55,7 @@ namespace
     String otaStatusPath;
     String autoResumePath;
     String stateBeforeOutagePath;
+    String schedulePath;
 
     bool streamStarted = false;
 
@@ -68,6 +69,17 @@ namespace
     bool autoResumeDataReceived = false;
     bool stateBeforeOutageReceived = false;
     String stateBeforeOutage = "";
+
+    // Irrigation schedule state: handled autonomously on-device via NTP in IST (UTC+5:30)
+    bool scheduleChecked = false;
+    bool scheduleEnabled = false;
+    String scheduleOnTime = "06:00";
+    String scheduleOffTime = "08:00";
+    String lastOnFiredDate = "";
+    String lastOffFiredDate = "";
+    bool scheduleStartPending = false;
+    bool scheduleStopPending = false;
+    unsigned long lastScheduleCheckMs = 0;
 
     unsigned long lastHeartbeat = 0;
     constexpr unsigned long HEARTBEAT_INTERVAL_MS = 10000;
@@ -118,17 +130,12 @@ namespace
 
             autoResumePending = true;
             autoResumeDueMs = millis() + (autoResumeDelayMinutes * 60000UL);
-
-            // Clear stateBeforeOutage in RTDB immediately so it won't re-trigger on subsequent reboots
-            database.set<String>(aClientMain, stateBeforeOutagePath, "", processData, "clearStateBeforeOutage");
-
-            Notify::sendWhatsApp("\u26a1 " + device.name() + " power restored - motor was running before outage. Auto-resume in " +
-                                  String(autoResumeDelayMinutes) + " min.");
         }
         else
         {
             if (stateBeforeOutage.length() > 0 && stateBeforeOutage != "null")
             {
+                stateBeforeOutage = "";
                 database.set<String>(aClientMain, stateBeforeOutagePath, "", processData, "clearStateBeforeOutage");
             }
         }
@@ -196,6 +203,49 @@ namespace
             return;
         }
 
+        if (result.uid() == "fetchSchedule")
+        {
+            RealtimeDatabaseResult &rtdb = result.to<RealtimeDatabaseResult>();
+            String json = rtdb.to<String>();
+            scheduleEnabled = (json.indexOf("\"enabled\":true") >= 0);
+
+            int onIdx = json.indexOf("\"onTime\":\"");
+            if (onIdx >= 0)
+            {
+                String onT = json.substring(onIdx + 10, onIdx + 15);
+                if (onT.length() == 5 && onT.charAt(2) == ':')
+                    scheduleOnTime = onT;
+            }
+
+            int offIdx = json.indexOf("\"offTime\":\"");
+            if (offIdx >= 0)
+            {
+                String offT = json.substring(offIdx + 11, offIdx + 16);
+                if (offT.length() == 5 && offT.charAt(2) == ':')
+                    scheduleOffTime = offT;
+            }
+
+            int lastOnIdx = json.indexOf("\"lastOnFiredDate\":\"");
+            if (lastOnIdx >= 0)
+            {
+                String lastOn = json.substring(lastOnIdx + 19, lastOnIdx + 29);
+                if (lastOn.length() == 10 && lastOn.charAt(4) == '-' && lastOn.charAt(7) == '-')
+                    lastOnFiredDate = lastOn;
+            }
+
+            int lastOffIdx = json.indexOf("\"lastOffFiredDate\":\"");
+            if (lastOffIdx >= 0)
+            {
+                String lastOff = json.substring(lastOffIdx + 20, lastOffIdx + 30);
+                if (lastOff.length() == 10 && lastOff.charAt(4) == '-' && lastOff.charAt(7) == '-')
+                    lastOffFiredDate = lastOff;
+            }
+
+            Logger::info(TAG, "Schedule updated: " + String(scheduleEnabled ? "ENABLED" : "DISABLED") +
+                               " (on: " + scheduleOnTime + ", off: " + scheduleOffTime + ")");
+            return;
+        }
+
         // Only the command stream task carries remote commands.
         if (result.uid() != "commandStream")
             return;
@@ -207,7 +257,9 @@ namespace
 
         String value = rtdb.to<String>();
 
-        if (value == "start" || value == "stop" || value == "restart" || value == "shutdown" || value == "update" || value == "factory_reset" || value == "cancel_auto_resume")
+        if (value == "start" || value == "stop" || value == "restart" || value == "shutdown" ||
+            value == "update" || value == "factory_reset" || value == "cancel_auto_resume" ||
+            value == "sync_schedule")
             pendingCommand = value;
     }
 
@@ -222,6 +274,15 @@ namespace
             autoResumePending = false;
             pendingCommand = "";
             database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
+            return;
+        }
+
+        if (pendingCommand == "sync_schedule")
+        {
+            Logger::info(TAG, "Remote command: SYNC_SCHEDULE");
+            pendingCommand = "";
+            database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
+            database.get(aClientMain, schedulePath, processData, false, "fetchSchedule");
             return;
         }
 
@@ -288,6 +349,8 @@ namespace
         if (pendingCommand == "start")
         {
             Logger::info(TAG, "Remote command: START");
+            scheduleStartPending = false;
+            scheduleStopPending = false;
             commandConfirmPending = "start";
             commandConfirmSince = millis();
             motor.start();
@@ -296,6 +359,8 @@ namespace
         {
             Logger::info(TAG, "Remote command: STOP");
             autoResumePending = false; // Stop cancels any active auto-resume timer
+            scheduleStartPending = false;
+            scheduleStopPending = false;
             commandConfirmPending = "stop";
             commandConfirmSince = millis();
             motor.stop();
@@ -336,10 +401,107 @@ namespace
         {
             autoResumePending = false;
             autoResumeStartPending = true;
+            if (stateBeforeOutage.length() > 0)
+            {
+                stateBeforeOutage = "";
+                database.set<String>(aClientMain, stateBeforeOutagePath, "", processData, "clearStateBeforeOutage");
+            }
             Logger::warn(TAG, "Auto-resume delay elapsed - starting motor");
             motor.start();
-            cloud.publishMotor("auto-resume");
-            Notify::sendWhatsApp("\u26a1 " + device.name() + " auto-resumed successfully after power restoration.");
+        }
+    }
+
+    void checkSchedule()
+    {
+        if (!scheduleEnabled)
+            return;
+
+        if (!Network::isConnected() || !app.ready())
+            return;
+
+        if (millis() - lastScheduleCheckMs < 1000)
+            return;
+        lastScheduleCheckMs = millis();
+
+        time_t now = time(nullptr);
+        if (now < 1704067200) // Valid time after 2024-01-01
+            return;
+
+        struct tm timeinfo;
+        if (!localtime_r(&now, &timeinfo))
+            return;
+
+        char nowTime[6];
+        snprintf(nowTime, sizeof(nowTime), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+
+        char nowDate[11];
+        snprintf(nowDate, sizeof(nowDate), "%04d-%02d-%02d",
+                 timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday);
+
+        // Guards against a misconfigured schedule (on time == off time)
+        if (scheduleOnTime == scheduleOffTime)
+            return;
+
+        bool onDue = (scheduleOnTime == nowTime && lastOnFiredDate != nowDate);
+        bool offDue = (scheduleOffTime == nowTime && lastOffFiredDate != nowDate);
+
+        if (!onDue && !offDue)
+            return;
+
+        // Scheduled turn on and off must only execute when the device has active internet
+        if (!Network::hasInternet())
+        {
+            Logger::warn(TAG, "Schedule: trigger due at " + String(nowTime) + 
+                              " but device has no active internet - skipping");
+            return;
+        }
+
+        // Start schedule trigger (fires once per calendar date)
+        if (onDue)
+        {
+            lastOnFiredDate = nowDate;
+            database.set<String>(aClientMain, schedulePath + "/lastOnFiredDate", String(nowDate), processData, "recordScheduleFired");
+
+            if (!motor.isRunning())
+            {
+                Logger::warn(TAG, "Schedule: turning ON at " + String(nowTime));
+                scheduleStartPending = true;
+                scheduleStopPending = false;
+                if (!motor.isDevelopment())
+                {
+                    commandConfirmPending = "start";
+                    commandConfirmSince = millis();
+                }
+                motor.start();
+            }
+            else
+            {
+                Logger::info(TAG, "Schedule: start time reached but motor already RUNNING");
+            }
+        }
+
+        // Stop schedule trigger (fires once per calendar date)
+        if (offDue)
+        {
+            lastOffFiredDate = nowDate;
+            database.set<String>(aClientMain, schedulePath + "/lastOffFiredDate", String(nowDate), processData, "recordScheduleFired");
+
+            if (motor.isRunning())
+            {
+                Logger::warn(TAG, "Schedule: turning OFF at " + String(nowTime));
+                scheduleStopPending = true;
+                scheduleStartPending = false;
+                if (!motor.isDevelopment())
+                {
+                    commandConfirmPending = "stop";
+                    commandConfirmSince = millis();
+                }
+                motor.stop();
+            }
+            else
+            {
+                Logger::info(TAG, "Schedule: stop time reached and motor already OFF");
+            }
         }
     }
 
@@ -365,6 +527,7 @@ namespace
             // Confirmed - the command took effect. Nothing to publish;
             // publishMotor() already covers the real state change.
             commandConfirmPending = "";
+            scheduleStopPending = false;
             return;
         }
 
@@ -374,28 +537,25 @@ namespace
         if (motor.isDevelopment())
         {
             commandConfirmPending = "";
+            scheduleStopPending = false;
             return;
         }
 
         Logger::error(TAG, "Motor failed to " + commandConfirmPending + " - no confirmation within " +
                             String(COMMAND_CONFIRM_TIMEOUT_MS / 1000) + "s");
 
-        Notify::sendWhatsApp("\u26a0\ufe0f " + device.name() + " failed to " + commandConfirmPending +
-                              (expectedRunning
-                                   ? " - no current detected after 30s. Check the panel."
-                                   : " - motor still drawing current after 30s. Check the panel."));
-
         // Small, rare-path write (only ever happens on an actual
-        // failure, never routinely) - a String path concatenation here
-        // is fine, unlike the hot 10s-forever publishDevice()/
-        // publishMotor() paths. Triggers a new onMotorCommandFailed
-        // Cloud Function (RTDB-watched) for the push-notification side;
-        // WhatsApp already went out directly above.
+        // failure, never routinely) - triggers onMotorCommandFailed
+        // Cloud Function (RTDB-watched) for both Push and WhatsApp
+        // notifications in elder-friendly wording.
         char json[96];
         snprintf(json, sizeof(json), "{\"action\":\"%s\",\"at\":{\".sv\":\"timestamp\"}}", commandConfirmPending.c_str());
         database.set<object_t>(aClientMain, motorPath + "/commandFailure", object_t(json), processData, "commandFailure");
 
         commandConfirmPending = "";
+        scheduleStartPending = false;
+        scheduleStopPending = false;
+        autoResumeStartPending = false;
     }
 
     // Downloads and flashes new firmware from a URL, then restarts.
@@ -552,6 +712,7 @@ void Cloud::begin()
     otaStatusPath = "/devices/" + device.id() + "/ota";
     autoResumePath = "/devices/" + device.id() + "/autoResume";
     stateBeforeOutagePath = "/devices/" + device.id() + "/motor/stateBeforeOutage";
+    schedulePath = "/devices/" + device.id() + "/schedule";
 
     // Skip TLS certificate verification for simplicity in v1.0.
     // Consider pinning Google's root CA for production use.
@@ -586,6 +747,7 @@ void Cloud::loop()
         autoResumeChecked = false;
         autoResumeDataReceived = false;
         stateBeforeOutageReceived = false;
+        scheduleChecked = false;
 
         unsigned long downtimeMs = Network::lastDisconnectDurationMs();
 
@@ -628,6 +790,12 @@ void Cloud::loop()
         database.get(aClientMain, stateBeforeOutagePath, processData, false, "fetchStateBeforeOutage");
     }
 
+    if (!scheduleChecked)
+    {
+        scheduleChecked = true;
+        database.get(aClientMain, schedulePath, processData, false, "fetchSchedule");
+    }
+
     if (!otaStatusReset)
     {
         // Clears any leftover OTA status from before this boot (whether
@@ -643,6 +811,8 @@ void Cloud::loop()
     checkCommandConfirmation();
 
     checkAutoResume();
+
+    checkSchedule();
 
     if (otaRequested)
     {
@@ -771,7 +941,7 @@ void Cloud::publishDevice()
     database.set<object_t>(aClientMain, statusPath, object_t(json), processData, "publishDevice");
 }
 
-void Cloud::publishMotor(const char *startedVia)
+void Cloud::publishMotor(const char *startedVia, const char *stoppedVia)
 {
     if (!app.ready())
         return;
@@ -789,23 +959,36 @@ void Cloud::publishMotor(const char *startedVia)
     // one-time paths in this file (path setup, OTA, remote commands)
     // were deliberately left as String.
     //
-    // startedVia is only ever non-null from the one call site that
-    // just caught a transition into RUNNING (see cloud.h's comment on
-    // the declaration) - database.set()'s full-replace semantics mean
-    // any call that omits it (every heartbeat, every OFF transition)
-    // naturally clears out whatever was there before, so a stale tag
-    // never lingers into a later, unrelated publish.
+    // startedVia and stoppedVia are only ever non-null from the call site
+    // that just caught a state transition (see cloud.h) - database.set()'s
+    // full-replace semantics mean any call that omits it (every routine
+    // heartbeat) naturally clears out whatever was there before, so a stale
+    // tag never lingers into a later, unrelated publish.
     char json[128];
-    int len = (startedVia != nullptr)
-        ? snprintf(json, sizeof(json),
-              "{\"state\":\"%s\",\"updatedAt\":%lu,\"startedVia\":\"%s\"}",
-              motor.isRunning() ? "RUNNING" : "OFF",
-              millis(),
-              startedVia)
-        : snprintf(json, sizeof(json),
-              "{\"state\":\"%s\",\"updatedAt\":%lu}",
-              motor.isRunning() ? "RUNNING" : "OFF",
-              millis());
+    int len = 0;
+    if (startedVia != nullptr)
+    {
+        len = snprintf(json, sizeof(json),
+                       "{\"state\":\"%s\",\"updatedAt\":%lu,\"startedVia\":\"%s\"}",
+                       motor.isRunning() ? "RUNNING" : "OFF",
+                       millis(),
+                       startedVia);
+    }
+    else if (stoppedVia != nullptr)
+    {
+        len = snprintf(json, sizeof(json),
+                       "{\"state\":\"%s\",\"updatedAt\":%lu,\"stoppedVia\":\"%s\"}",
+                       motor.isRunning() ? "RUNNING" : "OFF",
+                       millis(),
+                       stoppedVia);
+    }
+    else
+    {
+        len = snprintf(json, sizeof(json),
+                       "{\"state\":\"%s\",\"updatedAt\":%lu}",
+                       motor.isRunning() ? "RUNNING" : "OFF",
+                       millis());
+    }
 
     if (len < 0 || len >= (int)sizeof(json))
         Logger::error(TAG, "publishMotor: JSON truncated - buffer too small (shouldn't be reachable, all fields are fixed-format)");
@@ -816,6 +999,11 @@ void Cloud::publishMotor(const char *startedVia)
 bool Cloud::remoteStartWasPending()
 {
     return commandConfirmPending == "start";
+}
+
+bool Cloud::remoteStopWasPending()
+{
+    return commandConfirmPending == "stop" && !scheduleStopPending;
 }
 
 bool Cloud::isAutoResumePending()
@@ -836,4 +1024,22 @@ void Cloud::cancelAutoResume()
         autoResumePending = false;
     }
     autoResumeStartPending = false;
+    scheduleStartPending = false;
+    scheduleStopPending = false;
+    if (stateBeforeOutage.length() > 0)
+    {
+        stateBeforeOutage = "";
+        database.set<String>(aClientMain, stateBeforeOutagePath, "", processData, "clearStateBeforeOutage");
+    }
 }
+
+bool Cloud::scheduleStartWasPending()
+{
+    return scheduleStartPending;
+}
+
+bool Cloud::scheduleStopWasPending()
+{
+    return scheduleStopPending;
+}
+

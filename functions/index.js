@@ -71,7 +71,7 @@ async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag,
 
     if (phone) {
       try {
-        await sendWhatsApp(phone, `\u26a0\ufe0f ${name} appears to have lost power - no contact for over 30s`);
+        await sendWhatsApp(phone, `\u26a0\ufe0f Power Cut Alert! Electricity lost at ${name}. Motor is OFF.`);
         anySent = true;
       } catch (err) {
         logger.error(`  WhatsApp send failed: ${err}`);
@@ -82,7 +82,7 @@ async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag,
 
     if (sendPush) {
       try {
-        const pushResult = await sendPush(deviceId, `${name} lost power`, `No contact for over ${offlineSeconds}s`);
+        const pushResult = await sendPush(deviceId, `\u26a0\ufe0f ${name}: Power Cut`, `Power lost at ${name}. Motor is OFF.`);
         if (pushResult && pushResult.sent > 0) anySent = true;
       } catch (err) {
         logger.error(`  Push send failed: ${err}`);
@@ -170,7 +170,13 @@ async function sendPushToDevice(deviceId, title, body) {
     // generic/iconless from the SDK's own fallback display). A
     // data-only message has nothing for the browser to auto-display,
     // so our handler is the only thing that ever shows anything.
-    data: { title, body },
+    data: {
+      title,
+      body,
+      deviceId,
+      url: `./dashboard.html?device=${encodeURIComponent(deviceId)}`,
+      click_action: `./dashboard.html?device=${encodeURIComponent(deviceId)}`,
+    },
   });
 
   const deadPushIds = [];
@@ -251,8 +257,41 @@ module.exports.runWatchdog = runWatchdog; // exported for test.js
 // check rather than being skipped by it - harmless in practice, since
 // nobody has push notifications enabled yet for a device that was
 // just provisioned seconds ago.
+// Sends both a Push notification (FCM) and a WhatsApp message to the device recipient.
+// Pairs every cloud messaging alert with a matching WhatsApp alert so elder users
+// receive instant, clear updates on both their phone lock screen and WhatsApp chat.
+async function sendAlertToDevice({ deviceId, name, title, body, whatsappMessage }) {
+  const db = getDatabase();
+
+  const pushPromise = sendPushToDevice(deviceId, title, body).catch((err) => {
+    logger.error(`[Push] Failed for ${deviceId} (${name}): ${err}`);
+    return { sent: 0, pruned: 0 };
+  });
+
+  const whatsappPromise = (async () => {
+    try {
+      const phoneSnap = await db.ref(`devices/${deviceId}/status/whatsappPhone`).once("value");
+      const phone = phoneSnap.val();
+      if (phone) {
+        await sendWhatsAppReal(phone, whatsappMessage || body);
+        logger.info(`[WhatsApp] Alert sent to ${phone} for ${deviceId} (${name})`);
+      } else {
+        logger.info(`[WhatsApp] No phone configured for ${deviceId} (${name}) - skipped`);
+      }
+    } catch (err) {
+      logger.error(`[WhatsApp] Failed for ${deviceId} (${name}): ${err}`);
+    }
+  })();
+
+  await Promise.all([pushPromise, whatsappPromise]);
+}
+
+// Fires whenever a device's motor changes state (RUNNING or OFF) - catches remote
+// commands from the web dashboard, physical starter panel button presses,
+// scheduled on/off runs, and auto-resume. Sends both Push and WhatsApp notifications
+// in simple, clear, elder-friendly wording with visual status emojis.
 exports.onMotorStateChanged = onValueWritten(
-  { ref: "/devices/{deviceId}/motor/state", region: RTDB_REGION },
+  { ref: "/devices/{deviceId}/motor/state", region: RTDB_REGION, secrets: [whapiToken] },
   async (event) => {
     const before = event.data.before.val();
     const after = event.data.after.val();
@@ -265,85 +304,63 @@ exports.onMotorStateChanged = onValueWritten(
     const db = getDatabase();
 
     try {
-      let body = after === "RUNNING" ? "Motor started." : "Motor stopped.";
+      let title = "";
+      let message = "";
       let name = deviceId;
 
-      // Parallelize name and startedVia reads when transitioning into RUNNING -
-      // cuts round-trip network latency in half before sending push.
       if (after === "RUNNING") {
         const [nameSnap, viaSnap] = await Promise.all([
           db.ref(`devices/${deviceId}/status/name`).once("value"),
-          db.ref(`devices/${deviceId}/motor/startedVia`).once("value")
+          db.ref(`devices/${deviceId}/motor/startedVia`).once("value"),
         ]);
         name = nameSnap.val() || deviceId;
         const via = viaSnap.val();
+
+        title = `\u{1f7e2} ${name} turned ON`;
         if (via === "remote") {
-          body = "Motor started via remote command.";
+          message = `\u{1f7e2} ${name} turned ON from the mobile app / website.`;
         } else if (via === "manual") {
-          body = "Motor started manually at the panel.";
+          message = `\u{1f7e2} ${name} turned ON manually at the starter panel.`;
         } else if (via === "auto-resume") {
-          body = "Motor auto-resumed after power restoration.";
+          message = `\u{1f7e2} ${name} turned ON automatically (power restored).`;
+        } else if (via === "schedule") {
+          message = `\u{1f7e2} ${name} turned ON by daily schedule.`;
+        } else {
+          message = `\u{1f7e2} ${name} turned ON.`;
         }
       } else {
-        const nameSnap = await db.ref(`devices/${deviceId}/status/name`).once("value");
+        const [nameSnap, viaSnap] = await Promise.all([
+          db.ref(`devices/${deviceId}/status/name`).once("value"),
+          db.ref(`devices/${deviceId}/motor/stoppedVia`).once("value"),
+        ]);
         name = nameSnap.val() || deviceId;
+        const via = viaSnap.val();
+
+        title = `\u{1f534} ${name} turned OFF`;
+        if (via === "remote") {
+          message = `\u{1f534} ${name} turned OFF from the mobile app / website.`;
+        } else if (via === "schedule") {
+          message = `\u{1f534} ${name} turned OFF by daily schedule.`;
+        } else if (via === "manual") {
+          message = `\u{1f534} ${name} turned OFF manually at the starter panel.`;
+        } else {
+          message = `\u{1f534} ${name} turned OFF.`;
+        }
       }
 
-      const result = await sendPushToDevice(deviceId, `${name} is now ${after}`, body);
-      logger.info(`[MotorPush] ${deviceId} (${name}): ${before} -> ${after}, sent to ${result.sent} token(s)`);
+      await sendAlertToDevice({ deviceId, name, title, body: message, whatsappMessage: message });
+      logger.info(`[MotorAlert] ${deviceId} (${name}): ${before} -> ${after}`);
     } catch (err) {
-      logger.error(`[MotorPush] ${deviceId} (${name}): send failed: ${err}`);
+      logger.error(`[MotorAlert] ${deviceId} error: ${err}`);
     }
   }
 );
 
-// Pure decision logic for auto-resume, separated from the actual
-// delayed action (below) so it's unit-testable (see test.js) without
-// needing to fake a real multi-minute sleep.
-//
-// Opt-in and off unless a device's owner explicitly enabled it -
-// this restarts a physical motor with no human confirming in the
-// moment, so silence (missing/absent settings) always means "do
-// nothing," never "assume yes."
-function shouldAutoResume(autoResumeSettings, motorStateBeforeOutage) {
-  if (!autoResumeSettings || autoResumeSettings.enabled !== true) {
-    return false;
-  }
 
-  // "Restore previous state," not "always turn on" - only resumes if
-  // the motor was actually running right before the outage (the
-  // snapshot runWatchdog took at outage detection - see its own
-  // comment for why that specific moment, not recovery time, is the
-  // only race-free place to have captured this).
-  return motorStateBeforeOutage === "RUNNING";
-}
-
-// 1-10 minutes, matching the dashboard's own input constraints -
-// clamped again here rather than trusting the client-supplied range,
-// and falling back to the shortest safe delay (not 0/immediate, not
-// NaN) if the stored value is ever missing or malformed.
-function clampAutoResumeDelayMinutes(delayMinutes) {
-  const n = Number(delayMinutes);
-  if (!Number.isFinite(n)) return 1;
-  return Math.min(10, Math.max(1, n));
-}
-module.exports.shouldAutoResume = shouldAutoResume; // exported for test.js
-module.exports.clampAutoResumeDelayMinutes = clampAutoResumeDelayMinutes; // exported for test.js
-
-// Fires a push when a device recovers from a flagged power-loss
-// outage - watches powerAlertSent's true -> false transition, which
-// Cloud::publishDevice() (src/cloud.cpp) already sets automatically
-// the moment a device resumes normal heartbeats after being flagged
-// by runWatchdog above. No new firmware logic needed - this is purely
-// a new observer on a signal that already existed.
-//
-// Deliberately does NOT cover a brief WiFi blip under the 30s
-// threshold reconnecting (powerAlertSent is never set for those in
-// the first place, since runWatchdog only flags genuinely extended
-// outages) - that's consistent with treating this as a real power
-// event, not every momentary WiFi hiccup while still powered.
+// Fires a push and WhatsApp alert when a device recovers from a flagged power-loss
+// outage - watches powerAlertSent's true -> false transition.
 exports.onPowerRestored = onValueWritten(
-  { ref: "/devices/{deviceId}/status/powerAlertSent", region: RTDB_REGION },
+  { ref: "/devices/{deviceId}/status/powerAlertSent", region: RTDB_REGION, secrets: [whapiToken] },
   async (event) => {
     const before = event.data.before.val();
     const after = event.data.after.val();
@@ -351,6 +368,9 @@ exports.onPowerRestored = onValueWritten(
     if (before !== true || after !== false) {
       return;
     }
+
+    const deviceId = event.params.deviceId;
+    const db = getDatabase();
 
     try {
       const [nameSnap, autoResumeSnap, stateBeforeSnap] = await Promise.all([
@@ -363,171 +383,26 @@ exports.onPowerRestored = onValueWritten(
       const autoResume = autoResumeSnap.val() || {};
       const stateBefore = stateBeforeSnap.val();
 
-      let body = "Back online after a power loss.";
+      let title = `\u26a1 ${name}: Power Restored`;
+      let message = `\u26a1 Power is back! ${name} is connected and ready.`;
       if (autoResume.enabled === true && stateBefore === "RUNNING") {
         const delay = autoResume.delayMinutes || 5;
-        body = `Back online. Motor was running before outage - auto-resume starting in ${delay} min.`;
+        message = `\u26a1 Power is back! ${name} motor will turn ON in ${delay} min.`;
       }
 
-      const result = await sendPushToDevice(deviceId, `${name} power restored`, body);
-      logger.info(`[PowerRestoredPush] ${deviceId} (${name}): sent to ${result.sent} token(s)`);
+      await sendAlertToDevice({ deviceId, name, title, body: message, whatsappMessage: message });
+      logger.info(`[PowerRestoredAlert] ${deviceId} (${name}): alert sent`);
     } catch (err) {
-      logger.error(`[PowerRestoredPush] ${deviceId}: send failed: ${err}`);
+      logger.error(`[PowerRestoredAlert] ${deviceId}: send failed: ${err}`);
     }
-
-    // Auto-resume countdown and relay triggering are now handled
-    // directly on-device by the ESP32 firmware upon reconnect, eliminating
-    // the need for a 1-minute Cloud Function cron watchdog.
   }
 );
 
-// Daily on/off schedule (e.g. "start irrigation at 06:00, stop at
-// 08:00, every day"). Same shape as auto-resume above: a scheduled
-// function checking every device once a minute, writing the same
-// command/action a person clicking Start/Stop on the dashboard
-// already writes - reuses the existing remote-command pipeline
-// entirely, no new firmware code needed, same failed-start alerting
-// applies automatically.
-//
-// India-specific assumption, made explicit rather than silently
-// baked in: schedule times are interpreted in IST (UTC+5:30), fixed,
-// no DST (India doesn't observe it, so no seasonal correction
-// needed). If this project's devices are ever deployed somewhere
-// else, this offset needs to become configurable rather than fixed.
-const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
 
-// Pure - given a UTC timestamp, returns that moment's IST time-of-day
-// ("HH:MM") and calendar date ("YYYY-MM-DD"), both needed to decide
-// whether a schedule should fire right now and whether it already
-// has today. Separated from the Date-object plumbing so the actual
-// decision logic below can be tested without faking a clock.
-function getIstTimeAndDate(nowMs) {
-  const d = new Date(nowMs + IST_OFFSET_MS);
-  const hh = String(d.getUTCHours()).padStart(2, "0");
-  const mm = String(d.getUTCMinutes()).padStart(2, "0");
-  const yyyy = d.getUTCFullYear();
-  const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  return { time: `${hh}:${mm}`, date: `${yyyy}-${mo}-${dd}` };
-}
-module.exports.getIstTimeAndDate = getIstTimeAndDate; // exported for test.js
-
-const TIME_STRING_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-function isValidTimeString(t) {
-  return typeof t === "string" && TIME_STRING_PATTERN.test(t);
-}
-module.exports.isValidTimeString = isValidTimeString; // exported for test.js
-
-// Pure decision logic - given a device's schedule settings and the
-// current IST time/date, decides whether the on-command or the
-// off-command should fire right now. Deliberately never fires either
-// one twice on the same calendar date (lastOnFiredDate/
-// lastOffFiredDate), which is what makes "manual control wins until
-// the next scheduled cycle" true for free: once today's on-event has
-// fired, nothing here fires start again today, however many more
-// times this function runs before midnight - a manual stop in
-// between is never overridden by this watchdog re-noticing the clock
-// is still within the on-window.
-function computeScheduleActions(schedule, nowTime, nowDate) {
-  if (!schedule || schedule.enabled !== true) {
-    return { fireOn: false, fireOff: false };
-  }
-
-  if (!isValidTimeString(schedule.onTime) || !isValidTimeString(schedule.offTime)) {
-    return { fireOn: false, fireOff: false };
-  }
-
-  // Guards against a nonsensical/misconfigured schedule (on time ==
-  // off time) rather than firing both commands back to back with an
-  // undefined outcome.
-  if (schedule.onTime === schedule.offTime) {
-    return { fireOn: false, fireOff: false };
-  }
-
-  return {
-    fireOn: schedule.onTime === nowTime && schedule.lastOnFiredDate !== nowDate,
-    fireOff: schedule.offTime === nowTime && schedule.lastOffFiredDate !== nowDate,
-  };
-}
-module.exports.computeScheduleActions = computeScheduleActions; // exported for test.js
-
-// Companion runner to computeScheduleActions - same
-// fetch/act/mark-done shape as runAutoResumeWatchdog, separated from
-// the real Firestore/RTDB calls so it's testable without faking a
-// database.
-async function runScheduleWatchdog({ fetchDevices, sendCommand, markFired, nowMs }) {
-  const devices = (await fetchDevices()) || {};
-  const { time: nowTime, date: nowDate } = getIstTimeAndDate(nowMs);
-  const fired = [];
-
-  for (const [deviceId, data] of Object.entries(devices)) {
-    const schedule = (data && data.schedule) || {};
-    const { fireOn, fireOff } = computeScheduleActions(schedule, nowTime, nowDate);
-
-    if (fireOn) {
-      try {
-        await sendCommand(deviceId, "start");
-        await markFired(deviceId, "on", nowDate);
-        fired.push({ deviceId, action: "start" });
-      } catch (err) {
-        logger.error(`[ScheduleWatchdog] ${deviceId}: failed to fire scheduled start: ${err}`);
-      }
-    }
-
-    if (fireOff) {
-      try {
-        await sendCommand(deviceId, "stop");
-        await markFired(deviceId, "off", nowDate);
-        fired.push({ deviceId, action: "stop" });
-      } catch (err) {
-        logger.error(`[ScheduleWatchdog] ${deviceId}: failed to fire scheduled stop: ${err}`);
-      }
-    }
-  }
-
-  return fired;
-}
-module.exports.runScheduleWatchdog = runScheduleWatchdog; // exported for test.js
-
-exports.scheduleWatchdog = onSchedule("every 1 minutes", async () => {
-  const db = getDatabase();
-
-  await runScheduleWatchdog({
-    fetchDevices: async () => {
-      const snapshot = await db.ref("devices").once("value");
-      return snapshot.val();
-    },
-    sendCommand: async (deviceId, action) => {
-      // Same command/action path a person clicking Start/Stop on the
-      // dashboard already writes to.
-      await db.ref(`devices/${deviceId}/command/action`).set(action);
-    },
-    markFired: async (deviceId, which, dateStr) => {
-      const field = which === "on" ? "lastOnFiredDate" : "lastOffFiredDate";
-      await db.ref(`devices/${deviceId}/schedule/${field}`).set(dateStr);
-    },
-    nowMs: Date.now(),
-  });
-});
-
-// Fires a push when a remote start/stop command doesn't actually take
-// effect within 30s - see src/cloud.cpp's checkCommandConfirmation(),
-// which is what writes devices/{id}/motor/commandFailure in the first
-// place (compares the command's expected outcome against real CT
-// current feedback, not just whether the relay pulse was sent).
-// WhatsApp already went out directly from the device itself by the
-// time this fires - firmware has its own Whapi credential and doesn't
-// need to round-trip through a Cloud Function for that channel; this
-// function only ever handles the push side.
-//
-// Deliberately remote-command-only, same limitation as the firmware
-// side: a physical button press at the panel never routes through the
-// device's own command handling at all, so there's no "expected
-// outcome" recorded anywhere for this to compare against for that
-// case.
+// Fires push and WhatsApp alerts when a remote start/stop command doesn't take
+// effect within 30s. Plain, non-technical alert guiding the user to check the panel.
 exports.onMotorCommandFailed = onValueWritten(
-  { ref: "/devices/{deviceId}/motor/commandFailure", region: RTDB_REGION },
+  { ref: "/devices/{deviceId}/motor/commandFailure", region: RTDB_REGION, secrets: [whapiToken] },
   async (event) => {
     const after = event.data.after.val();
     if (!after || !after.action) {
@@ -539,15 +414,19 @@ exports.onMotorCommandFailed = onValueWritten(
     const nameSnap = await db.ref(`devices/${deviceId}/status/name`).once("value");
     const name = nameSnap.val() || deviceId;
 
-    const body = after.action === "start"
-      ? "No current detected 30s after the start command - check the panel."
-      : "Motor still drawing current 30s after the stop command - check the panel.";
+    const isStart = (after.action === "start");
+    const title = isStart
+      ? `\u26a0\ufe0f ${name}: Failed to Start`
+      : `\u26a0\ufe0f ${name}: Failed to Stop`;
+    const message = isStart
+      ? `\u26a0\ufe0f Alert: ${name} failed to start. Please check the starter panel.`
+      : `\u26a0\ufe0f Alert: ${name} did not stop. Motor is still running! Please check the starter panel.`;
 
     try {
-      const result = await sendPushToDevice(deviceId, `${name} failed to ${after.action}`, body);
-      logger.info(`[CommandFailedPush] ${deviceId} (${name}): ${after.action} failure, sent to ${result.sent} token(s)`);
+      await sendAlertToDevice({ deviceId, name, title, body: message, whatsappMessage: message });
+      logger.info(`[CommandFailedAlert] ${deviceId} (${name}): ${after.action} failure`);
     } catch (err) {
-      logger.error(`[CommandFailedPush] ${deviceId} (${name}): send failed: ${err}`);
+      logger.error(`[CommandFailedAlert] ${deviceId} (${name}): send failed: ${err}`);
     }
   }
 );
@@ -585,7 +464,12 @@ exports.sendTestNotification = onCall(async (request) => {
       // data, not notification - see sendPushToDevice()'s comment for
       // why (avoids a duplicate auto-displayed notification alongside
       // our own handler's).
-      data: { title, body },
+      data: {
+        title,
+        body,
+        url: "./dashboard.html",
+        click_action: "./dashboard.html",
+      },
     });
 
     logger.info(`[PushTest] sent to ${request.auth.token.email}: ${messageId}`);

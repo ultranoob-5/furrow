@@ -130,7 +130,7 @@ void setup()
     // ~400ms guarantee). loop() publishes the real state itself, the
     // moment baselineEstablished actually becomes true.
 
-    Notify::sendWhatsApp("\u2705 " + device.name() + " is online (firmware " + device.firmware() + ")");
+    Notify::sendWhatsApp("\u2705 " + device.name() + " is connected and ready.");
 }
 
 void loop()
@@ -187,27 +187,29 @@ void loop()
 
         Serial.println(runningNow ? "Motor is now RUNNING" : "Motor is now OFF");
 
-        // startedVia only ever applies to a transition into RUNNING -
-        // see cloud.h's comment on remoteStartWasPending() for why a
-        // stop can't be inferred the same safe way (power loss, a
-        // trip, or an overload can all stop a motor with no remote
-        // command involved at all, so "no remote command pending"
-        // doesn't mean "manual" the way it does for a start).
         if (runningNow)
         {
             const char *via = "manual";
             if (cloud.autoResumeStartWasPending())
                 via = "auto-resume";
+            else if (cloud.scheduleStartWasPending())
+                via = "schedule";
             else if (cloud.remoteStartWasPending())
                 via = "remote";
 
             cloud.cancelAutoResume();
-            cloud.publishMotor(via);
+            cloud.publishMotor(via, nullptr);
         }
         else
         {
+            const char *via = "manual";
+            if (cloud.scheduleStopWasPending())
+                via = "schedule";
+            else if (cloud.remoteStopWasPending())
+                via = "remote";
+
             cloud.cancelAutoResume();
-            cloud.publishMotor();
+            cloud.publishMotor(nullptr, via);
         }
     }
 

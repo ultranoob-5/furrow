@@ -62,6 +62,10 @@ bool Network::begin()
             Logger::info(TAG, "WiFi connected - IP: " + WiFi.localIP().toString() +
                                ", RSSI: " + String(WiFi.RSSI()) + " dBm");
 
+            // Synchronize with atomic clocks via NTP in IST (UTC+5:30, 19800 seconds).
+            // No DST offset needed for India.
+            configTime(19800, 0, "pool.ntp.org", "time.google.com");
+
             return true;
         }
 
@@ -112,6 +116,18 @@ void Network::loop()
 bool Network::isConnected()
 {
     return WiFi.status() == WL_CONNECTED;
+}
+
+bool Network::hasInternet()
+{
+    if (!isConnected())
+        return false;
+
+    IPAddress ip;
+    if (WiFi.hostByName("pool.ntp.org", ip) == 1 && ip != IPAddress(0, 0, 0, 0))
+        return true;
+
+    return (WiFi.hostByName("time.google.com", ip) == 1 && ip != IPAddress(0, 0, 0, 0));
 }
 
 bool Network::consumeReconnectEvent()

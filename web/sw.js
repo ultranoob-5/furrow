@@ -5,7 +5,7 @@
 // icons) and always prefers a fresh network copy when online, falling
 // back to cache only if the network request actually fails.
 
-const CACHE_NAME = 'furrow-dashboard-v1';
+const CACHE_NAME = 'furrow-dashboard-v2';
 
 const APP_SHELL = [
   './dashboard.html',
@@ -52,6 +52,32 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+// Handles notification clicks: focuses an existing dashboard tab or opens a new one
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const rawUrl = (event.notification.data && (event.notification.data.url || event.notification.data.click_action)) || './dashboard.html';
+  const targetUrl = new URL(rawUrl, self.location.origin).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // If a window is already open, focus it and navigate to the target device if needed
+      for (const client of clientList) {
+        if ('focus' in client) {
+          if ('navigate' in client && client.url !== targetUrl) {
+            client.navigate(targetUrl);
+          }
+          return client.focus();
+        }
+      }
+      // Otherwise open a new window/tab
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
+
 // Firebase Cloud Messaging (browser push) background-message handler,
 // see dashboard.html's enableNotificationsForSelectedDevice() for the
 // enable flow and functions/index.js for what actually triggers a
@@ -82,10 +108,13 @@ try {
     // one generic/iconless from the SDK's own fallback display).
     const title = (payload.data && payload.data.title) || 'Furrow';
     const body = (payload.data && payload.data.body) || '';
+    const url = (payload.data && (payload.data.url || payload.data.click_action)) || './dashboard.html';
 
     self.registration.showNotification(title, {
       body,
-      icon: './icons/icon-192.png'
+      icon: './icons/icon-192.png',
+      badge: './icons/icon-192.png',
+      data: { url }
     });
   });
 } catch (err) {

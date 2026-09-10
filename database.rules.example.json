@@ -33,7 +33,7 @@
           ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
         },
         "schedule": {
-          ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+          ".write": "auth.token.email == 'device@your-project-id.local' || auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
         }
       }
     }
