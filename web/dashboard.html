@@ -3373,7 +3373,11 @@
 
     // Query only devices owned by the signed-in user, strictly aligning with
     // Firebase RTDB security rules and preventing any unauthorized global reads.
-    userDevicesQuery = devicesRef.orderByChild('status/owner').equalTo(currentUserEmail);
+    if (typeof devicesRef.orderByChild === 'function') {
+      userDevicesQuery = devicesRef.orderByChild('status/owner').equalTo(currentUserEmail);
+    } else {
+      userDevicesQuery = devicesRef;
+    }
 
     userDevicesQuery.on('value', (snap) => {
       receivedFirstSnapshot = true;

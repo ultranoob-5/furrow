@@ -23,7 +23,16 @@ import {
   update,
   remove,
   push,
-  child
+  child,
+  query,
+  orderByChild,
+  orderByKey,
+  orderByValue,
+  equalTo,
+  limitToFirst,
+  limitToLast,
+  startAt,
+  endAt
 } from 'firebase/database';
 import {
   getMessaging,
@@ -42,14 +51,52 @@ let _db = null;
 let _messaging = null;
 let _functions = null;
 
-class DatabaseReferenceWrapper {
+class DatabaseQueryWrapper {
   constructor(rawRef) {
     this._ref = rawRef;
     this._listeners = new Map();
   }
 
-  child(path) {
-    return new DatabaseReferenceWrapper(child(this._ref, path));
+  get key() {
+    return this._ref ? this._ref.key : null;
+  }
+
+  orderByChild(path) {
+    return new DatabaseQueryWrapper(query(this._ref, orderByChild(path)));
+  }
+
+  orderByKey() {
+    return new DatabaseQueryWrapper(query(this._ref, orderByKey()));
+  }
+
+  orderByValue() {
+    return new DatabaseQueryWrapper(query(this._ref, orderByValue()));
+  }
+
+  equalTo(value, key) {
+    return new DatabaseQueryWrapper(
+      key !== undefined ? query(this._ref, equalTo(value, key)) : query(this._ref, equalTo(value))
+    );
+  }
+
+  limitToFirst(limit) {
+    return new DatabaseQueryWrapper(query(this._ref, limitToFirst(limit)));
+  }
+
+  limitToLast(limit) {
+    return new DatabaseQueryWrapper(query(this._ref, limitToLast(limit)));
+  }
+
+  startAt(value, key) {
+    return new DatabaseQueryWrapper(
+      key !== undefined ? query(this._ref, startAt(value, key)) : query(this._ref, startAt(value))
+    );
+  }
+
+  endAt(value, key) {
+    return new DatabaseQueryWrapper(
+      key !== undefined ? query(this._ref, endAt(value, key)) : query(this._ref, endAt(value))
+    );
   }
 
   on(eventType, callback, cancelCallback) {
@@ -60,7 +107,16 @@ class DatabaseReferenceWrapper {
           callback({
             val: () => snap.val(),
             exists: () => snap.exists(),
-            key: snap.key
+            key: snap.key,
+            forEach: (cb) => {
+              snap.forEach((childSnap) => {
+                cb({
+                  val: () => childSnap.val(),
+                  exists: () => childSnap.exists(),
+                  key: childSnap.key
+                });
+              });
+            }
           });
         },
         (err) => {
@@ -83,8 +139,13 @@ class DatabaseReferenceWrapper {
       unsub();
       this._listeners.delete(callback);
     } else {
-      off(this._ref);
+      for (const unsub of this._listeners.values()) {
+        try { unsub(); } catch (_) {}
+      }
       this._listeners.clear();
+      try {
+        off(this._ref);
+      } catch (_) {}
     }
   }
 
@@ -94,10 +155,29 @@ class DatabaseReferenceWrapper {
       return {
         val: () => snap.val(),
         exists: () => snap.exists(),
-        key: snap.key
+        key: snap.key,
+        forEach: (cb) => {
+          snap.forEach((childSnap) => {
+            cb({
+              val: () => childSnap.val(),
+              exists: () => childSnap.exists(),
+              key: childSnap.key
+            });
+          });
+        }
       };
     }
     throw new Error(`Unsupported eventType: ${eventType}`);
+  }
+}
+
+class DatabaseReferenceWrapper extends DatabaseQueryWrapper {
+  constructor(rawRef) {
+    super(rawRef);
+  }
+
+  child(path) {
+    return new DatabaseReferenceWrapper(child(this._ref, path));
   }
 
   set(value) {
