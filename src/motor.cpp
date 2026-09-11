@@ -42,6 +42,7 @@ void Motor::start()
     if (devMode)
     {
         state = MotorState::RUNNING;
+        AppStorage::setLastMotorState("RUNNING");
         Logger::info(TAG, "Start commanded [DEV MODE] - state set to RUNNING");
     }
     else
@@ -69,6 +70,7 @@ void Motor::stop()
     if (devMode)
     {
         state = MotorState::OFF;
+        AppStorage::setLastMotorState("OFF");
         Logger::info(TAG, "Stop commanded [DEV MODE] - state set to OFF");
     }
     else

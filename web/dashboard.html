@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <!-- Bundled, tree-shaken modular Firebase v11 (replaces 5 legacy CDN compat scripts, saving ~76% payload) -->
-<script src="firebase-bundle.js?v=1.3.9"></script>
+<script src="firebase-bundle.js?v=1.4.0"></script>
 <script src="firebase-config.js"></script>
 <!-- Defines firebaseConfig - generated at deploy time from GitHub
      Actions secrets, or copy web/firebase-config.example.js locally
@@ -2118,6 +2118,16 @@
           <div id="notifyStatus" style="font-size:12px; margin-top:8px; opacity:0.8;"></div>
         </div>
 
+        <div class="settings-section" id="waZone">
+          <div class="settings-label">WhatsApp alerts</div>
+          <p class="settings-desc">Receive WhatsApp alerts for power loss, motor start/stop, and reconnection. Enter your international phone number with country code without + (e.g. <code>919876543210</code>).</p>
+          <div style="display:flex; gap:8px; margin-top:8px; max-width:360px;">
+            <input type="tel" id="waPhoneInput" class="time-input" placeholder="e.g. 919876543210" style="flex:1; padding:8px 12px; font-size:13px; font-family:var(--font-mono); border-radius:8px;" maxlength="20">
+            <button type="button" class="btn" id="waPhoneSaveBtn" style="padding:8px 18px; font-size:13px; font-weight:700; border-radius:8px;">Save</button>
+          </div>
+          <div id="waPhoneStatus" style="font-size:12px; margin-top:6px; opacity:0.8;"></div>
+        </div>
+
         <div class="settings-section">
           <div class="settings-label">Restart device</div>
           <p class="settings-desc">Reboots the ESP32 - back online in about 10-20 seconds. The motor itself isn't affected either way; it keeps running or stays off exactly as it was, since that's controlled by the starter panel's own hardware, not the device.</p>
@@ -2823,10 +2833,10 @@
       const stateEl = chip.querySelector('.chip-state');
       if (stateEl) {
         let stateKey = 'idle';
-        if (running) {
-          stateKey = 'running';
-        } else if (status === 'offline') {
+        if (status === 'offline') {
           stateKey = 'no-power';
+        } else if (running) {
+          stateKey = 'running';
         } else if (status === 'updating' || status === 'connecting') {
           stateKey = 'updating';
         }
@@ -2933,6 +2943,7 @@
     refreshNotifyUi();
     refreshAutoResumeUi(data.autoResume || {});
     refreshScheduleUi(data.schedule || {});
+    refreshWhatsAppUi(data);
   }
 
   // RSSI roughly: > -60 great, -60 to -70 good, -70 to -80 weak, < -80 poor
@@ -3857,6 +3868,41 @@
     notifyTestBtn.addEventListener('click', sendTestNotificationForSelectedDevice);
   }
 
+  // ---- WhatsApp Alerts ---------------------------------------------
+  const waPhoneInput = document.getElementById('waPhoneInput');
+  const waPhoneSaveBtn = document.getElementById('waPhoneSaveBtn');
+  const waPhoneStatus = document.getElementById('waPhoneStatus');
+
+  function refreshWhatsAppUi(data){
+    if (!waPhoneInput) return;
+    if (document.activeElement === waPhoneInput) return;
+    const phone = (data && data.whatsappPhone) || (data && data.status && data.status.whatsappPhone) || '';
+    waPhoneInput.value = phone;
+  }
+
+  if (waPhoneSaveBtn) {
+    waPhoneSaveBtn.addEventListener('click', async () => {
+      if (!selectedId) return;
+      const raw = waPhoneInput.value.trim();
+      const cleanPhone = raw.replace(/[^0-9]/g, '');
+      waPhoneSaveBtn.disabled = true;
+      waPhoneStatus.textContent = 'Saving…';
+      try {
+        await Promise.all([
+          db.ref(`devices/${selectedId}/whatsappPhone`).set(cleanPhone),
+          db.ref(`devices/${selectedId}/status/whatsappPhone`).set(cleanPhone),
+          db.ref(`devices/${selectedId}/command/action`).set('sync_whatsapp_phone')
+        ]);
+        waPhoneStatus.textContent = cleanPhone ? 'WhatsApp recipient saved!' : 'WhatsApp recipient cleared.';
+      } catch (err) {
+        console.error('Failed to save WhatsApp number', err);
+        waPhoneStatus.textContent = 'Error: ' + err.message;
+      } finally {
+        waPhoneSaveBtn.disabled = false;
+      }
+    });
+  }
+
   // ---- Auto-resume after power loss --------------------------------
   // Opt-in, off by default, per device - a physical motor restarting
   // with no one confirming it in the moment is a real safety-relevant
@@ -3902,7 +3948,10 @@
     if (shouldSave && selectedId && !autoResumeBusy) {
       const data = devices[selectedId] || {};
       if (data.autoResume && data.autoResume.enabled === true) {
-        db.ref(`devices/${selectedId}/autoResume/delayMinutes`).set(clamped)
+        Promise.all([
+          db.ref(`devices/${selectedId}/autoResume/delayMinutes`).set(clamped),
+          db.ref(`devices/${selectedId}/command/action`).set('sync_auto_resume')
+        ])
           .then(() => {
             autoResumeStatus.textContent = `Delay updated to ${clamped} minute${clamped === 1 ? '' : 's'}.`;
           })
@@ -3975,19 +4024,22 @@
 
     autoResumeBusy = true;
     autoResumeToggleBtn.disabled = true;
-    autoResumeStatus.textContent = currentlyEnabled ? 'Disabling\u2026' : 'Enabling\u2026';
+    autoResumeStatus.textContent = currentlyEnabled ? 'Disabling…' : 'Enabling…';
 
     try {
       if (currentlyEnabled) {
         await Promise.all([
           db.ref(`devices/${selectedId}/autoResume/enabled`).set(false),
-          db.ref(`devices/${selectedId}/command/action`).set('cancel_auto_resume'),
+          db.ref(`devices/${selectedId}/command/action`).set('sync_auto_resume'),
           db.ref(`devices/${selectedId}/motor/stateBeforeOutage`).remove().catch(() => {})
         ]);
         autoResumeStatus.textContent = 'Auto-resume disabled.';
       } else {
         const delayMinutes = clampDelayInput(autoResumeDelayInput ? autoResumeDelayInput.value : 5);
-        await db.ref(`devices/${selectedId}/autoResume`).update({ enabled: true, delayMinutes });
+        await Promise.all([
+          db.ref(`devices/${selectedId}/autoResume`).update({ enabled: true, delayMinutes }),
+          db.ref(`devices/${selectedId}/command/action`).set('sync_auto_resume')
+        ]);
         autoResumeStatus.textContent = `Enabled - will restart ${delayMinutes} minute${delayMinutes === 1 ? '' : 's'} after power returns, only if it was running before the outage.`;
       }
     } catch (err) {

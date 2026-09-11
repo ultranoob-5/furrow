@@ -30,6 +30,10 @@ namespace
 
     String htmlPage(const String &statusMessage = "")
     {
+        String curName = AppStorage::deviceName();
+        String curOwner = AppStorage::ownerEmail();
+        String curPhone = AppStorage::whatsAppPhone();
+
         String html = R"HTML(
 <!DOCTYPE html>
 <html>
@@ -64,11 +68,11 @@ namespace
       <label>Password</label>
       <input type="password" name="password" placeholder="WiFi password">
       <label>Device Name</label>
-      <input type="text" name="devicename" placeholder="e.g. Farm Pump" maxlength="40">
+      <input type="text" name="devicename" value=")HTML" + curName + R"HTML(" placeholder="e.g. Farm Pump" maxlength="40">
       <label>Owner Email</label>
-      <input type="email" name="owner" placeholder="you@example.com" maxlength="60">
+      <input type="email" name="owner" value=")HTML" + curOwner + R"HTML(" placeholder="you@example.com" maxlength="60">
       <label>WhatsApp Alerts (optional)</label>
-      <input type="text" name="wa_phone" placeholder="Your number, digits only e.g. 919876543210" maxlength="20">
+      <input type="text" name="wa_phone" value=")HTML" + curPhone + R"HTML(" placeholder="Your number, digits only e.g. 919876543210" maxlength="20">
       <label class="check-row">
         <input type="checkbox" name="dev_mode" value="1")HTML";
         if (AppStorage::isDevelopmentDevice())
@@ -170,11 +174,8 @@ namespace
         AppStorage::setWifiCredentials(ssid, password);
         AppStorage::setDeviceConfig(deviceName, owner);
 
-        // Genuinely optional - blank is a valid choice (no alerts).
-        if (waPhone.length() > 0)
-        {
-            AppStorage::setWhatsAppConfig(waPhone);
-        }
+        // Genuinely optional - blank is a valid choice (clears alerts).
+        AppStorage::setWhatsAppConfig(waPhone);
 
         bool isDevMode = server.hasArg("dev_mode");
         AppStorage::setDevelopmentDevice(isDevMode);

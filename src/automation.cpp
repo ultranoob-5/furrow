@@ -30,6 +30,9 @@ namespace Automation
         String lastState = AppStorage::lastMotorState();
         uint8_t delayMin = AppStorage::autoResumeDelayMinutes();
 
+        Logger::info(TAG, "Ready - AutoResume: " + String(enabled ? "ENABLED (" + String(delayMin) + "m)" : "DISABLED") +
+                           ", LastMotorState: \"" + lastState + "\"");
+
         // If auto-resume is enabled and the motor was RUNNING when power was lost,
         // schedule a local start after the configured delay.
         if (enabled && lastState == "RUNNING")
@@ -43,6 +46,10 @@ namespace Automation
         }
         else
         {
+            if (!enabled && lastState == "RUNNING")
+            {
+                Logger::info(TAG, "Auto-resume is DISABLED in NVS - skipping local start despite pre-outage RUNNING state");
+            }
             // Clear stale state if any
             if (lastState.length() > 0)
                 AppStorage::setLastMotorState("");

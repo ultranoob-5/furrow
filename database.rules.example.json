@@ -6,7 +6,10 @@
       "$deviceId": {
         ".read": "auth != null && (auth.token.email == 'device@your-project-id.local' || data.child('status/owner').val() == auth.token.email)",
         "status": {
-          ".write": "auth != null && auth.token.email == 'device@your-project-id.local'"
+          ".write": "auth != null && auth.token.email == 'device@your-project-id.local'",
+          "whatsappPhone": {
+            ".write": "auth != null && (auth.token.email == 'device@your-project-id.local' || auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val())"
+          }
         },
         "motor": {
           ".write": "auth != null && auth.token.email == 'device@your-project-id.local'",
@@ -26,6 +29,9 @@
           }
         },
         "displayName": {
+          ".write": "auth != null && auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+        },
+        "whatsappPhone": {
           ".write": "auth != null && auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
         },
         "fcmTokens": {

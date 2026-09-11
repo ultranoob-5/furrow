@@ -44,7 +44,7 @@ async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag,
     const status = (data && data.status) || {};
     const lastSeen = status.lastSeen;
     const name = status.name || deviceId;
-    const phone = status.whatsappPhone;
+    const phone = status.whatsappPhone || (data && data.whatsappPhone);
     const alreadyAlerted = status.powerAlertSent === true;
 
     if (lastSeen === undefined || lastSeen === null) {
@@ -302,7 +302,11 @@ async function sendAlertToDevice({ deviceId, name, title, body, whatsappMessage 
   const whatsappPromise = (async () => {
     try {
       const phoneSnap = await db.ref(`devices/${deviceId}/status/whatsappPhone`).once("value");
-      const phone = phoneSnap.val();
+      let phone = phoneSnap.val();
+      if (!phone) {
+        const rootPhoneSnap = await db.ref(`devices/${deviceId}/whatsappPhone`).once("value");
+        phone = rootPhoneSnap.val();
+      }
       if (phone) {
         await sendWhatsAppReal(phone, whatsappMessage || body);
         logger.info(`[WhatsApp] Alert sent to ${phone} for ${deviceId} (${name})`);

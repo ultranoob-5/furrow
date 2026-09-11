@@ -95,19 +95,28 @@ namespace AppStorage
 
     bool hasWhatsAppConfig()
     {
-        return prefs.isKey(KEY_WA_PHONE) && prefs.getString(KEY_WA_PHONE).length() > 0;
+        return prefs.isKey(KEY_WA_PHONE) && prefs.getString(KEY_WA_PHONE, "").length() > 0;
     }
 
     String whatsAppPhone()
     {
+        if (!prefs.isKey(KEY_WA_PHONE))
+            return "";
         return prefs.getString(KEY_WA_PHONE, "");
     }
 
     void setWhatsAppConfig(const String &phone)
     {
-        prefs.putString(KEY_WA_PHONE, phone);
-
-        Logger::info(TAG, "WhatsApp notification recipient saved");
+        if (phone.length() == 0)
+        {
+            prefs.remove(KEY_WA_PHONE);
+            Logger::info(TAG, "WhatsApp notification recipient cleared");
+        }
+        else
+        {
+            prefs.putString(KEY_WA_PHONE, phone);
+            Logger::info(TAG, "WhatsApp notification recipient saved: " + phone);
+        }
     }
 
     bool isDevelopmentDevice()

@@ -1,4 +1,11 @@
 
+## [1.4.0] - 2026-09-11
+
+- **Instant Remote NVS Auto-Resume Synchronization**: Added `sync_auto_resume` remote command handler in firmware and connected dashboard toggle/delay changes to dispatch it immediately. Ensures ESP32 NVS flash storage holds the active auto-resume configuration and pre-outage motor state prior to mains power failure, enabling true offline local reboot autonomy without internet connectivity.
+- **Dashboard WhatsApp Alerts & Dual-Path Fallback**: Added a WhatsApp alerts configuration card directly in the web dashboard settings. Cloud functions and firmware now synchronize WhatsApp recipient numbers both from `devices/{id}/whatsappPhone` and `devices/{id}/status/whatsappPhone` with automatic NVS storage and safe handling of unset keys.
+- **Power-Loss Overview Priority**: Fixed device card status hierarchy in `dashboard.html` to prioritize offline/power-loss detection over stale `RUNNING` indicators, immediately showing "No Power" upon device disconnect.
+- **DevMode NVS State Persistence**: Ensured `Motor::start()` and `Motor::stop()` immediately record `RUNNING` and `OFF` states to NVS in development mode for offline recovery testing.
+
 ## [1.3.9] - 2026-09-11
 
 - **Motor-Guarded Power Loss Alerts**: Updated Cloud Functions `powerWatchdog` to only send power loss notifications (WhatsApp and FCM Push) when the motor was actively `RUNNING` at the time of the outage. If the pump is already `OFF`, the outage does not interrupt irrigation, avoiding nuisance alert spam when mains power flickers on an idle pump.

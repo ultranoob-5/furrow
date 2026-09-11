@@ -63,6 +63,7 @@ namespace
     // Synchronization tracking with Firebase RTDB
     bool autoResumeChecked = false;
     bool scheduleChecked = false;
+    bool whatsAppChecked = false;
     String stateBeforeOutage = "";
     bool remoteStartPending = false;
     bool remoteStopPending = false;
@@ -197,6 +198,20 @@ namespace
             return;
         }
 
+        if (result.uid() == "fetchWhatsAppPhone")
+        {
+            RealtimeDatabaseResult &rtdb = result.to<RealtimeDatabaseResult>();
+            String phone = rtdb.to<String>();
+            phone.replace("\"", "");
+            phone.trim();
+            if (phone.length() > 0 && phone != "null")
+            {
+                AppStorage::setWhatsAppConfig(phone);
+                cloud.publishDevice();
+            }
+            return;
+        }
+
         // Only the command stream task carries remote commands.
         if (result.uid() != "commandStream")
             return;
@@ -210,7 +225,7 @@ namespace
 
         if (value == "start" || value == "stop" || value == "restart" || value == "shutdown" ||
             value == "update" || value == "factory_reset" || value == "cancel_auto_resume" ||
-            value == "sync_schedule")
+            value == "sync_schedule" || value == "sync_auto_resume" || value == "sync_whatsapp_phone")
             pendingCommand = value;
     }
 
@@ -228,12 +243,30 @@ namespace
             return;
         }
 
+        if (pendingCommand == "sync_auto_resume")
+        {
+            Logger::info(TAG, "Remote command: SYNC_AUTO_RESUME");
+            pendingCommand = "";
+            database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
+            database.get(aClientMain, autoResumePath, processData, false, "fetchAutoResume");
+            return;
+        }
+
         if (pendingCommand == "sync_schedule")
         {
             Logger::info(TAG, "Remote command: SYNC_SCHEDULE");
             pendingCommand = "";
             database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
             database.get(aClientMain, schedulePath, processData, false, "fetchSchedule");
+            return;
+        }
+
+        if (pendingCommand == "sync_whatsapp_phone")
+        {
+            Logger::info(TAG, "Remote command: SYNC_WHATSAPP_PHONE");
+            pendingCommand = "";
+            database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
+            database.get(aClientMain, "/devices/" + device.id() + "/whatsappPhone", processData, false, "fetchWhatsAppPhone");
             return;
         }
 
@@ -557,6 +590,7 @@ void Cloud::loop()
         lastHeartbeat = 0;
         autoResumeChecked = false;
         scheduleChecked = false;
+        whatsAppChecked = false;
 
         unsigned long downtimeMs = Network::lastDisconnectDurationMs();
 
@@ -601,6 +635,15 @@ void Cloud::loop()
     {
         scheduleChecked = true;
         database.get(aClientMain, schedulePath, processData, false, "fetchSchedule");
+    }
+
+    if (!whatsAppChecked)
+    {
+        whatsAppChecked = true;
+        if (!AppStorage::hasWhatsAppConfig())
+        {
+            database.get(aClientMain, "/devices/" + device.id() + "/whatsappPhone", processData, false, "fetchWhatsAppPhone");
+        }
     }
 
     if (!otaStatusReset)
