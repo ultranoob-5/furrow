@@ -79,34 +79,41 @@ async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag,
       continue;
     }
 
-    let anySent = false;
-
-    if (phone) {
+    // Dispatch both WhatsApp and PWA Push concurrently - neither blocks or skips the other
+    const whatsappPromise = (async () => {
+      if (!phone) {
+        logger.info(`${deviceId} (${name}): offline ${offlineSeconds}s, no WhatsApp recipient configured - skipping WhatsApp`);
+        return false;
+      }
       try {
-        await sendWhatsApp(phone, `\u26a0\ufe0f Power Cut Alert! Electricity lost at ${name}. Motor is OFF.`);
-        anySent = true;
+        await sendWhatsApp(phone, `⚠️ Power Cut Alert! Electricity lost at ${name}. Motor is OFF.`);
+        return true;
       } catch (err) {
         logger.error(`  WhatsApp send failed: ${err}`);
+        return false;
       }
-    } else {
-      logger.info(`${deviceId} (${name}): offline ${offlineSeconds}s, no WhatsApp recipient configured - skipping WhatsApp`);
-    }
+    })();
 
-    if (sendPush) {
+    const pushPromise = (async () => {
+      if (!sendPush) return false;
       try {
-        const pushResult = await sendPush(deviceId, `\u26a0\ufe0f ${name}: Power Cut`, `Power lost at ${name}. Motor is OFF.`);
-        if (pushResult && pushResult.sent > 0) anySent = true;
+        const pushResult = await sendPush(deviceId, `⚠️ ${name}: Power Cut`, `Power lost at ${name}. Motor is OFF.`);
+        return !!(pushResult && pushResult.sent > 0);
       } catch (err) {
         logger.error(`  Push send failed: ${err}`);
+        return false;
       }
-    }
+    })();
+
+    const [waSent, pwaSent] = await Promise.all([whatsappPromise, pushPromise]);
+    const anySent = waSent || pwaSent;
 
     if (!anySent) {
       logger.info(`${deviceId} (${name}): offline ${offlineSeconds}s, no channel available or all sends failed - will retry next run`);
       continue; // don't mark alerted - neither channel worked (or neither is configured)
     }
 
-    logger.info(`${deviceId} (${name}): offline ${offlineSeconds}s - alerted`);
+    logger.info(`${deviceId} (${name}): offline ${offlineSeconds}s - alerted (WhatsApp: ${waSent}, PWA Push: ${pwaSent})`);
 
     try {
       // Snapshot motor state HERE, at first detection - not later, at
@@ -187,6 +194,16 @@ async function sendPushToDevice(deviceId, title, body) {
       deviceId,
       url: `./dashboard.html?device=${encodeURIComponent(deviceId)}`,
       click_action: `./dashboard.html?device=${encodeURIComponent(deviceId)}`,
+      timestamp: String(Date.now()),
+    },
+    webpush: {
+      headers: {
+        Urgency: "high",
+        TTL: "86400",
+      },
+      fcmOptions: {
+        link: `./dashboard.html?device=${encodeURIComponent(deviceId)}`,
+      },
     },
   });
 
@@ -485,6 +502,16 @@ exports.sendTestNotification = onCall(async (request) => {
         body,
         url: "./dashboard.html",
         click_action: "./dashboard.html",
+        timestamp: String(Date.now()),
+      },
+      webpush: {
+        headers: {
+          Urgency: "high",
+          TTL: "86400",
+        },
+        fcmOptions: {
+          link: "./dashboard.html",
+        },
       },
     });
 

@@ -144,11 +144,16 @@ try {
       const body = (payload.data && payload.data.body) || '';
       const url = (payload.data && (payload.data.url || payload.data.click_action)) || './dashboard.html';
 
+      const deviceId = payload.data && payload.data.deviceId;
       self.registration.showNotification(title, {
         body,
         icon: './icons/icon-192.png',
         badge: './icons/icon-192.png',
-        data: { url }
+        tag: deviceId ? `furrow-${deviceId}` : 'furrow-alert',
+        renotify: true,
+        requireInteraction: true,
+        vibrate: [200, 100, 200],
+        data: { url, deviceId }
       });
     });
   }
