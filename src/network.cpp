@@ -24,58 +24,42 @@ bool Network::begin()
     String ssid = AppStorage::wifiSSID();
     String password = AppStorage::wifiPassword();
 
-    // Retries a few times (each with the existing 15s timeout) before
-    // giving up entirely, rather than falling back to full
-    // reprovisioning after a single attempt. A transient issue right
-    // at boot - the router still rebooting after a shared power blip,
-    // for instance - shouldn't wipe perfectly good stored credentials
-    // and strand the device waiting for someone to physically visit
-    // and reconfigure it through the captive portal. This is the same
-    // resilience philosophy Network::loop() already applies once
-    // running (retries indefinitely, every 5s) - this just extends it
-    // to cover the boot-time connection too, instead of only what
-    // happens after the first one succeeds.
-    constexpr int MAX_CONNECT_ATTEMPTS = 3;
+    // Fast initial connect attempt (8s) so the motor controller boots and
+    // starts local protection/control immediately without waiting 45s if
+    // the farm router is still booting after a power cut. If this times out,
+    // boot continues locally and Network::loop() reconnects in the background.
+    constexpr unsigned long BOOT_CONNECT_TIMEOUT_MS = 8000;
 
-    for (int attempt = 1; attempt <= MAX_CONNECT_ATTEMPTS; attempt++)
+    Logger::info(TAG, "Connecting to WiFi \"" + ssid + "\"...");
+
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid.c_str(), password.c_str());
+
+    unsigned long start = millis();
+
+    while (WiFi.status() != WL_CONNECTED)
     {
-        Logger::info(TAG, "Connecting to WiFi \"" + ssid + "\" (attempt " +
-                           String(attempt) + "/" + String(MAX_CONNECT_ATTEMPTS) + ")...");
+        if (millis() - start >= BOOT_CONNECT_TIMEOUT_MS)
+            break;
 
-        WiFi.mode(WIFI_STA);
-        WiFi.begin(ssid.c_str(), password.c_str());
-
-        unsigned long start = millis();
-
-        while (WiFi.status() != WL_CONNECTED)
-        {
-            if (millis() - start >= CONNECT_TIMEOUT_MS)
-                break;
-
-            delay(300);
-        }
-
-        if (WiFi.status() == WL_CONNECTED)
-        {
-            wasConnected = true;
-
-            Logger::info(TAG, "WiFi connected - IP: " + WiFi.localIP().toString() +
-                               ", RSSI: " + String(WiFi.RSSI()) + " dBm");
-
-            // Synchronize with atomic clocks via NTP in IST (UTC+5:30, 19800 seconds).
-            // No DST offset needed for India.
-            configTime(19800, 0, "pool.ntp.org", "time.google.com");
-
-            return true;
-        }
-
-        Logger::warn(TAG, "Connect attempt " + String(attempt) + " timed out");
-
-        WiFi.disconnect();
+        delay(200);
     }
 
-    Logger::warn(TAG, "All " + String(MAX_CONNECT_ATTEMPTS) + " connect attempts failed");
+    if (WiFi.status() == WL_CONNECTED)
+    {
+        wasConnected = true;
 
+        Logger::info(TAG, "WiFi connected - IP: " + WiFi.localIP().toString() +
+                           ", RSSI: " + String(WiFi.RSSI()) + " dBm");
+
+        // Synchronize with atomic clocks via NTP in IST (UTC+5:30, 19800 seconds).
+        // No DST offset needed for India.
+        configTime(19800, 0, "pool.ntp.org", "time.google.com");
+
+        return true;
+    }
+
+    Logger::warn(TAG, "Initial WiFi connect timed out - continuing boot in local mode (will reconnect in background)");
     return false;
 }
 
@@ -87,7 +71,10 @@ void Network::loop()
     {
         lastDisconnectDuration = (disconnectedAt > 0) ? (millis() - disconnectedAt) : 0;
 
-        Logger::info(TAG, "WiFi reconnected - was down for " + String(lastDisconnectDuration / 1000) + "s");
+        Logger::info(TAG, "WiFi connected - IP: " + WiFi.localIP().toString() +
+                           ", RSSI: " + String(WiFi.RSSI()) + " dBm" +
+                           (disconnectedAt > 0 ? " (was down for " + String(lastDisconnectDuration / 1000) + "s)" : ""));
+        configTime(19800, 0, "pool.ntp.org", "time.google.com");
         reconnectEvent = true;
     }
     else if (!connected && wasConnected)

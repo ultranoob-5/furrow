@@ -35,6 +35,7 @@ private:
     bool readingReady = false;
     bool running = false;
     uint8_t consecutiveAboveRunThreshold = 0;
+    uint8_t consecutiveBelowStopThreshold = 0;
 
     // Based on the Mottramlabs single-channel adaptation:
     // 400 samples at 1 ms gives about 20 cycles at 50 Hz - that's the
@@ -108,13 +109,13 @@ private:
     // 3 windows, whatever one window's real duration actually is (see
     // SAMPLES's comment above - not a fixed ~1.2s guarantee, since
     // that depends on main.cpp's loop() cadence; check
-    // windowStartUs's log for the real number on real hardware). A
-    // small price either way for a farm pump that was never going to
-    // be checked on a sub-second timescale anyway.
-    // OFF deliberately stays immediate (no equivalent counter) - there's
-    // no reason to delay reporting a real stop, and a single low-current
-    // window is already good evidence the motor isn't drawing power.
+    // windowStartUs's log for the real number on real hardware).
     static constexpr uint8_t RUN_CONFIRM_WINDOWS = 3;
+
+    // OFF detection debounce: require 2 consecutive low-current windows
+    // below STOP_THRESHOLD_A to declare the motor OFF. Prevents a single
+    // noise dip or transient ADC artifact from falsely claiming the motor stopped.
+    static constexpr uint8_t STOP_CONFIRM_WINDOWS = 2;
 };
 
 extern CurrentSensor currentSensor;

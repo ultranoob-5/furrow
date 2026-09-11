@@ -6,6 +6,7 @@
 #include "device.h"
 #include "motor.h"
 #include "cloud.h"
+#include "automation.h"
 #include "notify.h"
 
 namespace
@@ -98,17 +99,17 @@ void setup()
         Provisioning::run(); // blocks, restarts the device once done
     }
 
-    if (!Network::begin())
-    {
-        // Stored credentials didn't work (wrong password, network gone,
-        // moved locations) - fall back to provisioning rather than
-        // retrying a connection that clearly isn't going to succeed.
-        Provisioning::run();
-    }
+    // Attempt initial WiFi connection (up to 8s). If the router is still
+    // rebooting after a power outage, boot proceeds immediately to start
+    // local motor protection and automation without delay. Network::loop()
+    // will reconnect in the background as soon as WiFi becomes available.
+    Network::begin();
 
     device.begin();
 
     motor.begin();
+
+    Automation::begin();
 
     cloud.begin();
 
@@ -140,6 +141,8 @@ void loop()
     device.loop();
 
     motor.update();
+
+    Automation::loop();
 
     // Motor state now comes from the CT current sensor, so this catches
     // remote commands, physical starter-button operation, and real
@@ -186,6 +189,10 @@ void loop()
         previousMotorRunning = runningNow;
 
         Serial.println(runningNow ? "Motor is now RUNNING" : "Motor is now OFF");
+
+        // Persist confirmed motor state in NVS so an unexpected power cut
+        // knows locally if the motor was running before losing power.
+        AppStorage::setLastMotorState(runningNow ? "RUNNING" : "OFF");
 
         if (runningNow)
         {

@@ -2298,6 +2298,7 @@
   const auth = firebase.auth();
   const db = firebase.database();
   const devicesRef = db.ref('devices');
+  let userDevicesQuery = null;
 
   // ---- Connection status (this browser, not any device) ---------------
   // Two signals combined: navigator.onLine fires instantly the moment
@@ -3366,39 +3367,25 @@
       </div>`;
     }, 8000);
 
-    devicesRef.on('value', (snap) => {
+    if (userDevicesQuery) {
+      userDevicesQuery.off('value');
+    }
+
+    // Query only devices owned by the signed-in user, strictly aligning with
+    // Firebase RTDB security rules and preventing any unauthorized global reads.
+    userDevicesQuery = devicesRef.orderByChild('status/owner').equalTo(currentUserEmail);
+
+    userDevicesQuery.on('value', (snap) => {
       receivedFirstSnapshot = true;
 
-      const allDevices = snap.val() || {};
-
-      // Only ever show/act on devices this signed-in user actually owns -
-      // every device publishes its own owner email as part of its status,
-      // set at flash time. Filtering client-side is just for a clean UI;
-      // the real enforcement is in the RTDB rules, which check the same
-      // field for every write regardless of what the dashboard displays.
-      const newDevices = {};
-      Object.keys(allDevices).forEach((id) => {
-        const ownerEmail = allDevices[id] && allDevices[id].status && allDevices[id].status.owner;
-        if (ownerEmail === currentUserEmail) newDevices[id] = allDevices[id];
-      });
-
-      devices = newDevices;
+      devices = snap.val() || {};
 
       const ids = Object.keys(devices);
 
       if (ids.length === 0){
         panelEl.style.display = 'none';
-
-        // Distinguish "nothing exists yet at all" from "devices exist,
-        // just none are registered to you" - different next steps for
-        // the person looking at this screen.
-        if (Object.keys(allDevices).length === 0){
-          emptyStateEl.style.display = 'block';
-          noOwnedDevicesEl.style.display = 'none';
-        } else {
-          emptyStateEl.style.display = 'none';
-          noOwnedDevicesEl.style.display = 'block';
-        }
+        emptyStateEl.style.display = 'block';
+        noOwnedDevicesEl.style.display = 'none';
 
         renderOverview();
         return;
@@ -3452,6 +3439,10 @@
       // forever underneath, silently accumulating one more on every
       // login/logout cycle in the same browser session - each firing
       // redundantly on every future device update.
+      if (userDevicesQuery) {
+        userDevicesQuery.off('value');
+        userDevicesQuery = null;
+      }
       devicesRef.off('value');
 
       devices = {};

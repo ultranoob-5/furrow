@@ -1,4 +1,9 @@
 
+## [1.3.9] - 2026-09-11
+
+- **Motor-Guarded Power Loss Alerts**: Updated Cloud Functions `powerWatchdog` to only send power loss notifications (WhatsApp and FCM Push) when the motor was actively `RUNNING` at the time of the outage. If the pump is already `OFF`, the outage does not interrupt irrigation, avoiding nuisance alert spam when mains power flickers on an idle pump.
+- **Offline Autonomy & Dynamic Schedule / Auto-Resume**: Decoupled automation engine (`Automation`) and persisted all schedule timings, auto-resume parameters, and last motor states in ESP32 NVS flash storage (`AppStorage`), guaranteeing full local operation without internet dependency.
+
 ## [1.3.8] - 2026-09-10
 
 - **Remote Start/Stop Attribution Decoupling**: Decoupled state transition attribution

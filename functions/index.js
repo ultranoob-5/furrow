@@ -6,6 +6,7 @@ const { logger } = require("firebase-functions");
 const admin = require("firebase-admin");
 const { getDatabase } = require("firebase-admin/database");
 const { getMessaging } = require("firebase-admin/messaging");
+const { Readable } = require("stream");
 
 admin.initializeApp();
 
@@ -67,6 +68,17 @@ async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag,
     }
 
     const offlineSeconds = Math.floor(ageMs / 1000);
+    const motor = (data && data.motor) || {};
+    const wasRunning = (motor.state === "RUNNING");
+
+    // Only notify power loss when the motor was actively RUNNING before the outage.
+    // If the pump was already OFF, the power cut does not interrupt irrigation,
+    // avoiding nuisance alerts when mains power flickers on an idle pump.
+    if (!wasRunning) {
+      logger.info(`${deviceId} (${name}): offline ${offlineSeconds}s, but motor was not RUNNING (${motor.state || "OFF"}) - skipping power loss alert`);
+      continue;
+    }
+
     let anySent = false;
 
     if (phone) {
@@ -110,7 +122,6 @@ async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag,
       // motor actually running right before the outage" needs to be
       // answered from a value that was frozen before recovery could
       // possibly race it.
-      const motor = (data && data.motor) || {};
       await setDedupFlag(deviceId, motor.state);
     } catch (err) {
       logger.error(`  Failed to set dedup flag (may re-alert next run): ${err}`);
@@ -228,9 +239,12 @@ exports.powerWatchdog = onSchedule(
         // reflects that the pump is no longer running while unpowered,
         // while preserving motor/stateBeforeOutage so autoResume knows
         // to resume when power is restored.
+        const safeState = (motorStateAtOutage === "RUNNING" || motorStateAtOutage === "OFF")
+          ? motorStateAtOutage
+          : null;
         await db.ref(`devices/${deviceId}`).update({
           "status/powerAlertSent": true,
-          "motor/stateBeforeOutage": motorStateAtOutage || null,
+          "motor/stateBeforeOutage": safeState,
           "motor/state": "OFF",
         });
       },
@@ -450,13 +464,15 @@ exports.sendTestNotification = onCall(async (request) => {
   }
 
   const token = request.data && request.data.token;
-  if (!token || typeof token !== "string") {
-    throw new HttpsError("invalid-argument", "Missing FCM token.");
+  if (!token || typeof token !== "string" || token.length > 500) {
+    throw new HttpsError("invalid-argument", "Missing or invalid FCM token.");
   }
 
-  const title = (request.data && request.data.title) || "Furrow test";
-  const body = (request.data && request.data.body) ||
+  const rawTitle = (request.data && request.data.title) || "Furrow test";
+  const rawBody = (request.data && request.data.body) ||
     "If you see this, push notifications work.";
+  const title = String(rawTitle).slice(0, 100);
+  const body = String(rawBody).slice(0, 500);
 
   try {
     const messageId = await getMessaging().send({
@@ -550,7 +566,8 @@ exports.firmwareProxy = onRequest({ invoker: "public" }, async (req, res) => {
     }
 
     res.set("Content-Type", "application/octet-stream");
-    res.send(Buffer.from(await upstream.arrayBuffer()));
+    res.set("Cache-Control", "public, max-age=86400, s-maxage=86400");
+    Readable.fromWeb(upstream.body).pipe(res);
   } catch (err) {
     logger.error(`[FirmwareProxy] fetch failed for ${tag}/${file}: ${err}`);
     res.status(502).send("Failed to fetch firmware from GitHub");

@@ -145,15 +145,17 @@ port, relay cables, and serial pins. ~1.2h print time.
 - If WiFi drops for 30 seconds or longer (but the device stays
   powered), you get a message the moment it reconnects, saying how
   long it was gone
-- **Real power-loss alerts**, even when the device is fully switched
+- **Real power-loss alerts (motor-guarded)**, even when the device is fully switched
   off and can't report anything itself: a small program running on
   Google's own servers (a "Cloud Function" - not on the ESP32 itself)
   checks in on every device roughly once a minute, independent of the
-  device. If one's gone quiet, it sends the alert. This piece needs
-  Firebase's paid "Blaze" plan - see [SETUP.md](SETUP.md) step 8 for
-  why that's still effectively free at this scale
+  device. If a device has gone quiet for 30+ seconds AND the motor was actively
+  running at the time of the outage, it sends WhatsApp and browser push alerts.
+  If the pump was already OFF, it skips alerting to eliminate nuisance spam when
+  mains power flickers on an idle pump. This piece needs Firebase's paid "Blaze" plan -
+  see [SETUP.md](SETUP.md) step 8 for why that's still effectively free at this scale
 - **Browser/PWA push notifications**, alongside WhatsApp, for the same
-  events: power loss, power restored, and the motor starting or
+  events: power loss (when motor was running), power restored, and the motor starting or
   stopping (including a physical button press at the panel, not just
   remote commands - this comes from the same real current-sensor
   feedback as everything else). A motor-started notification also
@@ -182,11 +184,10 @@ port, relay cables, and serial pins. ~1.2h print time.
 - **Scheduled on/off** (optional, off by default, per device): turns
   the pump on at a set time every day, and off at another - a normal
   daily irrigation schedule. Managed directly on-device using atomic
-  SNTP time synchronization (IST UTC+5:30) without needing scheduled
-  cloud cron jobs. Manual control always wins - stopping it yourself
-  during the "on" window keeps it off until tomorrow's cycle, the
-  schedule never overrides a same-day manual stop. Requires an
-  active internet connection to execute, preventing blind offline runs.
+  SNTP time synchronization (IST UTC+5:30) and persisted in ESP32 NVS flash,
+  executing reliably even if internet connectivity temporarily drops. Manual control
+  always wins - stopping it yourself during the "on" window keeps it off until tomorrow's
+  cycle, the schedule never overrides a same-day manual stop.
   Real-time sync, WhatsApp notifications, and push notifications included.
 
 **Releases**
@@ -209,6 +210,12 @@ device trips, the ESP32 loses power too, at the same moment. The
 dashboard uses exactly that: if a device goes silent for 30+ seconds,
 it's shown as "No Power" rather than a generic "offline," because in
 practice that's almost always what actually happened.
+
+Power-loss alerts (WhatsApp and FCM push notifications via Cloud Functions)
+are **guarded by motor state**: they are dispatched only if the pump was actively
+`RUNNING` when power was cut. If electricity cuts out while the pump is already
+idle (`OFF`), no alerts are sent, preventing disturbance during routine power cuts
+when irrigation is not underway.
 
 **Not yet done:**
 - **Motor-fault alerts.** Alerts currently cover device health,

@@ -87,8 +87,9 @@ async function main() {
     "dev-fresh":     { status: { lastSeen: nowMs - 5000,  name: "Fresh",     whatsappPhone: "111", powerAlertSent: false } },
     "dev-stale-new": { status: { lastSeen: nowMs - 45000, name: "StaleNew",  whatsappPhone: "222", powerAlertSent: false }, motor: { state: "RUNNING" } },
     "dev-stale-old": { status: { lastSeen: nowMs - 90000, name: "StaleOld",  whatsappPhone: "333", powerAlertSent: true } },
-    "dev-no-phone":  { status: { lastSeen: nowMs - 60000, name: "NoPhone",   powerAlertSent: false } },
-    "dev-push-only": { status: { lastSeen: nowMs - 70000, name: "PushOnly",  powerAlertSent: false } },
+    "dev-stale-off": { status: { lastSeen: nowMs - 55000, name: "StaleOff",  whatsappPhone: "444", powerAlertSent: false }, motor: { state: "OFF" } },
+    "dev-no-phone":  { status: { lastSeen: nowMs - 60000, name: "NoPhone",   powerAlertSent: false }, motor: { state: "RUNNING" } },
+    "dev-push-only": { status: { lastSeen: nowMs - 70000, name: "PushOnly",  powerAlertSent: false }, motor: { state: "RUNNING" } },
     "dev-never":     { status: { name: "Never" } },
   };
 
@@ -100,8 +101,8 @@ async function main() {
   // Devices that "have push tokens registered" in this fake - everyone
   // except dev-no-phone (whose whole point is testing "neither channel
   // configured" still gets skipped safely) and the ones that shouldn't
-  // reach the send stage at all (dev-fresh, dev-stale-old, dev-never).
-  const hasPushTokens = new Set(["dev-stale-new", "dev-push-only"]);
+  // reach the send stage at all (dev-fresh, dev-stale-old, dev-stale-off, dev-never).
+  const hasPushTokens = new Set(["dev-stale-new", "dev-push-only", "dev-stale-off"]);
 
   const alerted = await runWatchdog({
     fetchDevices: async () => fakeDevices,
@@ -132,6 +133,7 @@ async function main() {
   assert(alerted.includes("dev-stale-new"), "Expected dev-stale-new to be alerted (has both WhatsApp and push)");
   assert(alerted.includes("dev-push-only"), "Expected dev-push-only to be alerted (push alone, no WhatsApp phone configured)");
   assert(!alerted.includes("dev-no-phone"), "Expected dev-no-phone to NOT be alerted (neither channel configured)");
+  assert(!alerted.includes("dev-stale-off"), "Expected dev-stale-off to NOT be alerted (motor was OFF at outage)");
 
   assert(sent.length === 1 && sent[0][0] === "222", "Expected phone 222 (dev-stale-new) to be the only WhatsApp recipient");
   assert(sent[0][1].includes("StaleNew"), "Expected WhatsApp message to mention StaleNew");
@@ -145,15 +147,16 @@ async function main() {
 
   assert(motorStatesSnapshotted["dev-stale-new"] === "RUNNING",
     `Expected dev-stale-new's motor state (RUNNING) to be snapshotted at outage detection, got ${motorStatesSnapshotted["dev-stale-new"]}`);
-  assert(motorStatesSnapshotted["dev-push-only"] === undefined,
-    `Expected dev-push-only (no motor field at all in the fake) to snapshot as undefined, got ${motorStatesSnapshotted["dev-push-only"]}`);
+  assert(motorStatesSnapshotted["dev-push-only"] === "RUNNING",
+    `Expected dev-push-only's motor state (RUNNING) to be snapshotted at outage detection, got ${motorStatesSnapshotted["dev-push-only"]}`);
 
   console.log("\nALL ASSERTIONS PASS:");
   console.log("- dev-fresh (5s): correctly skipped, too recent");
-  console.log("- dev-stale-new (45s, WhatsApp + push configured): correctly alerted via both, flagged");
+  console.log("- dev-stale-new (45s, motor RUNNING, WhatsApp + push configured): correctly alerted via both, flagged");
   console.log("- dev-stale-old (90s, already alerted): correctly skipped, dedup working");
-  console.log("- dev-no-phone (60s, no WhatsApp AND no push tokens): correctly skipped, no crash");
-  console.log("- dev-push-only (70s, push only, no WhatsApp phone): correctly alerted via push alone - the whole point of decoupling the two channels");
+  console.log("- dev-stale-off (55s, motor OFF): correctly skipped without alert even with phone and push registered");
+  console.log("- dev-no-phone (60s, motor RUNNING, no WhatsApp AND no push tokens): correctly skipped, no crash");
+  console.log("- dev-push-only (70s, motor RUNNING, push only, no WhatsApp phone): correctly alerted via push alone - the whole point of decoupling the two channels");
   console.log("- dev-never (no lastSeen ever): correctly skipped, no crash");
 }
 

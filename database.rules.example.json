@@ -1,39 +1,41 @@
 {
   "rules": {
     "devices": {
-      ".read": true,
+      ".indexOn": ["status/owner"],
+      ".read": "auth != null && (auth.token.email == 'device@your-project-id.local' || (query.orderByChild == 'status/owner' && query.equalTo == auth.token.email))",
       "$deviceId": {
+        ".read": "auth != null && (auth.token.email == 'device@your-project-id.local' || data.child('status/owner').val() == auth.token.email)",
         "status": {
-          ".write": "auth.token.email == 'device@your-project-id.local'"
+          ".write": "auth != null && auth.token.email == 'device@your-project-id.local'"
         },
         "motor": {
-          ".write": "auth.token.email == 'device@your-project-id.local'",
+          ".write": "auth != null && auth.token.email == 'device@your-project-id.local'",
           "stateBeforeOutage": {
-            ".write": "auth.token.email == 'device@your-project-id.local' || auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+            ".write": "auth != null && (auth.token.email == 'device@your-project-id.local' || auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val())"
           }
         },
         "ota": {
-          ".write": "auth.token.email == 'device@your-project-id.local'"
+          ".write": "auth != null && auth.token.email == 'device@your-project-id.local'"
         },
         "command": {
           "action": {
-            ".write": "auth.token.email == 'device@your-project-id.local' || auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+            ".write": "auth != null && (auth.token.email == 'device@your-project-id.local' || auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val())"
           },
           "firmwareUrl": {
-            ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+            ".write": "auth != null && auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
           }
         },
         "displayName": {
-          ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+          ".write": "auth != null && auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
         },
         "fcmTokens": {
-          ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+          ".write": "auth != null && auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
         },
         "autoResume": {
-          ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+          ".write": "auth != null && auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
         },
         "schedule": {
-          ".write": "auth.token.email == 'device@your-project-id.local' || auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
+          ".write": "auth != null && (auth.token.email == 'device@your-project-id.local' || auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val())"
         }
       }
     }

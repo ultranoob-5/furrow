@@ -18,6 +18,7 @@
 #include "storage.h"
 #include "notify.h"
 #include "json_util.h"
+#include "automation.h"
 
 Cloud cloud;
 
@@ -59,29 +60,12 @@ namespace
 
     bool streamStarted = false;
 
-    // Auto-resume state: handled locally on ESP32 without requiring Cloud Function polling
+    // Synchronization tracking with Firebase RTDB
     bool autoResumeChecked = false;
-    bool autoResumePending = false;
-    bool autoResumeStartPending = false;
-    unsigned long autoResumeDueMs = 0;
-    uint8_t autoResumeDelayMinutes = 5;
-    bool autoResumeEnabled = false;
-    bool autoResumeDataReceived = false;
-    bool stateBeforeOutageReceived = false;
-    String stateBeforeOutage = "";
-
-    // Irrigation schedule state: handled autonomously on-device via NTP in IST (UTC+5:30)
     bool scheduleChecked = false;
-    bool scheduleEnabled = false;
-    String scheduleOnTime = "06:00";
-    String scheduleOffTime = "08:00";
-    String lastOnFiredDate = "";
-    String lastOffFiredDate = "";
-    bool scheduleStartPending = false;
-    bool scheduleStopPending = false;
+    String stateBeforeOutage = "";
     bool remoteStartPending = false;
     bool remoteStopPending = false;
-    unsigned long lastScheduleCheckMs = 0;
 
     unsigned long lastHeartbeat = 0;
     constexpr unsigned long HEARTBEAT_INTERVAL_MS = 10000;
@@ -117,31 +101,6 @@ namespace
     String commandConfirmPending = ""; // "start" or "stop", empty when nothing's pending
     unsigned long commandConfirmSince = 0;
     constexpr unsigned long COMMAND_CONFIRM_TIMEOUT_MS = 30000;
-
-    void processData(AsyncResult &result);
-
-    void checkTriggerAutoResume()
-    {
-        if (!autoResumeDataReceived || !stateBeforeOutageReceived)
-            return;
-
-        if (autoResumeEnabled && stateBeforeOutage == "RUNNING")
-        {
-            Logger::warn(TAG, "Auto-resume: pump was RUNNING before outage. Scheduling start in " +
-                                String(autoResumeDelayMinutes) + " minute(s)");
-
-            autoResumePending = true;
-            autoResumeDueMs = millis() + (autoResumeDelayMinutes * 60000UL);
-        }
-        else
-        {
-            if (stateBeforeOutage.length() > 0 && stateBeforeOutage != "null")
-            {
-                stateBeforeOutage = "";
-                database.set<String>(aClientMain, stateBeforeOutagePath, "", processData, "clearStateBeforeOutage");
-            }
-        }
-    }
 
     void processData(AsyncResult &result)
     {
@@ -179,18 +138,16 @@ namespace
         {
             RealtimeDatabaseResult &rtdb = result.to<RealtimeDatabaseResult>();
             String json = rtdb.to<String>();
-            autoResumeEnabled = (json.indexOf("\"enabled\":true") >= 0);
+            bool enabled = (json.indexOf("\"enabled\":true") >= 0);
+            uint8_t delay = 5;
             int idx = json.indexOf("\"delayMinutes\":");
             if (idx >= 0)
             {
-                int delay = json.substring(idx + 15).toInt();
-                if (delay >= 1 && delay <= 10)
-                    autoResumeDelayMinutes = delay;
-                else
-                    autoResumeDelayMinutes = 5;
+                int val = json.substring(idx + 15).toInt();
+                if (val >= 1 && val <= 10)
+                    delay = val;
             }
-            autoResumeDataReceived = true;
-            checkTriggerAutoResume();
+            Automation::updateAutoResume(enabled, delay);
             return;
         }
 
@@ -200,8 +157,15 @@ namespace
             stateBeforeOutage = rtdb.to<String>();
             stateBeforeOutage.replace("\"", "");
             stateBeforeOutage.trim();
-            stateBeforeOutageReceived = true;
-            checkTriggerAutoResume();
+            if (stateBeforeOutage == "RUNNING" && !Automation::isAutoResumePending() && !motor.isRunning())
+            {
+                Logger::warn(TAG, "Cloud watchdog recorded RUNNING before outage - triggering local auto-resume delay");
+                Automation::triggerAutoResume(AppStorage::autoResumeDelayMinutes());
+            }
+            if (stateBeforeOutage.length() > 0 && stateBeforeOutage != "null")
+            {
+                database.set<String>(aClientMain, stateBeforeOutagePath, "", processData, "clearStateBeforeOutage");
+            }
             return;
         }
 
@@ -209,42 +173,27 @@ namespace
         {
             RealtimeDatabaseResult &rtdb = result.to<RealtimeDatabaseResult>();
             String json = rtdb.to<String>();
-            scheduleEnabled = (json.indexOf("\"enabled\":true") >= 0);
+            bool enabled = (json.indexOf("\"enabled\":true") >= 0);
 
+            String onT = "06:00";
             int onIdx = json.indexOf("\"onTime\":\"");
             if (onIdx >= 0)
             {
-                String onT = json.substring(onIdx + 10, onIdx + 15);
-                if (onT.length() == 5 && onT.charAt(2) == ':')
-                    scheduleOnTime = onT;
+                String val = json.substring(onIdx + 10, onIdx + 15);
+                if (val.length() == 5 && val.charAt(2) == ':')
+                    onT = val;
             }
 
+            String offT = "08:00";
             int offIdx = json.indexOf("\"offTime\":\"");
             if (offIdx >= 0)
             {
-                String offT = json.substring(offIdx + 11, offIdx + 16);
-                if (offT.length() == 5 && offT.charAt(2) == ':')
-                    scheduleOffTime = offT;
+                String val = json.substring(offIdx + 11, offIdx + 16);
+                if (val.length() == 5 && val.charAt(2) == ':')
+                    offT = val;
             }
 
-            int lastOnIdx = json.indexOf("\"lastOnFiredDate\":\"");
-            if (lastOnIdx >= 0)
-            {
-                String lastOn = json.substring(lastOnIdx + 19, lastOnIdx + 29);
-                if (lastOn.length() == 10 && lastOn.charAt(4) == '-' && lastOn.charAt(7) == '-')
-                    lastOnFiredDate = lastOn;
-            }
-
-            int lastOffIdx = json.indexOf("\"lastOffFiredDate\":\"");
-            if (lastOffIdx >= 0)
-            {
-                String lastOff = json.substring(lastOffIdx + 20, lastOffIdx + 30);
-                if (lastOff.length() == 10 && lastOff.charAt(4) == '-' && lastOff.charAt(7) == '-')
-                    lastOffFiredDate = lastOff;
-            }
-
-            Logger::info(TAG, "Schedule updated: " + String(scheduleEnabled ? "ENABLED" : "DISABLED") +
-                               " (on: " + scheduleOnTime + ", off: " + scheduleOffTime + ")");
+            Automation::updateSchedule(enabled, onT, offT);
             return;
         }
 
@@ -273,7 +222,7 @@ namespace
         if (pendingCommand == "cancel_auto_resume")
         {
             Logger::warn(TAG, "Remote command: CANCEL AUTO-RESUME");
-            autoResumePending = false;
+            Automation::cancelAutoResume();
             pendingCommand = "";
             database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
             return;
@@ -321,19 +270,14 @@ namespace
 
         if (pendingCommand == "factory_reset")
         {
-            Logger::warn(TAG, "Remote command: FACTORY RESET - clearing all stored config, restarting into setup mode");
+            Logger::warn(TAG, "Remote command: FACTORY RESET - clearing RTDB command and resetting to setup mode");
 
-            AppStorage::factoryReset();
-
-            // Same reasoning as restart/shutdown: clear the command
-            // first. Unlike shutdown, this device WILL come back up
-            // and start broadcasting its own Furrow-Setup-XXXX WiFi
-            // network again immediately after rebooting - it's not
-            // gone, just unreachable via Firebase until someone
-            // physically re-provisions it through the captive portal.
+            pendingCommand = "";
             database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
 
-            delay(1000);
+            delay(500);
+            AppStorage::factoryReset();
+            delay(500);
             ESP.restart();
         }
 
@@ -353,8 +297,6 @@ namespace
             Logger::info(TAG, "Remote command: START");
             remoteStartPending = true;
             remoteStopPending = false;
-            scheduleStartPending = false;
-            scheduleStopPending = false;
             commandConfirmPending = "start";
             commandConfirmSince = millis();
             motor.start();
@@ -362,11 +304,9 @@ namespace
         else if (pendingCommand == "stop")
         {
             Logger::info(TAG, "Remote command: STOP");
-            autoResumePending = false; // Stop cancels any active auto-resume timer
+            Automation::cancelAutoResume(); // Stop cancels any active auto-resume timer
             remoteStartPending = false;
             remoteStopPending = true;
-            scheduleStartPending = false;
-            scheduleStopPending = false;
             commandConfirmPending = "stop";
             commandConfirmSince = millis();
             motor.stop();
@@ -377,127 +317,6 @@ namespace
         // Acknowledge / clear the command so it isn't re-applied on the
         // next stream reconnect.
         database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
-    }
-
-    void checkAutoResume()
-    {
-        if (!autoResumePending)
-            return;
-
-        // If the motor is already running, cancel auto-resume
-        if (motor.isRunning())
-        {
-            Logger::info(TAG, "Auto-resume cancelled - motor already running");
-            autoResumePending = false;
-            return;
-        }
-
-        if ((long)(millis() - autoResumeDueMs) >= 0)
-        {
-            autoResumePending = false;
-            autoResumeStartPending = true;
-            if (stateBeforeOutage.length() > 0)
-            {
-                stateBeforeOutage = "";
-                database.set<String>(aClientMain, stateBeforeOutagePath, "", processData, "clearStateBeforeOutage");
-            }
-            Logger::warn(TAG, "Auto-resume delay elapsed - starting motor");
-            motor.start();
-        }
-    }
-
-    void checkSchedule()
-    {
-        if (!scheduleEnabled)
-            return;
-
-        if (!Network::isConnected() || !app.ready())
-            return;
-
-        if (millis() - lastScheduleCheckMs < 1000)
-            return;
-        lastScheduleCheckMs = millis();
-
-        time_t now = time(nullptr);
-        if (now < 1704067200) // Valid time after 2024-01-01
-            return;
-
-        struct tm timeinfo;
-        if (!localtime_r(&now, &timeinfo))
-            return;
-
-        char nowTime[6];
-        snprintf(nowTime, sizeof(nowTime), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
-
-        char nowDate[11];
-        snprintf(nowDate, sizeof(nowDate), "%04d-%02d-%02d",
-                 timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday);
-
-        // Guards against a misconfigured schedule (on time == off time)
-        if (scheduleOnTime == scheduleOffTime)
-            return;
-
-        bool onDue = (scheduleOnTime == nowTime && lastOnFiredDate != nowDate);
-        bool offDue = (scheduleOffTime == nowTime && lastOffFiredDate != nowDate);
-
-        if (!onDue && !offDue)
-            return;
-
-        // Scheduled turn on and off must only execute when the device has active internet
-        if (!Network::hasInternet())
-        {
-            Logger::warn(TAG, "Schedule: trigger due at " + String(nowTime) + 
-                              " but device has no active internet - skipping");
-            return;
-        }
-
-        // Start schedule trigger (fires once per calendar date)
-        if (onDue)
-        {
-            lastOnFiredDate = nowDate;
-            database.set<String>(aClientMain, schedulePath + "/lastOnFiredDate", String(nowDate), processData, "recordScheduleFired");
-
-            if (!motor.isRunning())
-            {
-                Logger::warn(TAG, "Schedule: turning ON at " + String(nowTime));
-                scheduleStartPending = true;
-                scheduleStopPending = false;
-                if (!motor.isDevelopment())
-                {
-                    commandConfirmPending = "start";
-                    commandConfirmSince = millis();
-                }
-                motor.start();
-            }
-            else
-            {
-                Logger::info(TAG, "Schedule: start time reached but motor already RUNNING");
-            }
-        }
-
-        // Stop schedule trigger (fires once per calendar date)
-        if (offDue)
-        {
-            lastOffFiredDate = nowDate;
-            database.set<String>(aClientMain, schedulePath + "/lastOffFiredDate", String(nowDate), processData, "recordScheduleFired");
-
-            if (motor.isRunning())
-            {
-                Logger::warn(TAG, "Schedule: turning OFF at " + String(nowTime));
-                scheduleStopPending = true;
-                scheduleStartPending = false;
-                if (!motor.isDevelopment())
-                {
-                    commandConfirmPending = "stop";
-                    commandConfirmSince = millis();
-                }
-                motor.stop();
-            }
-            else
-            {
-                Logger::info(TAG, "Schedule: stop time reached and motor already OFF");
-            }
-        }
     }
 
     // Checked every Cloud::loop() iteration - cheap no-op when nothing's
@@ -548,9 +367,6 @@ namespace
         commandConfirmPending = "";
         remoteStartPending = false;
         remoteStopPending = false;
-        scheduleStartPending = false;
-        scheduleStopPending = false;
-        autoResumeStartPending = false;
     }
 
     // Downloads and flashes new firmware from a URL, then restarts.
@@ -740,8 +556,6 @@ void Cloud::loop()
         streamStarted = false;
         lastHeartbeat = 0;
         autoResumeChecked = false;
-        autoResumeDataReceived = false;
-        stateBeforeOutageReceived = false;
         scheduleChecked = false;
 
         unsigned long downtimeMs = Network::lastDisconnectDurationMs();
@@ -779,8 +593,6 @@ void Cloud::loop()
     if (!autoResumeChecked)
     {
         autoResumeChecked = true;
-        autoResumeDataReceived = false;
-        stateBeforeOutageReceived = false;
         database.get(aClientMain, autoResumePath, processData, false, "fetchAutoResume");
         database.get(aClientMain, stateBeforeOutagePath, processData, false, "fetchStateBeforeOutage");
     }
@@ -804,10 +616,6 @@ void Cloud::loop()
     handlePendingCommand();
 
     checkCommandConfirmation();
-
-    checkAutoResume();
-
-    checkSchedule();
 
     if (otaRequested)
     {
@@ -931,7 +739,10 @@ void Cloud::publishDevice()
         devModeField);
 
     if (len < 0 || len >= (int)sizeof(json))
+    {
         Logger::error(TAG, "publishDevice: JSON truncated - name/owner/phone unusually long? Buffer is " + String(sizeof(json)) + " bytes");
+        return;
+    }
 
     database.set<object_t>(aClientMain, statusPath, object_t(json), processData, "publishDevice");
 }
@@ -986,7 +797,10 @@ void Cloud::publishMotor(const char *startedVia, const char *stoppedVia)
     }
 
     if (len < 0 || len >= (int)sizeof(json))
+    {
         Logger::error(TAG, "publishMotor: JSON truncated - buffer too small (shouldn't be reachable, all fields are fixed-format)");
+        return;
+    }
 
     database.set<object_t>(aClientMain, motorPath, object_t(json), processData, "publishMotor");
 }
@@ -1003,24 +817,17 @@ bool Cloud::remoteStopWasPending()
 
 bool Cloud::isAutoResumePending()
 {
-    return autoResumePending;
+    return Automation::isAutoResumePending();
 }
 
 bool Cloud::autoResumeStartWasPending()
 {
-    return autoResumeStartPending;
+    return Automation::autoResumeStartWasPending();
 }
 
 void Cloud::cancelAutoResume()
 {
-    if (autoResumePending)
-    {
-        Logger::info(TAG, "Auto-resume cancelled");
-        autoResumePending = false;
-    }
-    autoResumeStartPending = false;
-    scheduleStartPending = false;
-    scheduleStopPending = false;
+    Automation::cancelAutoResume();
     remoteStartPending = false;
     remoteStopPending = false;
     if (stateBeforeOutage.length() > 0)
@@ -1032,11 +839,11 @@ void Cloud::cancelAutoResume()
 
 bool Cloud::scheduleStartWasPending()
 {
-    return scheduleStartPending;
+    return Automation::scheduleStartWasPending();
 }
 
 bool Cloud::scheduleStopWasPending()
 {
-    return scheduleStopPending;
+    return Automation::scheduleStopWasPending();
 }
 

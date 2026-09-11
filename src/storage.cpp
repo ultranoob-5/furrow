@@ -21,6 +21,12 @@ namespace
     constexpr const char *KEY_OWNER = "owner";
     constexpr const char *KEY_WA_PHONE = "wa_phone";
     constexpr const char *KEY_DEV_MODE = "dev_mode";
+    constexpr const char *KEY_SCHED_EN = "sched_en";
+    constexpr const char *KEY_SCHED_ON = "sched_on";
+    constexpr const char *KEY_SCHED_OFF = "sched_off";
+    constexpr const char *KEY_RESUME_EN = "res_en";
+    constexpr const char *KEY_RESUME_DEL = "res_del";
+    constexpr const char *KEY_LAST_STATE = "last_state";
     constexpr const char *TAG = "Storage";
 }
 
@@ -116,6 +122,60 @@ namespace AppStorage
         Logger::info(TAG, String("Development device mode ") + (enabled ? "ENABLED" : "DISABLED"));
     }
 
+    bool scheduleEnabled()
+    {
+        return prefs.getBool(KEY_SCHED_EN, false);
+    }
+
+    String scheduleOnTime()
+    {
+        return prefs.getString(KEY_SCHED_ON, "");
+    }
+
+    String scheduleOffTime()
+    {
+        return prefs.getString(KEY_SCHED_OFF, "");
+    }
+
+    void setScheduleConfig(bool enabled, const String &onTime, const String &offTime)
+    {
+        prefs.putBool(KEY_SCHED_EN, enabled);
+        prefs.putString(KEY_SCHED_ON, onTime);
+        prefs.putString(KEY_SCHED_OFF, offTime);
+
+        Logger::info(TAG, "Schedule saved - enabled: " + String(enabled ? "true" : "false") +
+                           ", on: " + onTime + ", off: " + offTime);
+    }
+
+    bool autoResumeEnabled()
+    {
+        return prefs.getBool(KEY_RESUME_EN, false);
+    }
+
+    uint8_t autoResumeDelayMinutes()
+    {
+        return (uint8_t)prefs.getUChar(KEY_RESUME_DEL, 5);
+    }
+
+    void setAutoResumeConfig(bool enabled, uint8_t delayMinutes)
+    {
+        prefs.putBool(KEY_RESUME_EN, enabled);
+        prefs.putUChar(KEY_RESUME_DEL, delayMinutes);
+
+        Logger::info(TAG, "Auto-resume saved - enabled: " + String(enabled ? "true" : "false") +
+                           ", delay: " + String(delayMinutes) + "m");
+    }
+
+    String lastMotorState()
+    {
+        return prefs.getString(KEY_LAST_STATE, "");
+    }
+
+    void setLastMotorState(const String &state)
+    {
+        prefs.putString(KEY_LAST_STATE, state);
+    }
+
     void factoryReset()
     {
         prefs.remove(KEY_WIFI_SSID);
@@ -124,6 +184,12 @@ namespace AppStorage
         prefs.remove(KEY_OWNER);
         prefs.remove(KEY_WA_PHONE);
         prefs.remove(KEY_DEV_MODE);
+        prefs.remove(KEY_SCHED_EN);
+        prefs.remove(KEY_SCHED_ON);
+        prefs.remove(KEY_SCHED_OFF);
+        prefs.remove(KEY_RESUME_EN);
+        prefs.remove(KEY_RESUME_DEL);
+        prefs.remove(KEY_LAST_STATE);
 
         Logger::warn(TAG, "Factory reset - all stored config cleared");
     }

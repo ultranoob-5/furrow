@@ -41,13 +41,27 @@ namespace AppStorage
     bool isDevelopmentDevice();
     void setDevelopmentDevice(bool enabled);
 
-    // Wipes WiFi credentials, device name/owner, and WhatsApp config -
-    // everything, returning the device to the same state as a freshly
-    // flashed board. Unlike clearWifiCredentials() alone, this also
-    // clears device identity, since a real factory reset shouldn't
-    // leave a stale name/owner behind for whoever re-provisions it
-    // next (could be a different person entirely - re-purposing a
-    // device for someone else is exactly one real reason to use this).
+    // Schedule configuration persisted in NVS so the device can execute
+    // scheduled motor starts and stops even when WiFi/internet is down.
+    bool scheduleEnabled();
+    String scheduleOnTime();
+    String scheduleOffTime();
+    void setScheduleConfig(bool enabled, const String &onTime, const String &offTime);
+
+    // Auto-Resume configuration persisted in NVS so the device can resume
+    // operation after a power outage without depending on Firebase connectivity.
+    bool autoResumeEnabled();
+    uint8_t autoResumeDelayMinutes();
+    void setAutoResumeConfig(bool enabled, uint8_t delayMinutes);
+
+    // Motor state persisted across power outages. Updated on confirmed
+    // motor state transitions (RUNNING/OFF). When power is restored,
+    // the firmware checks this locally to know if the motor was running.
+    String lastMotorState();
+    void setLastMotorState(const String &state);
+
+    // Wipes WiFi credentials, device name/owner, WhatsApp config,
+    // and automation preferences - returning the device to factory defaults.
     void factoryReset();
 }
 

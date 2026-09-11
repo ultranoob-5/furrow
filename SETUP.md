@@ -209,8 +209,10 @@ in `secrets.h`/repository secrets as `WHAPI_TOKEN`. Each device's
 
 **Power-loss alerts specifically** (a device going fully silent for
 30s+, not just a WiFi hiccup) run as a Firebase Cloud Function -
-`functions/index.js`, the `powerWatchdog` scheduled function. It
-needs its own deploy step, and **requires your project to be on the
+`functions/index.js`, the `powerWatchdog` scheduled function. It alerts
+users (via WhatsApp and FCM Push) when a device goes dark while its motor
+was actively `RUNNING`, skipping nuisance alerts if the pump was already
+OFF. It needs its own deploy step, and **requires your project to be on the
 Blaze (pay-as-you-go) pricing plan** - Cloud Functions aren't
 available on the free Spark plan at all. See
 [firebase.google.com/pricing](https://firebase.google.com/pricing)
@@ -333,8 +335,8 @@ plan to.
    same as WhatsApp's per-device recipient.
 
 From there it's automatic - no more buttons to press. You'll get a
-push when that device loses power, when it recovers, or when its
-motor starts or stops (including a physical button press at the
+push when that device loses power (if its motor was running), when it recovers,
+or when its motor starts or stops (including a physical button press at the
 panel, not just remote commands - this comes from the same real
 current-sensor feedback everything else uses). The easiest way to
 confirm the whole pipeline works after setup is just pressing
@@ -346,15 +348,17 @@ arrive within a few seconds.
 ## 12. Auto-resume after power loss (optional)
 
 If a pump was actually running right before the power went out,
-automatically starts it again once the device reconnects - after a
+automatically starts it again once power returns - after a
 delay you set (1-10 minutes), so it doesn't restart the instant power
 returns. Off by default, per device - restores previous state, not an
 unconditional "always turn on"; if it was off before the outage, it
 stays off.
 
 The countdown and motor restart are handled directly on-device by
-the ESP32 firmware upon reconnect. When power returns, the device
-also sends WhatsApp alerts and triggers push notifications (`onPowerRestored`).
+the ESP32 firmware using local NVS flash storage (`AppStorage`), operating
+autonomously without needing an active internet connection. When power returns and
+connectivity is established, the device also sends WhatsApp alerts and triggers push
+notifications (`onPowerRestored`).
 
 1. **If you already deployed RTDB rules before this feature existed**,
    redeploy them: `firebase deploy --only database`. The rules include
@@ -381,10 +385,10 @@ keeps it off until tomorrow's cycle - the schedule never re-fires the
 same on-event twice in one calendar day.
 
 The schedule engine runs directly on the ESP32 firmware using hardware
-SNTP time synchronization, requiring no scheduled Cloud Function cron
-jobs (saving ~43,200 runs/month). Scheduled turn on and off actions
-require an active internet connection to execute, ensuring the device
-never runs blindly offline without cloud synchronization and alerts.
+SNTP time synchronization and persists schedule parameters in NVS flash,
+requiring no scheduled Cloud Function cron jobs (saving ~43,200 runs/month).
+Daily schedules run reliably using the ESP32's internal RTC even through
+temporary internet drops.
 
 1. **If you already deployed RTDB rules before this feature existed**,
    redeploy them: `firebase deploy --only database`. The rules include
