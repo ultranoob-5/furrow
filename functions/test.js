@@ -86,12 +86,13 @@ async function main() {
   const fakeDevices = {
     "dev-fresh":     { status: { lastSeen: nowMs - 5000,  name: "Fresh",     whatsappPhone: "111", powerAlertSent: false } },
     "dev-stale-new": { status: { lastSeen: nowMs - 45000, name: "StaleNew",  whatsappPhone: "222", powerAlertSent: false }, motor: { state: "RUNNING" } },
-    "dev-renamed":   { displayName: "Well Pump", status: { lastSeen: nowMs - 45000, name: "Farm Pump", whatsappPhone: "555", powerAlertSent: false }, motor: { state: "RUNNING" } },
-    "dev-stale-old": { status: { lastSeen: nowMs - 90000, name: "StaleOld",  whatsappPhone: "333", powerAlertSent: true } },
-    "dev-stale-off": { status: { lastSeen: nowMs - 55000, name: "StaleOff",  whatsappPhone: "444", powerAlertSent: false }, motor: { state: "OFF" } },
-    "dev-no-phone":  { status: { lastSeen: nowMs - 60000, name: "NoPhone",   powerAlertSent: false }, motor: { state: "RUNNING" } },
-    "dev-push-only": { status: { lastSeen: nowMs - 70000, name: "PushOnly",  powerAlertSent: false }, motor: { state: "RUNNING" } },
-    "dev-never":     { status: { name: "Never" } },
+    "dev-renamed":       { displayName: "Well Pump", status: { lastSeen: nowMs - 45000, name: "Farm Pump", whatsappPhone: "555", powerAlertSent: false }, motor: { state: "RUNNING" } },
+    "dev-cleared-phone": { whatsappPhone: "", status: { lastSeen: nowMs - 45000, name: "ClearedPhone", whatsappPhone: "999", powerAlertSent: false }, motor: { state: "RUNNING" } },
+    "dev-stale-old":     { status: { lastSeen: nowMs - 90000, name: "StaleOld",  whatsappPhone: "333", powerAlertSent: true } },
+    "dev-stale-off":     { status: { lastSeen: nowMs - 55000, name: "StaleOff",  whatsappPhone: "444", powerAlertSent: false }, motor: { state: "OFF" } },
+    "dev-no-phone":      { status: { lastSeen: nowMs - 60000, name: "NoPhone",   powerAlertSent: false }, motor: { state: "RUNNING" } },
+    "dev-push-only":     { status: { lastSeen: nowMs - 70000, name: "PushOnly",  powerAlertSent: false }, motor: { state: "RUNNING" } },
+    "dev-never":         { status: { name: "Never" } },
   };
 
   const sent = [];
@@ -103,7 +104,7 @@ async function main() {
   // except dev-no-phone (whose whole point is testing "neither channel
   // configured" still gets skipped safely) and the ones that shouldn't
   // reach the send stage at all (dev-fresh, dev-stale-old, dev-stale-off, dev-never).
-  const hasPushTokens = new Set(["dev-stale-new", "dev-renamed", "dev-push-only", "dev-stale-off"]);
+  const hasPushTokens = new Set(["dev-stale-new", "dev-renamed", "dev-cleared-phone", "dev-push-only", "dev-stale-off"]);
 
   const alerted = await runWatchdog({
     fetchDevices: async () => fakeDevices,
@@ -130,14 +131,15 @@ async function main() {
   console.log("Push sent:", pushSent);
   console.log("Flags set:", flagsSet);
 
-  assert(alerted.length === 3, `Expected exactly 3 alerts, got ${alerted.length}`);
+  assert(alerted.length === 4, `Expected exactly 4 alerts, got ${alerted.length}`);
   assert(alerted.includes("dev-stale-new"), "Expected dev-stale-new to be alerted (has both WhatsApp and push)");
   assert(alerted.includes("dev-renamed"), "Expected dev-renamed to be alerted (has both WhatsApp and push)");
+  assert(alerted.includes("dev-cleared-phone"), "Expected dev-cleared-phone to be alerted (push only, WhatsApp was cleared)");
   assert(alerted.includes("dev-push-only"), "Expected dev-push-only to be alerted (push alone, no WhatsApp phone configured)");
   assert(!alerted.includes("dev-no-phone"), "Expected dev-no-phone to NOT be alerted (neither channel configured)");
   assert(!alerted.includes("dev-stale-off"), "Expected dev-stale-off to NOT be alerted (motor was OFF at outage)");
 
-  assert(sent.length === 2, `Expected 2 WhatsApp messages, got ${sent.length}`);
+  assert(sent.length === 2, `Expected exactly 2 WhatsApp messages, got ${sent.length}`);
   const staleNewWa = sent.find(([phone]) => phone === "222");
   assert(staleNewWa && staleNewWa[1].includes("StaleNew"), "Expected WhatsApp message to mention StaleNew for phone 222");
 
@@ -146,9 +148,13 @@ async function main() {
   assert(renamedWa[1].includes("Well Pump"), `Expected WhatsApp message to use displayName 'Well Pump', got: ${renamedWa[1]}`);
   assert(!renamedWa[1].includes("Farm Pump"), `Expected WhatsApp message to NOT contain old status.name 'Farm Pump', got: ${renamedWa[1]}`);
 
-  assert(pushSent.length === 3, `Expected exactly 3 push sends, got ${pushSent.length}`);
+  // dev-cleared-phone must NOT have sent to phone "999"
+  assert(!sent.some(([phone]) => phone === "999"), "Expected phone 999 to NOT receive WhatsApp message because whatsappPhone was cleared");
+
+  assert(pushSent.length === 4, `Expected exactly 4 push sends, got ${pushSent.length}`);
   assert(pushSent.some(([id]) => id === "dev-stale-new"), "Expected a push send for dev-stale-new");
   assert(pushSent.some(([id]) => id === "dev-renamed"), "Expected a push send for dev-renamed");
+  assert(pushSent.some(([id]) => id === "dev-cleared-phone"), "Expected a push send for dev-cleared-phone");
   assert(pushSent.some(([id]) => id === "dev-push-only"), "Expected a push send for dev-push-only");
 
   const renamedPush = pushSent.find(([id]) => id === "dev-renamed");
@@ -157,13 +163,15 @@ async function main() {
   assert(renamedPush[2].includes("Well Pump") && !renamedPush[2].includes("Farm Pump"),
     `Expected push notification body to use displayName 'Well Pump', got: ${renamedPush[2]}`);
 
-  assert(flagsSet.length === 3 && flagsSet.includes("dev-stale-new") && flagsSet.includes("dev-renamed") && flagsSet.includes("dev-push-only"),
-    "Expected dedup flags set for all three alerted devices");
+  assert(flagsSet.length === 4 && flagsSet.includes("dev-stale-new") && flagsSet.includes("dev-renamed") && flagsSet.includes("dev-cleared-phone") && flagsSet.includes("dev-push-only"),
+    "Expected dedup flags set for all alerted devices");
 
   assert(motorStatesSnapshotted["dev-stale-new"] === "RUNNING",
     `Expected dev-stale-new's motor state (RUNNING) to be snapshotted at outage detection, got ${motorStatesSnapshotted["dev-stale-new"]}`);
   assert(motorStatesSnapshotted["dev-renamed"] === "RUNNING",
     `Expected dev-renamed's motor state (RUNNING) to be snapshotted at outage detection, got ${motorStatesSnapshotted["dev-renamed"]}`);
+  assert(motorStatesSnapshotted["dev-cleared-phone"] === "RUNNING",
+    `Expected dev-cleared-phone's motor state (RUNNING) to be snapshotted at outage detection, got ${motorStatesSnapshotted["dev-cleared-phone"]}`);
   assert(motorStatesSnapshotted["dev-push-only"] === "RUNNING",
     `Expected dev-push-only's motor state (RUNNING) to be snapshotted at outage detection, got ${motorStatesSnapshotted["dev-push-only"]}`);
 
@@ -171,6 +179,7 @@ async function main() {
   console.log("- dev-fresh (5s): correctly skipped, too recent");
   console.log("- dev-stale-new (45s, motor RUNNING, WhatsApp + push configured): correctly alerted via both, flagged");
   console.log("- dev-renamed (45s, motor RUNNING, displayName 'Well Pump' overrides status.name 'Farm Pump'): correctly alerted using displayName");
+  console.log("- dev-cleared-phone (45s, motor RUNNING, whatsappPhone: ''): correctly skipped WhatsApp and alerted via Push only");
   console.log("- dev-stale-old (90s, already alerted): correctly skipped, dedup working");
   console.log("- dev-stale-off (55s, motor OFF): correctly skipped without alert even with phone and push registered");
   console.log("- dev-no-phone (60s, motor RUNNING, no WhatsApp AND no push tokens): correctly skipped, no crash");

@@ -46,7 +46,12 @@ async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag,
     const name = (data && data.displayName && typeof data.displayName === "string" && data.displayName.trim()) ||
                  (status.name && typeof status.name === "string" && status.name.trim()) ||
                  deviceId;
-    const phone = status.whatsappPhone || (data && data.whatsappPhone);
+    let phone = null;
+    if (data && typeof data.whatsappPhone === "string") {
+      phone = data.whatsappPhone.trim() || null;
+    } else if (status.whatsappPhone && typeof status.whatsappPhone === "string") {
+      phone = status.whatsappPhone.trim() || null;
+    }
     const alreadyAlerted = status.powerAlertSent === true;
 
     if (lastSeen === undefined || lastSeen === null) {
@@ -325,11 +330,17 @@ async function sendAlertToDevice({ deviceId, name, title, body, whatsappMessage 
 
   const whatsappPromise = (async () => {
     try {
-      const phoneSnap = await db.ref(`devices/${deviceId}/status/whatsappPhone`).once("value");
-      let phone = phoneSnap.val();
-      if (!phone) {
-        const rootPhoneSnap = await db.ref(`devices/${deviceId}/whatsappPhone`).once("value");
-        phone = rootPhoneSnap.val();
+      const [rootPhoneSnap, statusPhoneSnap] = await Promise.all([
+        db.ref(`devices/${deviceId}/whatsappPhone`).once("value"),
+        db.ref(`devices/${deviceId}/status/whatsappPhone`).once("value"),
+      ]);
+      let phone = null;
+      const rootVal = rootPhoneSnap.val();
+      if (typeof rootVal === "string") {
+        phone = rootVal.trim() || null;
+      } else {
+        const statusVal = statusPhoneSnap.val();
+        phone = (typeof statusVal === "string" && statusVal.trim()) || null;
       }
       if (phone) {
         await sendWhatsAppReal(phone, whatsappMessage || body);

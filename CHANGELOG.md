@@ -1,4 +1,8 @@
 
+## [1.4.2] - 2026-09-12
+
+- **WhatsApp Recipient Clearing & Synchronization Fix**: Resolved issue where clearing WhatsApp number failed due to `status/` write permission errors and firmware skipping NVS wipe on empty/null strings. Updated dashboard to set `whatsappPhone` to `""`, updated firmware `fetchWhatsAppPhone` to wipe NVS key on empty/null, and ensured boot sync always runs without skipping when local credentials exist.
+
 ## [1.4.1] - 2026-09-12
 
 - **Device Display Name Synchronization**: Resolved device name divergence where dashboard renamed devices (e.g. "Well Pump") triggered alerts under the factory captive-portal name (e.g. "Farm Pump").
