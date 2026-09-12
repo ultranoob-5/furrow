@@ -32,3 +32,8 @@ __pycache__/
 # Node dependencies (root and functions)
 node_modules/
 functions/node_modules/
+
+# Local testing and scratch artifacts
+scratch/
+.chrome_temp/
+

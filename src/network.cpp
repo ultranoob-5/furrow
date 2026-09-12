@@ -33,6 +33,7 @@ bool Network::begin()
     Logger::info(TAG, "Connecting to WiFi \"" + ssid + "\"...");
 
     WiFi.mode(WIFI_STA);
+    WiFi.setSleep(false);
     WiFi.begin(ssid.c_str(), password.c_str());
 
     unsigned long start = millis();

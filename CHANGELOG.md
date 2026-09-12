@@ -1,4 +1,12 @@
 
+## [1.4.3] - 2026-09-12
+
+- **Serial Transmission & Clock Stability**: Added `Serial.flush()` to ensure all bytes leave the hardware UART FIFO before periodic Wi-Fi SSL transmissions occur, and disabled Wi-Fi modem sleep (`WiFi.setSleep(false)`) to eliminate dynamic APB bus clock scaling and RF wake-up jitter that caused serial output corruption.
+- **Smartphone & Tablet Responsiveness Matrix**: Comprehensive optimization across 35 device viewports and DPI modes (OnePlus Nord CE4, Google Pixel series, Nothing Phone, OnePlus flagships, Redmi series, iPad family, Samsung Galaxy Tab family, and Android compact tablets) with 0px horizontal document scroll and safe-area insets (`viewport-fit=cover`, `100dvh`).
+- **Tablet CSS Grid Overview**: Implemented adaptive 2-column grid at $\ge 640\text{px}$ and 3-column grid at $\ge 900\text{px}$ for device overview chips with proportional container scaling (`max-width: 560px / 620px`).
+- **WhatsApp Action Row Optimization**: Expanded action row breakpoint to 540px, ensuring wide and high-density phones display full-width telephone input and accessible 44px buttons without row compression.
+- **PWA Cache Invalidation**: Bumped service worker cache to `furrow-dashboard-v10` and PWA version to `v1.4.3` to ensure instant cache invalidation on installed client PWAs.
+
 ## [1.4.2] - 2026-09-12
 
 - **WhatsApp Recipient Clearing & Synchronization Fix**: Resolved issue where clearing WhatsApp number failed due to `status/` write permission errors and firmware skipping NVS wipe on empty/null strings. Updated dashboard to set `whatsappPhone` to `""`, updated firmware `fetchWhatsAppPhone` to wipe NVS key on empty/null, and ensured boot sync always runs without skipping when local credentials exist.

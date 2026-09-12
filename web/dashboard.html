@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Furrow - Motor Control</title>
 
 <!-- PWA -->
@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <!-- Bundled, tree-shaken modular Firebase v11 (replaces 5 legacy CDN compat scripts, saving ~76% payload) -->
-<script src="firebase-bundle.js?v=1.4.2"></script>
+<script src="firebase-bundle.js?v=1.4.3"></script>
 <script src="firebase-config.js"></script>
 <!-- Defines firebaseConfig - generated at deploy time from GitHub
      Actions secrets, or copy web/firebase-config.example.js locally
@@ -73,6 +73,7 @@
   body{
     margin: 0;
     min-height: 100vh;
+    min-height: 100dvh;
     background:
       radial-gradient(1200px 600px at 50% -10%, var(--bg-glow) 0%, var(--bg) 60%);
     color: var(--text);
@@ -80,7 +81,13 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 40px 20px 60px;
+    padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
+
+  @media (max-width: 380px){
+    body{
+      padding: max(16px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(36px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+    }
   }
 
   /* ---- Header - the real leaf-and-circuit mark, not just a dot ------- */
@@ -92,6 +99,12 @@
     align-items: center;
     gap: 10px;
     margin-bottom: 20px;
+  }
+
+  @media (max-width: 380px){
+    .app-title{
+      margin-bottom: 14px;
+    }
   }
 
   .app-title .leaf-mark{
@@ -322,6 +335,14 @@
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
     scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  @media (max-width: 380px){
+    .overview{
+      gap: 8px;
+      margin-bottom: 14px;
+    }
   }
 
   .overview::-webkit-scrollbar{
@@ -350,6 +371,14 @@
     padding: 14px 16px;
     cursor: pointer;
     transition: border-color 0.18s ease, transform 0.08s ease, background 0.18s ease, box-shadow 0.18s ease;
+    touch-action: manipulation;
+  }
+
+  @media (max-width: 380px){
+    .chip{
+      min-width: 138px;
+      padding: 12px 14px;
+    }
   }
 
   .chip:hover{ border-color: #3a4049; background: var(--panel-raised); }
@@ -463,13 +492,10 @@
     50% { opacity: 0.45; }
   }
 
-  /* ---- Title row / rename -------------------------------------------- */
-
   .device-title-row{
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    display: block;
     margin-top: 3px;
+    line-height: 1.25;
   }
 
   .rename-btn{
@@ -478,14 +504,19 @@
     border: none;
     color: var(--muted);
     cursor: pointer;
-    font-size: 13px;
-    padding: 3px 5px;
-    border-radius: 6px;
+    font-size: 14px;
+    padding: 6px;
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 8px;
     line-height: 1;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    vertical-align: middle;
+    margin-left: 2px;
     transition: color 0.15s ease, background 0.15s ease;
+    touch-action: manipulation;
   }
 
   .rename-btn:hover{
@@ -553,16 +584,19 @@
     background: transparent;
     border: none;
     color: var(--text);
-    width: 32px;
-    height: 32px;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border-radius: 8px;
     cursor: pointer;
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 700;
     transition: background 0.15s ease, color 0.15s ease;
+    touch-action: manipulation;
   }
 
   .stepper-btn:hover:not(:disabled){
@@ -607,13 +641,17 @@
     background: var(--panel-raised);
     border: 1px solid var(--border);
     border-radius: 999px;
-    padding: 5px 11px;
+    padding: 7px 12px;
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
     font-family: var(--sans);
     font-size: 12px;
     font-weight: 600;
     color: var(--muted);
     cursor: pointer;
     transition: all 0.15s ease;
+    touch-action: manipulation;
   }
 
   .preset-chip:hover{
@@ -722,7 +760,7 @@
 
   .time-val-display{
     font-family: var(--mono);
-    font-size: 22px;
+    font-size: clamp(18px, 5.2vw, 22px);
     font-weight: 700;
     color: var(--text);
     line-height: 1;
@@ -757,18 +795,21 @@
     background: var(--bg);
     border: 1px solid var(--border);
     color: var(--muted);
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
     border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 0.15s ease;
+    touch-action: manipulation;
   }
   .time-clock-btn svg{
-    width: 17px;
-    height: 17px;
+    width: 18px;
+    height: 18px;
   }
   .time-card.start:hover .time-clock-btn{
     color: var(--green);
@@ -791,9 +832,19 @@
     color: var(--text);
     box-shadow: 0 20px 60px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.06);
     max-width: 320px;
-    width: calc(100vw - 32px);
+    width: calc(100vw - 24px);
+    max-height: min(94dvh, 600px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     outline: none;
     animation: clockDialogPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @media (max-width: 340px){
+    .clock-dialog-shell {
+      padding: 14px 12px 12px;
+      gap: 10px;
+    }
   }
 
   @keyframes clockDialogPop {
@@ -1141,8 +1192,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 5px;
     padding-top: 2px;
+    flex-wrap: wrap;
   }
 
   .clock-presets-label {
@@ -1160,10 +1212,12 @@
     font-family: var(--mono);
     font-size: 11px;
     font-weight: 700;
-    padding: 3px 8px;
+    padding: 5px 8px;
+    min-height: 28px;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.15s ease;
+    touch-action: manipulation;
   }
 
   .clock-preset-chip:hover {
@@ -1192,10 +1246,12 @@
     font-family: var(--sans);
     font-size: 13px;
     font-weight: 700;
-    padding: 7px 14px;
+    padding: 9px 16px;
+    min-height: 40px;
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: all 0.15s ease;
+    touch-action: manipulation;
   }
 
   .clock-btn-cancel {
@@ -1234,7 +1290,7 @@
   .schedule-duration-badge{
     margin-top: 10px;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
     font-size: 12px;
     font-weight: 600;
@@ -1243,12 +1299,14 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 8px 12px;
-    line-height: 1.3;
+    line-height: 1.4;
+    word-break: break-word;
   }
 
   .schedule-duration-badge svg{
     width: 14px;
     height: 14px;
+    margin-top: 2px;
     color: var(--amber);
     flex-shrink: 0;
   }
@@ -1433,13 +1491,19 @@
   .wa-status-msg.error{ color: var(--red); }
   .wa-status-msg.info{ color: var(--amber); }
 
-  @media (max-width: 440px){
+  @media (max-width: 540px){
     .wa-input-row{
       flex-wrap: wrap;
+      gap: 8px;
+    }
+    .wa-input-wrap{
+      width: 100%;
+      flex: 1 1 100%;
     }
     .wa-save-btn, .wa-clear-btn{
-      flex: 1;
+      flex: 1 1 0;
       text-align: center;
+      min-height: 44px;
     }
   }
 
@@ -1449,13 +1513,13 @@
     border: 1px solid var(--amber);
     color: var(--text);
     font-family: var(--display);
-    font-size: 20px;
+    font-size: clamp(16px, 4.5vw, 20px);
     font-weight: 800;
     letter-spacing: -0.01em;
-    padding: 5px 10px;
+    padding: 6px 10px;
     border-radius: 8px;
     width: 200px;
-    max-width: 60vw;
+    max-width: 65vw;
     box-shadow: 0 0 0 3px rgba(232,163,61,0.18);
     transition: box-shadow 0.15s ease;
   }
@@ -1479,11 +1543,17 @@
   }
 
   .panel-header{
-    padding: 22px 24px 18px;
+    padding: clamp(16px, 5vw, 22px) clamp(16px, 5vw, 24px) clamp(14px, 4.5vw, 18px);
     border-bottom: 1px solid var(--border);
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
+    gap: 8px;
+  }
+
+  .device-header-left{
+    flex: 1;
+    min-width: 0;
   }
 
   .device-name{
@@ -1493,15 +1563,18 @@
   }
 
   .device-title{
+    display: inline;
+    vertical-align: middle;
     font-family: var(--display);
-    font-size: 22px;
+    font-size: clamp(16.5px, 4.8vw, 22px);
     font-weight: 800;
-    margin-top: 2px;
     letter-spacing: -0.01em;
+    word-break: break-word;
+    overflow-wrap: break-word;
   }
 
   .conn{
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 8px;
     font-size: 12px;
@@ -1517,7 +1590,7 @@
 
   .status-block{
     position: relative;
-    padding: 36px 24px 26px;
+    padding: clamp(26px, 7.5vw, 36px) clamp(16px, 5vw, 24px) clamp(20px, 6vw, 26px);
     text-align: center;
     border-bottom: 1px solid var(--border);
     overflow: hidden;
@@ -1554,14 +1627,16 @@
   .status-value{
     position: relative;
     font-family: var(--display);
-    font-size: 44px;
+    font-size: clamp(28px, 8.5vw, 44px);
     font-weight: 900;
     letter-spacing: -0.01em;
     transition: color 0.25s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: 10px;
+    max-width: 100%;
+    word-break: break-word;
   }
 
   .status-value.running{ color: var(--green); text-shadow: 0 0 30px rgba(73,182,117,0.4); }
@@ -1593,8 +1668,19 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 14px;
-    padding: 24px;
+    padding: clamp(16px, 5vw, 24px);
     border-bottom: 1px solid var(--border);
+  }
+
+  @media (max-width: 380px){
+    .controls{
+      padding: 16px 14px;
+      gap: 10px;
+    }
+    button.btn{
+      padding: 16px 0;
+      font-size: 15px;
+    }
   }
 
   button.btn{
@@ -1645,7 +1731,7 @@
   /* ---- Readout: mono reserved for actual tabular values only ---------- */
 
   .readout{
-    padding: 20px 24px 22px;
+    padding: 18px clamp(16px, 5vw, 24px) 20px;
   }
 
   .readout-row{
@@ -1654,11 +1740,14 @@
     align-items: baseline;
     padding: 8px 0;
     font-size: 13.5px;
+    gap: 8px;
+    flex-wrap: wrap;
   }
 
   .readout-row .k{
     color: var(--muted);
     font-weight: 500;
+    flex-shrink: 0;
   }
 
   .readout-row .v{
@@ -1669,6 +1758,8 @@
     align-items: center;
     gap: 6px;
     font-size: 12.5px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .update-badge{
@@ -1747,14 +1838,11 @@
   }
 
   .advanced-body.open{
-    max-height: 900px; /* comfortably above the real content height - a
-                           transition target has to be a concrete value,
-                           not "auto", so this is deliberately generous
-                           rather than tightly measured */
+    max-height: 1400px; /* comfortably accommodates long wrapped text on narrow mobile screens */
   }
 
   .settings-section{
-    padding: 14px 24px 18px;
+    padding: 14px clamp(16px, 5vw, 24px) 18px;
   }
 
   /* Divider between subsections, not on the first one (right under
@@ -2011,10 +2099,6 @@
     line-height: 1.6;
   }
 
-  @media (max-width: 420px){
-    .status-value{ font-size: 36px; }
-  }
-
   .logout-btn{
     width: calc(100% - 48px);
     margin: 0 24px 24px;
@@ -2036,12 +2120,61 @@
 
     cursor: pointer;
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+    touch-action: manipulation;
   }
 
   .logout-btn:hover{
     border-color: var(--amber);
     color: var(--amber);
     background: var(--amber-soft);
+  }
+
+  @media (max-width: 380px){
+    .logout-btn{
+      width: calc(100% - 28px);
+      margin: 0 14px 20px;
+      padding: 14px 0;
+    }
+    .footer-note{
+      padding: 12px 14px 16px;
+    }
+  }
+
+  /* ---- Tablets & Large Screens ---------------------------------------- */
+  @media (min-width: 640px){
+    body{
+      padding: max(32px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+    }
+    .app-title,
+    .install-banner,
+    .update-banner,
+    .panel{
+      max-width: 560px;
+    }
+    .overview{
+      max-width: 560px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      overflow-x: visible;
+      gap: 12px;
+    }
+    .chip{
+      min-width: 0;
+    }
+  }
+
+  @media (min-width: 900px){
+    .app-title,
+    .install-banner,
+    .update-banner,
+    .panel{
+      max-width: 620px;
+    }
+    .overview{
+      max-width: 620px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
   }
 </style>
 </head>
@@ -2111,7 +2244,7 @@
 
   <div class="panel" id="panel" style="display:none;">
     <div class="panel-header">
-      <div>
+      <div class="device-header-left">
         <div class="device-name" id="deviceLabel">Device</div>
         <div class="device-title-row">
           <div class="device-title" id="deviceTitle">&mdash;</div>
@@ -2307,7 +2440,7 @@
     </div>
 
     <div class="footer-note">
-      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.4.2</span><br>
+      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.4.3</span><br>
       <a href="flash.html" style="color:var(--muted);">Set up a new device &rarr;</a>
     </div>
     <button class="logout-btn" id="logoutBtn">Logout</button>

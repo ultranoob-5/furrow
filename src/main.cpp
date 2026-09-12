@@ -158,6 +158,7 @@ void loop()
         Serial.printf("[Current] %.2f A RMS | Motor: %s\n",
                       motor.currentAmps(),
                       runningNow ? "RUNNING" : "OFF");
+        Serial.flush();
     }
 
     if (!baselineEstablished)
