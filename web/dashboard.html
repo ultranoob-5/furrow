@@ -3018,7 +3018,9 @@
             stateEl.innerHTML = `<svg class="chip-state-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="12.41 6.75 13 2 10.57 4.92"></polyline><polyline points="18.57 12.91 21 10 15.66 10"></polyline><polyline points="18.57 12.91 21 10 15.66 10"></polyline><line x1="2" y1="2" x2="22" y2="22"></line></svg> <span>No Power</span>`;
           } else {
             const text = online ? 'Idle' : (STATUS_LABELS[status] || status);
-            stateEl.innerHTML = `<span>${text}</span>`;
+            const span = document.createElement('span');
+            span.textContent = text;
+            stateEl.replaceChildren(span);
           }
         }
       }
@@ -3133,7 +3135,7 @@
     failed: 'Update failed'
   };
 
-  function setUpdateBtnState(stage, percent, labelHtml) {
+  function setUpdateBtnState(stage, percent, labelText, showSpinner = null) {
     if (!updateBtn) return;
 
     if (stage === 'idle') {
@@ -3146,27 +3148,34 @@
     updateBtn.classList.add('btn-ota-progress');
     updateBtn.disabled = true;
 
+    const shouldSpin = showSpinner !== null ? showSpinner : (stage === 'initializing' || stage === 'downloading' || stage === 'flashing');
+
     if (stage === 'initializing') {
       updateBtn.classList.add('pulsing');
       updateBtn.classList.remove('failed');
       updateBtn.style.setProperty('--ota-fill', `${percent}%`);
-      updateBtn.innerHTML = `<span class="btn-ota-inner"><span class="ota-spinner"></span> ${labelHtml}</span>`;
-      return;
-    }
-
-    updateBtn.classList.remove('pulsing');
-
-    if (stage === 'failed') {
+    } else if (stage === 'failed') {
+      updateBtn.classList.remove('pulsing');
       updateBtn.classList.add('failed');
       updateBtn.style.setProperty('--ota-fill', '100%');
-      updateBtn.innerHTML = `<span class="btn-ota-inner">${labelHtml}</span>`;
-      return;
+    } else {
+      // downloading, flashing, restarting
+      updateBtn.classList.remove('pulsing', 'failed');
+      updateBtn.style.setProperty('--ota-fill', `${percent}%`);
     }
 
-    // downloading, flashing, restarting
-    updateBtn.classList.remove('failed');
-    updateBtn.style.setProperty('--ota-fill', `${percent}%`);
-    updateBtn.innerHTML = `<span class="btn-ota-inner">${stage === 'restarting' ? '' : '<span class="ota-spinner"></span> '}${labelHtml}</span>`;
+    const inner = document.createElement('span');
+    inner.className = 'btn-ota-inner';
+
+    if (shouldSpin) {
+      const spinner = document.createElement('span');
+      spinner.className = 'ota-spinner';
+      inner.appendChild(spinner);
+      inner.appendChild(document.createTextNode(' '));
+    }
+
+    inner.appendChild(document.createTextNode(labelText || ''));
+    updateBtn.replaceChildren(inner);
   }
 
   function renderOtaProgress(ota){
@@ -3196,19 +3205,19 @@
     if (phase === 'downloading') {
       otaInProgress = true;
       if (percent < 80) {
-        setUpdateBtnState('downloading', Math.max(percent, 12), `Downloading&hellip; ${percent}%`);
+        setUpdateBtnState('downloading', Math.max(percent, 12), `Downloading\u2026 ${percent}%`);
       } else if (percent < 100) {
-        setUpdateBtnState('flashing', percent, `Flashing&hellip; ${percent}%`);
+        setUpdateBtnState('flashing', percent, `Flashing\u2026 ${percent}%`);
       } else {
-        setUpdateBtnState('flashing', 100, `Flashing&hellip; 100%`);
+        setUpdateBtnState('flashing', 100, `Flashing\u2026 100%`);
       }
     } else if (phase === 'restarting') {
       otaInProgress = true;
-      setUpdateBtnState('restarting', 100, '&#x2714; Rebooting device&hellip;');
+      setUpdateBtnState('restarting', 100, '\u2714 Rebooting device\u2026', false);
     } else if (phase === 'failed') {
       otaInProgress = false;
       const failMsg = ota.message || 'Error';
-      setUpdateBtnState('failed', 100, `&#x26A0; Update failed: ${failMsg}`);
+      setUpdateBtnState('failed', 100, `\u26A0 Update failed: ${failMsg}`, false);
       setTimeout(() => {
         setUpdateBtnState('idle', 0, 'Update firmware');
         const mState = (devices[selectedId] && devices[selectedId].motor) ? devices[selectedId].motor.state : null;
@@ -3489,13 +3498,13 @@
 
     otaPendingInitiation = true;
     if (otaInitiationTimer) clearTimeout(otaInitiationTimer);
-    setUpdateBtnState('initializing', 15, 'Initializing update&hellip;');
+    setUpdateBtnState('initializing', 15, 'Initializing update\u2026', true);
 
     // Timeout safety: if device doesn't respond within 45s, report failure
     otaInitiationTimer = setTimeout(() => {
       if (otaPendingInitiation) {
         otaPendingInitiation = false;
-        setUpdateBtnState('failed', 100, '&#x26A0; Device did not respond');
+        setUpdateBtnState('failed', 100, '\u26A0 Device did not respond', false);
         setTimeout(() => {
           setUpdateBtnState('idle', 0, 'Update firmware');
           const mState = (devices[selectedId] && devices[selectedId].motor) ? devices[selectedId].motor.state : null;
@@ -3510,7 +3519,7 @@
         console.error('Failed to set firmware URL', err);
         otaPendingInitiation = false;
         if (otaInitiationTimer) clearTimeout(otaInitiationTimer);
-        setUpdateBtnState('failed', 100, '&#x26A0; Failed to send command');
+        setUpdateBtnState('failed', 100, '\u26A0 Failed to send command', false);
         setTimeout(() => {
           setUpdateBtnState('idle', 0, 'Update firmware');
           const mState = (devices[selectedId] && devices[selectedId].motor) ? devices[selectedId].motor.state : null;
@@ -4415,7 +4424,13 @@
 
         const onFmt = `${on.h12}:${on.displayMin} ${on.ampm}`;
         const offFmt = `${off.h12}:${off.displayMin} ${off.ampm}`;
-        scheduleDurationText.innerHTML = `Runs for <strong>${durStr}</strong> daily (${onFmt} &rarr; ${offFmt})`;
+        const strong = document.createElement('strong');
+        strong.textContent = durStr;
+        scheduleDurationText.replaceChildren(
+          document.createTextNode('Runs for '),
+          strong,
+          document.createTextNode(` daily (${onFmt} \u2192 ${offFmt})`)
+        );
       }
     }
   }
