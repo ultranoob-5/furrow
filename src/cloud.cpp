@@ -57,6 +57,7 @@ namespace
     String autoResumePath;
     String stateBeforeOutagePath;
     String schedulePath;
+    String displayNamePath;
 
     bool streamStarted = false;
 
@@ -64,6 +65,7 @@ namespace
     bool autoResumeChecked = false;
     bool scheduleChecked = false;
     bool whatsAppChecked = false;
+    bool displayNameChecked = false;
     String stateBeforeOutage = "";
     bool remoteStartPending = false;
     bool remoteStopPending = false;
@@ -212,6 +214,21 @@ namespace
             return;
         }
 
+        if (result.uid() == "fetchDisplayName")
+        {
+            RealtimeDatabaseResult &rtdb = result.to<RealtimeDatabaseResult>();
+            String name = rtdb.to<String>();
+            name.replace("\"", "");
+            name.trim();
+            if (name.length() > 0 && name != "null" && name != AppStorage::deviceName())
+            {
+                Logger::info(TAG, "Device displayName synced from cloud: " + name);
+                AppStorage::setDeviceName(name);
+                cloud.publishDevice();
+            }
+            return;
+        }
+
         // Only the command stream task carries remote commands.
         if (result.uid() != "commandStream")
             return;
@@ -225,7 +242,8 @@ namespace
 
         if (value == "start" || value == "stop" || value == "restart" || value == "shutdown" ||
             value == "update" || value == "factory_reset" || value == "cancel_auto_resume" ||
-            value == "sync_schedule" || value == "sync_auto_resume" || value == "sync_whatsapp_phone")
+            value == "sync_schedule" || value == "sync_auto_resume" || value == "sync_whatsapp_phone" ||
+            value == "sync_name")
             pendingCommand = value;
     }
 
@@ -267,6 +285,15 @@ namespace
             pendingCommand = "";
             database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
             database.get(aClientMain, "/devices/" + device.id() + "/whatsappPhone", processData, false, "fetchWhatsAppPhone");
+            return;
+        }
+
+        if (pendingCommand == "sync_name")
+        {
+            Logger::info(TAG, "Remote command: SYNC_NAME");
+            pendingCommand = "";
+            database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
+            database.get(aClientMain, displayNamePath, processData, false, "fetchDisplayName");
             return;
         }
 
@@ -557,6 +584,7 @@ void Cloud::begin()
     autoResumePath = "/devices/" + device.id() + "/autoResume";
     stateBeforeOutagePath = "/devices/" + device.id() + "/motor/stateBeforeOutage";
     schedulePath = "/devices/" + device.id() + "/schedule";
+    displayNamePath = "/devices/" + device.id() + "/displayName";
 
     // Skip TLS certificate verification for simplicity in v1.0.
     // Consider pinning Google's root CA for production use.
@@ -591,6 +619,7 @@ void Cloud::loop()
         autoResumeChecked = false;
         scheduleChecked = false;
         whatsAppChecked = false;
+        displayNameChecked = false;
 
         unsigned long downtimeMs = Network::lastDisconnectDurationMs();
 
@@ -644,6 +673,12 @@ void Cloud::loop()
         {
             database.get(aClientMain, "/devices/" + device.id() + "/whatsappPhone", processData, false, "fetchWhatsAppPhone");
         }
+    }
+
+    if (!displayNameChecked)
+    {
+        displayNameChecked = true;
+        database.get(aClientMain, displayNamePath, processData, false, "fetchDisplayName");
     }
 
     if (!otaStatusReset)

@@ -1,4 +1,12 @@
 
+## [1.4.1] - 2026-09-12
+
+- **Device Display Name Synchronization**: Resolved device name divergence where dashboard renamed devices (e.g. "Well Pump") triggered alerts under the factory captive-portal name (e.g. "Farm Pump").
+- **Cloud Functions Display Name Resolution**: Added `resolveDeviceName` across all notification triggers (`onMotorStateChanged`, `onPowerRestored`, `onMotorCommandFailed`, and `powerWatchdog`) prioritizing user-defined `displayName` over `status/name`.
+- **Firmware NVS Name Sync**: Added `AppStorage::setDeviceName()` and cloud sync logic on boot, reconnect, and via `sync_name` remote command so the ESP32 synchronizes its local storage and status reports with `displayName`.
+- **Web Dashboard Rename Dispatch**: Updated `startRename()` to automatically dispatch the `sync_name` action to the device whenever a device is renamed in the UI.
+- **CodeQL DOM XSS Hardening**: Eliminated all `innerHTML` sinks in OTA button and chip status renders using safe DOM element and text node manipulation.
+
 ## [1.4.0] - 2026-09-11
 
 - **Instant Remote NVS Auto-Resume Synchronization**: Added `sync_auto_resume` remote command handler in firmware and connected dashboard toggle/delay changes to dispatch it immediately. Ensures ESP32 NVS flash storage holds the active auto-resume configuration and pre-outage motor state prior to mains power failure, enabling true offline local reboot autonomy without internet connectivity.

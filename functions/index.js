@@ -43,7 +43,9 @@ async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag,
   for (const [deviceId, data] of Object.entries(devices)) {
     const status = (data && data.status) || {};
     const lastSeen = status.lastSeen;
-    const name = status.name || deviceId;
+    const name = (data && data.displayName && typeof data.displayName === "string" && data.displayName.trim()) ||
+                 (status.name && typeof status.name === "string" && status.name.trim()) ||
+                 deviceId;
     const phone = status.whatsappPhone || (data && data.whatsappPhone);
     const alreadyAlerted = status.powerAlertSent === true;
 
@@ -288,6 +290,28 @@ module.exports.runWatchdog = runWatchdog; // exported for test.js
 // check rather than being skipped by it - harmless in practice, since
 // nobody has push notifications enabled yet for a device that was
 // just provisioned seconds ago.
+// Resolves the human-readable device name, prioritizing user-configured displayName
+// (set from the dashboard) over status.name (reported by firmware) and fallback deviceId.
+async function resolveDeviceName(db, deviceId) {
+  try {
+    const [dispSnap, nameSnap] = await Promise.all([
+      db.ref(`devices/${deviceId}/displayName`).once("value"),
+      db.ref(`devices/${deviceId}/status/name`).once("value"),
+    ]);
+    const disp = dispSnap.val();
+    if (disp && typeof disp === "string" && disp.trim().length > 0) {
+      return disp.trim();
+    }
+    const name = nameSnap.val();
+    if (name && typeof name === "string" && name.trim().length > 0) {
+      return name.trim();
+    }
+  } catch (err) {
+    logger.warn(`[resolveDeviceName] Failed for ${deviceId}: ${err}`);
+  }
+  return deviceId;
+}
+
 // Sends both a Push notification (FCM) and a WhatsApp message to the device recipient.
 // Pairs every cloud messaging alert with a matching WhatsApp alert so elder users
 // receive instant, clear updates on both their phone lock screen and WhatsApp chat.
@@ -341,16 +365,14 @@ exports.onMotorStateChanged = onValueWritten(
     try {
       let title = "";
       let message = "";
-      let name = deviceId;
+      const isRunning = (after === "RUNNING");
+      const [name, viaSnap] = await Promise.all([
+        resolveDeviceName(db, deviceId),
+        db.ref(`devices/${deviceId}/motor/${isRunning ? "startedVia" : "stoppedVia"}`).once("value"),
+      ]);
+      const via = viaSnap.val();
 
-      if (after === "RUNNING") {
-        const [nameSnap, viaSnap] = await Promise.all([
-          db.ref(`devices/${deviceId}/status/name`).once("value"),
-          db.ref(`devices/${deviceId}/motor/startedVia`).once("value"),
-        ]);
-        name = nameSnap.val() || deviceId;
-        const via = viaSnap.val();
-
+      if (isRunning) {
         title = `\u{1f7e2} ${name} turned ON`;
         if (via === "remote") {
           message = `\u{1f7e2} ${name} turned ON from the mobile app / website.`;
@@ -364,13 +386,6 @@ exports.onMotorStateChanged = onValueWritten(
           message = `\u{1f7e2} ${name} turned ON.`;
         }
       } else {
-        const [nameSnap, viaSnap] = await Promise.all([
-          db.ref(`devices/${deviceId}/status/name`).once("value"),
-          db.ref(`devices/${deviceId}/motor/stoppedVia`).once("value"),
-        ]);
-        name = nameSnap.val() || deviceId;
-        const via = viaSnap.val();
-
         title = `\u{1f534} ${name} turned OFF`;
         if (via === "remote") {
           message = `\u{1f534} ${name} turned OFF from the mobile app / website.`;
@@ -408,13 +423,12 @@ exports.onPowerRestored = onValueWritten(
     const db = getDatabase();
 
     try {
-      const [nameSnap, autoResumeSnap, stateBeforeSnap] = await Promise.all([
-        db.ref(`devices/${deviceId}/status/name`).once("value"),
+      const [name, autoResumeSnap, stateBeforeSnap] = await Promise.all([
+        resolveDeviceName(db, deviceId),
         db.ref(`devices/${deviceId}/autoResume`).once("value"),
         db.ref(`devices/${deviceId}/motor/stateBeforeOutage`).once("value"),
       ]);
 
-      const name = nameSnap.val() || deviceId;
       const autoResume = autoResumeSnap.val() || {};
       const stateBefore = stateBeforeSnap.val();
 
@@ -446,8 +460,7 @@ exports.onMotorCommandFailed = onValueWritten(
 
     const deviceId = event.params.deviceId;
     const db = getDatabase();
-    const nameSnap = await db.ref(`devices/${deviceId}/status/name`).once("value");
-    const name = nameSnap.val() || deviceId;
+    const name = await resolveDeviceName(db, deviceId);
 
     const isStart = (after.action === "start");
     const title = isStart

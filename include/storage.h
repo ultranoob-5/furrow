@@ -24,6 +24,7 @@ namespace AppStorage
     String deviceName();
     String ownerEmail();
     void setDeviceConfig(const String &name, const String &owner);
+    void setDeviceName(const String &name);
 
     // WhatsApp alerts (via Whapi.cloud) - entirely optional, unlike
     // WiFi/device config above. Provisioning completes fine without

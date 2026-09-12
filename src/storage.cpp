@@ -93,6 +93,12 @@ namespace AppStorage
         Logger::info(TAG, "Device config saved - name: " + name + ", owner: " + owner);
     }
 
+    void setDeviceName(const String &name)
+    {
+        prefs.putString(KEY_DEV_NAME, name);
+        Logger::info(TAG, "Device name updated in storage: " + name);
+    }
+
     bool hasWhatsAppConfig()
     {
         return prefs.isKey(KEY_WA_PHONE) && prefs.getString(KEY_WA_PHONE, "").length() > 0;
