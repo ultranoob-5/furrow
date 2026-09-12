@@ -209,8 +209,13 @@ namespace
             if (phone.length() > 0 && phone != "null")
             {
                 AppStorage::setWhatsAppConfig(phone);
-                cloud.publishDevice();
             }
+            else
+            {
+                Logger::info(TAG, "WhatsApp recipient cleared from cloud");
+                AppStorage::setWhatsAppConfig("");
+            }
+            cloud.publishDevice();
             return;
         }
 
@@ -669,10 +674,7 @@ void Cloud::loop()
     if (!whatsAppChecked)
     {
         whatsAppChecked = true;
-        if (!AppStorage::hasWhatsAppConfig())
-        {
-            database.get(aClientMain, "/devices/" + device.id() + "/whatsappPhone", processData, false, "fetchWhatsAppPhone");
-        }
+        database.get(aClientMain, "/devices/" + device.id() + "/whatsappPhone", processData, false, "fetchWhatsAppPhone");
     }
 
     if (!displayNameChecked)

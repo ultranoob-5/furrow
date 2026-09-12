@@ -5,6 +5,7 @@
 - **Cloud Functions Display Name Resolution**: Added `resolveDeviceName` across all notification triggers (`onMotorStateChanged`, `onPowerRestored`, `onMotorCommandFailed`, and `powerWatchdog`) prioritizing user-defined `displayName` over `status/name`.
 - **Firmware NVS Name Sync**: Added `AppStorage::setDeviceName()` and cloud sync logic on boot, reconnect, and via `sync_name` remote command so the ESP32 synchronizes its local storage and status reports with `displayName`.
 - **Web Dashboard Rename Dispatch**: Updated `startRename()` to automatically dispatch the `sync_name` action to the device whenever a device is renamed in the UI.
+- **WhatsApp Recipient Clearing Fix**: Resolved issue where clearing WhatsApp number failed due to `status/` write permission errors and firmware skipping NVS wipe on empty strings. Updated dashboard to set `whatsappPhone` to `""`, updated firmware `fetchWhatsAppPhone` to wipe NVS key on empty/null, and ensured boot sync always runs.
 - **CodeQL DOM XSS Hardening**: Eliminated all `innerHTML` sinks in OTA button and chip status renders using safe DOM element and text node manipulation.
 
 ## [1.4.0] - 2026-09-11

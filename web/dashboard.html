@@ -4056,7 +4056,9 @@
 
   function refreshWhatsAppUi(data){
     if (!waPhoneInput) return;
-    const phone = (data && data.whatsappPhone) || (data && data.status && data.status.whatsappPhone) || '';
+    const phone = (data && typeof data.whatsappPhone === 'string')
+      ? data.whatsappPhone
+      : (data && data.status && data.status.whatsappPhone) || '';
     if (document.activeElement !== waPhoneInput) {
       waPhoneInput.value = phone;
     }
@@ -4095,7 +4097,6 @@
         if (cleanPhone) {
           await Promise.all([
             db.ref(`devices/${selectedId}/whatsappPhone`).set(cleanPhone),
-            db.ref(`devices/${selectedId}/status/whatsappPhone`).set(cleanPhone),
             db.ref(`devices/${selectedId}/command/action`).set('sync_whatsapp_phone')
           ]);
           waPhoneStatus.className = 'wa-status-msg success';
@@ -4107,8 +4108,7 @@
           if (waPhoneClearBtn) waPhoneClearBtn.style.display = 'inline-block';
         } else {
           await Promise.all([
-            db.ref(`devices/${selectedId}/whatsappPhone`).remove(),
-            db.ref(`devices/${selectedId}/status/whatsappPhone`).remove(),
+            db.ref(`devices/${selectedId}/whatsappPhone`).set(''),
             db.ref(`devices/${selectedId}/command/action`).set('sync_whatsapp_phone')
           ]);
           waPhoneStatus.className = 'wa-status-msg success';
@@ -4140,8 +4140,7 @@
       waPhoneStatus.textContent = 'Removing WhatsApp alerts…';
       try {
         await Promise.all([
-          db.ref(`devices/${selectedId}/whatsappPhone`).remove(),
-          db.ref(`devices/${selectedId}/status/whatsappPhone`).remove(),
+          db.ref(`devices/${selectedId}/whatsappPhone`).set(''),
           db.ref(`devices/${selectedId}/command/action`).set('sync_whatsapp_phone')
         ]);
         waPhoneStatus.className = 'wa-status-msg success';
