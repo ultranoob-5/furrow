@@ -1304,6 +1304,145 @@
     color: var(--amber);
   }
 
+  /* ---- WhatsApp Alerts Section ------------------------------------ */
+  .wa-badge{
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 3px 8px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    transition: all 0.2s ease;
+  }
+  .wa-badge.active{
+    background: var(--green-soft);
+    border-color: rgba(73,182,117,0.4);
+    color: var(--green);
+  }
+
+  .wa-input-row{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    width: 100%;
+  }
+
+  .wa-input-wrap{
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+
+  .wa-prefix{
+    position: absolute;
+    left: 14px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .wa-phone-input{
+    appearance: none;
+    width: 100%;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 12px 14px 12px 28px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  }
+
+  .wa-phone-input:focus{
+    outline: none;
+    border-color: var(--amber);
+    box-shadow: 0 0 0 3px rgba(232,163,61,0.18);
+  }
+
+  .wa-phone-input::placeholder{
+    color: rgba(157,163,175,0.45);
+    font-family: var(--sans);
+    font-size: 13px;
+  }
+
+  .wa-save-btn{
+    appearance: none;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 13px;
+    padding: 12px 20px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+
+  .wa-save-btn:hover:not(:disabled){
+    border-color: var(--amber);
+    color: var(--amber);
+    background: var(--amber-soft);
+  }
+
+  .wa-save-btn:disabled{
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .wa-clear-btn{
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 12.5px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+
+  .wa-clear-btn:hover:not(:disabled){
+    border-color: var(--red);
+    color: var(--red);
+    background: var(--red-soft);
+  }
+
+  .wa-status-msg{
+    font-size: 12px;
+    margin-top: 8px;
+    line-height: 1.4;
+    transition: all 0.2s ease;
+  }
+  .wa-status-msg.success{ color: var(--green); }
+  .wa-status-msg.error{ color: var(--red); }
+  .wa-status-msg.info{ color: var(--amber); }
+
+  @media (max-width: 440px){
+    .wa-input-row{
+      flex-wrap: wrap;
+    }
+    .wa-save-btn, .wa-clear-btn{
+      flex: 1;
+      text-align: center;
+    }
+  }
+
   input.name-edit{
     appearance: none;
     background: var(--panel-raised);
@@ -2103,12 +2242,12 @@
     </div>
 
     <div class="advanced-settings">
-      <button type="button" class="advanced-toggle" id="advancedToggle" aria-expanded="false" aria-controls="advancedBody">
-        <span>Advanced settings</span>
+      <button type="button" class="advanced-toggle" id="notificationToggle" aria-expanded="false" aria-controls="notificationBody">
+        <span>Notification settings</span>
         <svg class="advanced-chevron" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
 
-      <div class="advanced-body" id="advancedBody">
+      <div class="advanced-body" id="notificationBody">
 
         <div class="settings-section" id="notifyZone">
           <div class="settings-label">Push notifications</div>
@@ -2119,14 +2258,32 @@
         </div>
 
         <div class="settings-section" id="waZone">
-          <div class="settings-label">WhatsApp alerts</div>
-          <p class="settings-desc">Receive WhatsApp alerts for power loss, motor start/stop, and reconnection. Enter your international phone number with country code without + (e.g. <code>919876543210</code>).</p>
-          <div style="display:flex; gap:8px; margin-top:8px; max-width:360px;">
-            <input type="tel" id="waPhoneInput" class="time-input" placeholder="e.g. 919876543210" style="flex:1; padding:8px 12px; font-size:13px; font-family:var(--font-mono); border-radius:8px;" maxlength="20">
-            <button type="button" class="btn" id="waPhoneSaveBtn" style="padding:8px 18px; font-size:13px; font-weight:700; border-radius:8px;">Save</button>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <div class="settings-label" style="margin-bottom:0;">WhatsApp alerts</div>
+            <span class="wa-badge" id="waBadge">Off</span>
           </div>
-          <div id="waPhoneStatus" style="font-size:12px; margin-top:6px; opacity:0.8;"></div>
+          <p class="settings-desc">Receive WhatsApp alerts for power loss, motor start/stop, and reconnection. Enter your international phone number with country code without + (e.g. <code>919876543210</code>).</p>
+          <div class="wa-input-row">
+            <div class="wa-input-wrap">
+              <span class="wa-prefix">+</span>
+              <input type="tel" id="waPhoneInput" class="wa-phone-input" placeholder="919876543210" maxlength="20" autocomplete="tel">
+            </div>
+            <button type="button" class="wa-save-btn" id="waPhoneSaveBtn">Save</button>
+            <button type="button" class="wa-clear-btn" id="waPhoneClearBtn" style="display:none;" title="Remove WhatsApp alerts">Clear</button>
+          </div>
+          <div id="waPhoneStatus" class="wa-status-msg"></div>
         </div>
+
+      </div>
+    </div>
+
+    <div class="advanced-settings">
+      <button type="button" class="advanced-toggle" id="advancedToggle" aria-expanded="false" aria-controls="advancedBody">
+        <span>Advanced settings</span>
+        <svg class="advanced-chevron" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+
+      <div class="advanced-body" id="advancedBody">
 
         <div class="settings-section">
           <div class="settings-label">Restart device</div>
@@ -2606,6 +2763,15 @@
     advancedToggle.addEventListener('click', () => {
       const isOpen = advancedBody.classList.toggle('open');
       advancedToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+  }
+
+  const notificationToggle = document.getElementById('notificationToggle');
+  const notificationBody = document.getElementById('notificationBody');
+  if (notificationToggle && notificationBody) {
+    notificationToggle.addEventListener('click', () => {
+      const isOpen = notificationBody.classList.toggle('open');
+      notificationToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     });
   }
 
@@ -3717,7 +3883,7 @@
         registration.showNotification(title, {
           body,
           icon: './icons/icon-192.png',
-          badge: './icons/icon-192.png',
+          badge: './icons/badge-96.png',
           tag: deviceId ? `furrow-${deviceId}` : 'furrow-alert',
           renotify: true,
           requireInteraction: true,
@@ -3871,13 +4037,28 @@
   // ---- WhatsApp Alerts ---------------------------------------------
   const waPhoneInput = document.getElementById('waPhoneInput');
   const waPhoneSaveBtn = document.getElementById('waPhoneSaveBtn');
+  const waPhoneClearBtn = document.getElementById('waPhoneClearBtn');
   const waPhoneStatus = document.getElementById('waPhoneStatus');
+  const waBadge = document.getElementById('waBadge');
 
   function refreshWhatsAppUi(data){
     if (!waPhoneInput) return;
-    if (document.activeElement === waPhoneInput) return;
     const phone = (data && data.whatsappPhone) || (data && data.status && data.status.whatsappPhone) || '';
-    waPhoneInput.value = phone;
+    if (document.activeElement !== waPhoneInput) {
+      waPhoneInput.value = phone;
+    }
+    if (waBadge) {
+      if (phone) {
+        waBadge.textContent = 'Active';
+        waBadge.classList.add('active');
+      } else {
+        waBadge.textContent = 'Off';
+        waBadge.classList.remove('active');
+      }
+    }
+    if (waPhoneClearBtn) {
+      waPhoneClearBtn.style.display = phone ? 'inline-block' : 'none';
+    }
   }
 
   if (waPhoneSaveBtn) {
@@ -3885,19 +4066,84 @@
       if (!selectedId) return;
       const raw = waPhoneInput.value.trim();
       const cleanPhone = raw.replace(/[^0-9]/g, '');
+
+      if (raw.length > 0 && cleanPhone.length < 8) {
+        waPhoneStatus.className = 'wa-status-msg error';
+        waPhoneStatus.textContent = 'Please enter a valid phone number with country code (e.g. 919876543210).';
+        return;
+      }
+
       waPhoneSaveBtn.disabled = true;
+      if (waPhoneClearBtn) waPhoneClearBtn.disabled = true;
+      waPhoneStatus.className = 'wa-status-msg info';
       waPhoneStatus.textContent = 'Saving…';
+
       try {
-        await Promise.all([
-          db.ref(`devices/${selectedId}/whatsappPhone`).set(cleanPhone),
-          db.ref(`devices/${selectedId}/status/whatsappPhone`).set(cleanPhone),
-          db.ref(`devices/${selectedId}/command/action`).set('sync_whatsapp_phone')
-        ]);
-        waPhoneStatus.textContent = cleanPhone ? 'WhatsApp recipient saved!' : 'WhatsApp recipient cleared.';
+        if (cleanPhone) {
+          await Promise.all([
+            db.ref(`devices/${selectedId}/whatsappPhone`).set(cleanPhone),
+            db.ref(`devices/${selectedId}/status/whatsappPhone`).set(cleanPhone),
+            db.ref(`devices/${selectedId}/command/action`).set('sync_whatsapp_phone')
+          ]);
+          waPhoneStatus.className = 'wa-status-msg success';
+          waPhoneStatus.textContent = `✓ WhatsApp alerts enabled for +${cleanPhone}`;
+          if (waBadge) {
+            waBadge.textContent = 'Active';
+            waBadge.classList.add('active');
+          }
+          if (waPhoneClearBtn) waPhoneClearBtn.style.display = 'inline-block';
+        } else {
+          await Promise.all([
+            db.ref(`devices/${selectedId}/whatsappPhone`).remove(),
+            db.ref(`devices/${selectedId}/status/whatsappPhone`).remove(),
+            db.ref(`devices/${selectedId}/command/action`).set('sync_whatsapp_phone')
+          ]);
+          waPhoneStatus.className = 'wa-status-msg success';
+          waPhoneStatus.textContent = 'WhatsApp alerts cleared.';
+          if (waBadge) {
+            waBadge.textContent = 'Off';
+            waBadge.classList.remove('active');
+          }
+          if (waPhoneClearBtn) waPhoneClearBtn.style.display = 'none';
+        }
       } catch (err) {
         console.error('Failed to save WhatsApp number', err);
+        waPhoneStatus.className = 'wa-status-msg error';
         waPhoneStatus.textContent = 'Error: ' + err.message;
       } finally {
+        waPhoneSaveBtn.disabled = false;
+        if (waPhoneClearBtn) waPhoneClearBtn.disabled = false;
+      }
+    });
+  }
+
+  if (waPhoneClearBtn) {
+    waPhoneClearBtn.addEventListener('click', async () => {
+      if (!selectedId) return;
+      waPhoneInput.value = '';
+      waPhoneClearBtn.disabled = true;
+      waPhoneSaveBtn.disabled = true;
+      waPhoneStatus.className = 'wa-status-msg info';
+      waPhoneStatus.textContent = 'Removing WhatsApp alerts…';
+      try {
+        await Promise.all([
+          db.ref(`devices/${selectedId}/whatsappPhone`).remove(),
+          db.ref(`devices/${selectedId}/status/whatsappPhone`).remove(),
+          db.ref(`devices/${selectedId}/command/action`).set('sync_whatsapp_phone')
+        ]);
+        waPhoneStatus.className = 'wa-status-msg success';
+        waPhoneStatus.textContent = '✓ WhatsApp alerts removed.';
+        if (waBadge) {
+          waBadge.textContent = 'Off';
+          waBadge.classList.remove('active');
+        }
+        waPhoneClearBtn.style.display = 'none';
+      } catch (err) {
+        console.error('Failed to clear WhatsApp number', err);
+        waPhoneStatus.className = 'wa-status-msg error';
+        waPhoneStatus.textContent = 'Error: ' + err.message;
+      } finally {
+        waPhoneClearBtn.disabled = false;
         waPhoneSaveBtn.disabled = false;
       }
     });

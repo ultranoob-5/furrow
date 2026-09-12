@@ -2,7 +2,7 @@
 // Provides an offline-first app shell, intelligent CDN caching for libraries/fonts,
 // background push notifications via FCM, and seamless in-app update workflows.
 
-const CACHE_NAME = 'furrow-dashboard-v6';
+const CACHE_NAME = 'furrow-dashboard-v7';
 
 const APP_SHELL = [
   './dashboard.html',
@@ -12,7 +12,8 @@ const APP_SHELL = [
   './sw-firebase.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/apple-touch-icon.png'
+  './icons/apple-touch-icon.png',
+  './icons/badge-96.png'
 ];
 
 // Pinned third-party CDNs used by Furrow that can be safely cached for offline reliability
@@ -148,7 +149,7 @@ try {
       self.registration.showNotification(title, {
         body,
         icon: './icons/icon-192.png',
-        badge: './icons/icon-192.png',
+        badge: './icons/badge-96.png',
         tag: deviceId ? `furrow-${deviceId}` : 'furrow-alert',
         renotify: true,
         requireInteraction: true,
