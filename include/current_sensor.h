@@ -15,7 +15,7 @@ public:
 private:
     void finishSample();
 
-    uint32_t nextSampleUs = 0;
+    uint32_t lastSampleUs = 0;
     uint16_t samplesTaken = 0;
     float sumI = 0.0f;
     float offsetI = 2048.0f;
@@ -49,6 +49,21 @@ private:
     // window was taking closer to 4-5 real seconds, not 400ms - see
     // main.cpp's delay(1) comment for the fix and windowStartUs's log
     // for how to check what's actually being achieved on real hardware.
+    //
+    // Scheduling uses lastSampleUs (time of the most recent sample
+    // taken) rather than a rolling nextSampleUs target. The difference
+    // matters for long-uptime devices: with nextSampleUs, loop() jitter
+    // makes nextSampleUs fall behind 'now' continuously (every iteration
+    // of loop() is slightly longer than 1ms), so the lag grows without
+    // bound. When it exceeds 2^31 microseconds (~35 minutes of
+    // accumulated deficit), the signed cast in (int32_t)(now -
+    // nextSampleUs) wraps negative and the guard fires on EVERY
+    // loop tick - the sensor permanently stops sampling (confirmed
+    // to happen in practice after a few hours of normal operation).
+    // lastSampleUs simply records when the last sample was taken; if
+    // loop() arrives late, we sample immediately and reset the anchor
+    // to now - no lag ever accumulates, and unsigned subtraction is
+    // rollover-safe across the full 2^32 us (~71 minute) cycle.
     static constexpr uint16_t SAMPLES = 400;
     static constexpr uint32_t SAMPLE_INTERVAL_US = 1000;
 
@@ -92,12 +107,23 @@ private:
     // the ICAL comment above): each single ADC count already corresponds
     // to about 0.024 A at this gain (3.3V / 4095 counts * 30 A/V), so a
     // completely ordinary ADC noise floor of a dozen-ish counts shows up
-    // as several tenths of an amp. 0.8 A keeps a solid margin above that
-    // observed noise ceiling while staying well clear of RUN_THRESHOLD_A,
-    // so the hysteresis gap between "definitely off" and "definitely
-    // running" stays wide either way.
-    static constexpr float RUN_THRESHOLD_A = 2.0f;
-    static constexpr float STOP_THRESHOLD_A = 0.8f;
+    // as several tenths of an amp. Raised to 0.8 A in v1.3.9 to clear
+    // that observed noise ceiling.
+    //
+    // Raised again to 1.2 A in v1.4.4: WiFi modem sleep was disabled in
+    // v1.4.3 (WiFi.setSleep(false)) to eliminate UART serial corruption.
+    // With the RF power domain active continuously, RF coupling into ADC1
+    // raises the idle noise floor further to ~0.85-0.95 A RMS. 0.8 A no
+    // longer provides enough headroom - the motor OFF state was not being
+    // detected reliably after turn-off because the noise occasionally sat
+    // just above 0.8 A, resetting consecutiveBelowStopThreshold every
+    // window and preventing the STOP confirmation from accumulating.
+    // 1.2 A sits solidly above the observed WiFi-active noise ceiling
+    // while remaining well clear of RUN_THRESHOLD_A (2.2 A), keeping
+    // the hysteresis gap between "definitely off" and "definitely running"
+    // wide and unambiguous.
+    static constexpr float RUN_THRESHOLD_A = 2.2f;
+    static constexpr float STOP_THRESHOLD_A = 1.2f;
 
     // A single noisy RMS window can spike over RUN_THRESHOLD_A with
     // nothing actually running - confirmed on real hardware: a false

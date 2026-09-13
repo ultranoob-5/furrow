@@ -28,7 +28,7 @@ void CurrentSensor::begin()
     running = false;
     consecutiveAboveRunThreshold = 0;
     consecutiveBelowStopThreshold = 0;
-    nextSampleUs = micros();
+    lastSampleUs = micros();
 
     Logger::info(TAG, "Ready - GPIO" + String(Config::CURRENT_ADC_PIN));
 }
@@ -37,13 +37,27 @@ void CurrentSensor::update()
 {
     const uint32_t now = micros();
 
-    // Not time for the next sample yet.
-    if ((int32_t)(now - nextSampleUs) < 0)
+    // Unsigned subtraction is rollover-safe across the full 2^32 us
+    // (~71 min) micros() cycle - no cast needed, this is always correct.
+    if (now - lastSampleUs < SAMPLE_INTERVAL_US)
         return;
 
-    // Schedule from the previous target instead of from 'now', keeping
-    // the sampling interval close to 1 ms even when loop() has jitter.
-    nextSampleUs += SAMPLE_INTERVAL_US;
+    // If loop() was delayed significantly longer than one interval (e.g.
+    // a long cloud.loop() SSL transaction or WiFi event), don't try to
+    // catch up - just anchor to now and resume at the normal rate. This
+    // prevents any lag from ever accumulating across loop iterations.
+    // With the old nextSampleUs approach, jitter made nextSampleUs fall
+    // behind 'now' by a tiny amount every loop tick (loop is ~1.5-2ms,
+    // SAMPLE_INTERVAL_US is 1ms), so the deficit grew without bound.
+    // After ~35 minutes of accumulated lag the signed cast in
+    // (int32_t)(now - nextSampleUs) wrapped negative, making the guard
+    // fire on every tick and permanently halting all sampling - confirmed
+    // to happen in practice after a few hours of runtime. This approach
+    // cannot accumulate any lag at all.
+    if (now - lastSampleUs >= 2 * SAMPLE_INTERVAL_US)
+        lastSampleUs = now;
+    else
+        lastSampleUs += SAMPLE_INTERVAL_US;
 
     if (samplesTaken == 0)
         windowStartUs = now; // first sample of a new window - mark its real start time
