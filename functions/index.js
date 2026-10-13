@@ -500,12 +500,21 @@ exports.onMotorCommandFailed = onValueWritten(
 // onMotorCommandFailed) - this one only ever fires when a person
 // explicitly clicks the test button.
 //
-// Any signed-in owner can call this - deliberately not restricted
-// further, since it never touches device data, only sends a push to
-// whatever token the caller's own browser just generated for itself.
+// Locked down because sign-up is open: the caller must have a verified
+// email, must own the device they name, and the token must already be
+// registered under that device's fcmTokens (which only the owner can
+// write). The text is fixed server-side. Without these checks any
+// account could use this function to push arbitrary text to any FCM
+// token it got hold of.
+const TEST_PUSH_TITLE = "Furrow test";
+const TEST_PUSH_BODY = "If you see this, push notifications work.";
+
 exports.sendTestNotification = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Sign in first.");
+  }
+  if (request.auth.token.email_verified !== true) {
+    throw new HttpsError("permission-denied", "Verify your email first.");
   }
 
   const token = request.data && request.data.token;
@@ -513,11 +522,24 @@ exports.sendTestNotification = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "Missing or invalid FCM token.");
   }
 
-  const rawTitle = (request.data && request.data.title) || "Furrow test";
-  const rawBody = (request.data && request.data.body) ||
-    "If you see this, push notifications work.";
-  const title = String(rawTitle).slice(0, 100);
-  const body = String(rawBody).slice(0, 500);
+  const deviceId = request.data && request.data.deviceId;
+  if (!deviceId || typeof deviceId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(deviceId)) {
+    throw new HttpsError("invalid-argument", "Missing or invalid device id.");
+  }
+
+  const deviceSnap = await getDatabase().ref(`devices/${deviceId}`).get();
+  const device = deviceSnap.val() || {};
+  const owner = device.status && device.status.owner;
+  if (!owner || owner !== request.auth.token.email) {
+    throw new HttpsError("permission-denied", "You don't own this device.");
+  }
+  const registered = Object.values(device.fcmTokens || {}).includes(token);
+  if (!registered) {
+    throw new HttpsError("failed-precondition", "Enable notifications for this device first.");
+  }
+
+  const title = TEST_PUSH_TITLE;
+  const body = TEST_PUSH_BODY;
 
   try {
     const messageId = await getMessaging().send({
@@ -598,7 +620,9 @@ module.exports.isValidFirmwareAssetRequest = isValidFirmwareAssetRequest; // exp
 // them). Rather than deploy and find out which one was true this
 // time via a silent 403 in flash.html, this removes the ambiguity
 // outright.
-exports.firmwareProxy = onRequest({ invoker: "public" }, async (req, res) => {
+// maxInstances caps the bill if someone hammers this public endpoint;
+// a handful of instances is plenty for occasional device setups.
+exports.firmwareProxy = onRequest({ invoker: "public", maxInstances: 5 }, async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
 
   const tag = req.query.tag;

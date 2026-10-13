@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <!-- Bundled, tree-shaken modular Firebase v11 (replaces 5 legacy CDN compat scripts, saving ~76% payload) -->
-<script src="firebase-bundle.js?v=1.5.1"></script>
+<script src="firebase-bundle.js?v=1.5.2"></script>
 <script src="firebase-config.js"></script>
 <!-- Defines firebaseConfig - generated at deploy time from GitHub
      Actions secrets, or copy web/firebase-config.example.js locally
@@ -2594,7 +2594,7 @@
        hidden then, which used to leave no way to log out). -->
   <div class="account-footer" id="accountFooter">
     <div class="footer-note">
-      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.5.1</span><br>
+      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.5.2</span><br>
       <a href="flash.html" style="color:var(--muted);">Set up a new device &rarr;</a>
     </div>
     <p class="account-signed-in" id="accountSignedIn"></p>
@@ -4672,11 +4672,7 @@
     try {
       const token = await getCurrentPushToken();
       const sendTestNotification = firebase.functions().httpsCallable('sendTestNotification');
-      const result = await sendTestNotification({
-        token,
-        title: 'Furrow test',
-        body: 'If you see this, push notifications work.'
-      });
+      const result = await sendTestNotification({ token, deviceId: selectedId });
 
       notifyStatus.textContent = 'Test sent (id: ' + result.data.messageId + '). Check your notifications.';
     } catch (err) {

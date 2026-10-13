@@ -1,3 +1,13 @@
+## [1.5.2] - 2026-10-13
+
+Security hardening (web, rules, Cloud Functions) - no firmware change.
+
+- **Device Account Locked Down**: The shared device login ships inside the public release firmware, so the database rules now only let it do what the firmware actually does: it can no longer list every device, can only write `"none"` to `command/action` (so it can't start or stop pumps), can only clear `stateBeforeOutage`, and can no longer write `schedule`. Copy into your real `database.rules.json` and publish.
+- **Clickjacking Protection**: Hosting now sends `X-Frame-Options: DENY` and `frame-ancestors 'none'`, so the dashboard can't be embedded in another site to trick an owner into pressing Start/Stop. Also adds `nosniff`, `Referrer-Policy`, and a `Permissions-Policy` (Web Serial for the flasher is unaffected).
+- **Test Notification Hardened**: `sendTestNotification` now requires a verified email, ownership of the named device, and an FCM token already registered under that device; title and body are fixed server-side.
+- **Firmware Proxy Cost Cap**: `firmwareProxy` limited to 5 instances.
+- **PWA Cache Invalidation**: Service worker cache `furrow-dashboard-v13`, PWA `v1.5.2`.
+
 
 ## [1.5.1] - 2026-10-13
 
