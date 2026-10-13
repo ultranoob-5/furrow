@@ -33,6 +33,10 @@ __pycache__/
 node_modules/
 functions/node_modules/
 
+# Copied from node_modules by build-web.mjs (npm run build) - generated,
+# and rebuilt by the hosting deploy workflow.
+web/vendor/
+
 # Local testing and scratch artifacts
 scratch/
 .chrome_temp/

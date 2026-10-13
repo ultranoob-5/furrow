@@ -430,6 +430,38 @@ temporary internet drops.
 Schedule times are synchronized to IST (India Standard Time, UTC+5:30)
 via atomic NTP servers (`pool.ntp.org`, `time.google.com`).
 
+## 14. App Check (optional, monitoring only for now)
+
+App Check lets Firebase tell requests from the real dashboard apart
+from bots and scripts. The dashboard sends an App Check token
+(reCAPTCHA Enterprise) with every Auth, Database and Functions request
+once a site key is configured.
+
+1. Google Cloud Console → **Security → reCAPTCHA** → create a
+   **website** key. Under **Domains**, list every domain the dashboard
+   is served from (e.g. `furrow.in`, `<projectId>.web.app`,
+   `<projectId>.firebaseapp.com`).
+2. Firebase Console → **App Check → Apps** → your web app →
+   **reCAPTCHA Enterprise** → paste the same site key.
+3. Add the site key as the GitHub secret `FIREBASE_APPCHECK_SITE_KEY`
+   (and as `appCheckSiteKey` in your local `web/firebase-config.js`).
+   The site key is public, not sensitive. Redeploy the dashboard.
+4. Watch **App Check → APIs** → each product's request metrics:
+   dashboard traffic should now show as *verified*.
+
+**Do not enforce App Check on Realtime Database or Authentication.**
+The ESP32 firmware signs in through Authentication and talks to the
+Realtime Database directly, and it can't produce App Check tokens - so
+enforcing either one cuts every device off at its next sign-in (any
+reboot or power cut). Keep them on *Monitoring*. Authentication can
+only be enforced once devices sign in through a server-side function
+that attaches an App Check token on their behalf.
+
+For local testing, the dashboard switches to App Check's debug mode on
+`localhost` and logs a debug token to the browser console; register it
+under App Check → Apps → your web app → **Manage debug tokens** if you
+want local requests counted as verified.
+
 ---
 
 ## Troubleshooting

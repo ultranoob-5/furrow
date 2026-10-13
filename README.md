@@ -5,7 +5,7 @@
 <h1 align="center">Furrow</h1>
 <p align="center"><i>Agriculture IoT platform - built on ESP32 + Firebase</i></p>
 
-**Live dashboard:** [furrow-123098.web.app](https://furrow-123098.web.app)
+**Live dashboard:** [furrow.in](https://furrow.in)
 
 ---
 

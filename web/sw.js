@@ -2,7 +2,7 @@
 // Provides an offline-first app shell, intelligent CDN caching for libraries/fonts,
 // background push notifications via FCM, and seamless in-app update workflows.
 
-const CACHE_NAME = 'furrow-dashboard-v14';
+const CACHE_NAME = 'furrow-dashboard-v15';
 
 const APP_SHELL = [
   './dashboard.html',
@@ -16,11 +16,11 @@ const APP_SHELL = [
   './icons/badge-96.png'
 ];
 
-// Pinned third-party CDNs used by Furrow that can be safely cached for offline reliability
+// Third-party hosts whose responses can be cached for offline use. Only
+// fonts now - ESP Web Tools is self-hosted under vendor/.
 const TRUSTED_CDN_HOSTS = [
   'fonts.googleapis.com',
-  'fonts.gstatic.com',
-  'unpkg.com'
+  'fonts.gstatic.com'
 ];
 
 self.addEventListener('install', (event) => {

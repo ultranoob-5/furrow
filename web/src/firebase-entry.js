@@ -8,6 +8,7 @@
 // - Cloud Functions (callable HTTPS endpoints)
 
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import {
   getAuth,
   onAuthStateChanged,
@@ -212,6 +213,31 @@ class DatabaseReferenceWrapper extends DatabaseQueryWrapper {
 const FurrowFirebase = {
   initializeApp(config) {
     _app = initializeApp(config);
+
+    // App Check must be set up before Auth/Database/Functions make their
+    // first request, so every call from this dashboard carries an App
+    // Check token (reCAPTCHA Enterprise). Optional: with no site key
+    // configured it's skipped and everything works as before. Never
+    // let it break the dashboard - failures just mean unverified
+    // requests, which only matter once a product is enforced.
+    if (config && config.appCheckSiteKey) {
+      try {
+        const host = typeof location !== 'undefined' ? location.hostname : '';
+        if (host === 'localhost' || host === '127.0.0.1') {
+          // Local testing: print a debug token to the console instead of
+          // running reCAPTCHA (localhost isn't an allowed key domain).
+          // Register it under App Check -> Apps -> Manage debug tokens.
+          self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+        }
+        initializeAppCheck(_app, {
+          provider: new ReCaptchaEnterpriseProvider(config.appCheckSiteKey),
+          isTokenAutoRefreshEnabled: true
+        });
+      } catch (err) {
+        console.warn('App Check not initialized:', err);
+      }
+    }
+
     _auth = getAuth(_app);
     _db = getDatabase(_app);
     return _app;

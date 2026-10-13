@@ -26,5 +26,10 @@ const firebaseConfig = {
   // proof of concept (see dashboard.html's setupPushExperiment() and
   // SETUP.md). Leave as-is/omit entirely if you're not using that -
   // nothing else on the dashboard depends on it.
-  vapidKey: "REPLACE_WITH_FIREBASE_VAPID_KEY"
+  vapidKey: "REPLACE_WITH_FIREBASE_VAPID_KEY",
+  // Optional - App Check (reCAPTCHA Enterprise) site key. With it, every
+  // Auth/Database/Functions request from the dashboard carries an App
+  // Check token. Leave empty to skip App Check. The site key is public
+  // (it's sent to every browser), not a secret. See SETUP.md.
+  appCheckSiteKey: ""
 };

@@ -14,17 +14,17 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preconnect" href="https://unpkg.com" crossorigin>
-<link rel="dns-prefetch" href="https://unpkg.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 
 <!-- ESP Web Tools - handles the actual flashing protocol (entering
      bootloader mode, erasing, writing each part, verifying) over the
      Web Serial API. This project doesn't reimplement any of that -
-     https://esphome.github.io/esp-web-tools/, pinned to a specific
-     version rather than @latest for stability, matching how this
-     project already pins the Firebase SDK version in dashboard.html. -->
-<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+     https://esphome.github.io/esp-web-tools/, pinned to an exact
+     version in package.json. Served from this site (copied into
+     web/vendor/ by build-web.mjs) rather than a CDN: this page writes
+     firmware to hardware, so a compromised CDN must not be able to
+     change what it does. -->
+<script type="module" src="vendor/esp-web-tools/install-button.js"></script>
 
 <style>
   :root{

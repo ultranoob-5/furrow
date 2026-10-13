@@ -40,6 +40,13 @@ try {
     legalComments: 'none'
   });
 
+  // 3. Self-host ESP Web Tools for flash.html (exact version pinned in
+  // package.json) instead of loading it from a CDN at runtime.
+  const ewtSrc = 'node_modules/esp-web-tools/dist/web';
+  const ewtDest = 'web/vendor/esp-web-tools';
+  fs.rmSync(ewtDest, { recursive: true, force: true });
+  fs.cpSync(ewtSrc, ewtDest, { recursive: true });
+
   const duration = (performance.now() - start).toFixed(1);
 
   // Measure bundle file sizes

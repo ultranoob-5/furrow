@@ -1,3 +1,13 @@
+## [1.5.4] - 2026-10-13
+
+Web only - no firmware or rules change.
+
+- **Self-Hosted Flasher Library**: `flash.html` loads ESP Web Tools 10.4.0 from this site (`web/vendor/`, copied from the exact version pinned in `package.json` by `npm run build`) instead of unpkg.com. The flasher writes firmware to hardware, so a compromised CDN must not be able to change what it does. The service worker no longer caches unpkg.com.
+- **Firebase SDK 13 Bundle Committed**: `web/firebase-bundle.js` / `web/sw-firebase.js` rebuilt locally with Firebase 13.0.0, matching what the hosting deploy already builds and serves.
+- **App Check (Web, Monitoring)**: The dashboard initializes Firebase App Check with reCAPTCHA Enterprise when `appCheckSiteKey` is set in its config (from the new `FIREBASE_APPCHECK_SITE_KEY` GitHub secret), so its Auth/Database/Functions requests carry App Check tokens. Missing key or any App Check failure is non-fatal. Authentication and Realtime Database must stay unenforced: the ESP32 firmware can't produce App Check tokens. See SETUP.md section 14.
+- **Custom Domain**: The dashboard is now live at https://furrow.in (Firebase Hosting custom domain); `furrow-123098.web.app` keeps working. README link updated.
+- **PWA Cache Invalidation**: Service worker cache `furrow-dashboard-v15`, PWA `v1.5.4`.
+
 ## [1.5.3] - 2026-10-13
 
 Web dashboard fixes - no firmware or rules change.

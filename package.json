@@ -12,6 +12,7 @@
     "firebase": "^13.0.0"
   },
   "devDependencies": {
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "esp-web-tools": "10.4.0"
   }
 }
