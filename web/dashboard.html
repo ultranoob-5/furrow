@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <!-- Bundled, tree-shaken modular Firebase v11 (replaces 5 legacy CDN compat scripts, saving ~76% payload) -->
-<script src="firebase-bundle.js?v=1.4.3"></script>
+<script src="firebase-bundle.js?v=1.5.1"></script>
 <script src="firebase-config.js"></script>
 <!-- Defines firebaseConfig - generated at deploy time from GitHub
      Actions secrets, or copy web/firebase-config.example.js locally
@@ -2027,11 +2027,80 @@
     margin: 0 0 22px;
   }
 
-  #signinForm{
+  .auth-form{
     display: flex;
     flex-direction: column;
     gap: 10px;
   }
+
+  .auth-pane[hidden]{ display: none; }
+
+  .auth-link{
+    appearance: none;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--amber);
+    font-family: var(--sans);
+    font-size: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .auth-link:hover{ text-decoration: underline; }
+
+  .auth-link-inline{
+    display: block;
+    margin: 12px auto 0;
+    font-size: 12.5px;
+  }
+
+  .auth-switch{
+    font-size: 12.5px;
+    color: var(--muted);
+    margin: 18px 0 0;
+  }
+
+  .auth-hint{
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+    margin: 12px 0 0;
+  }
+
+  .auth-verify-email{
+    font-weight: 700;
+    color: var(--text);
+    font-size: 14px;
+    margin: -8px 0 18px;
+    overflow-wrap: anywhere;
+  }
+
+  .auth-secondary-btn{
+    appearance: none;
+    width: 100%;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 0;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 13.5px;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+
+  .auth-secondary-btn:disabled{ cursor: not-allowed; opacity: 0.55; }
+
+  .signin-notice{
+    color: var(--green, #49B675);
+    font-size: 12.5px;
+    line-height: 1.5;
+    margin: 16px 0 0;
+  }
+
+  .signin-notice:empty{ display: none; }
 
   .signin-input{
     appearance: none;
@@ -2086,6 +2155,12 @@
     line-height: 1.5;
   }
 
+  .account-footer{
+    width: 100%;
+    max-width: 480px;
+    margin-top: 8px;
+  }
+
   .empty-state{
     width: 100%;
     max-width: 480px;
@@ -2123,6 +2198,23 @@
     touch-action: manipulation;
   }
 
+  .account-btn{ margin-bottom: 10px; }
+
+  .account-signed-in{
+    width: calc(100% - 48px);
+    margin: 0 24px 10px;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  .account-signed-in:empty{ display: none; }
+
+  .account-dialog{ max-width: 360px; }
+  .account-dialog .signin-error{ margin-top: 4px; }
+  .account-dialog .signin-error:empty{ display: none; }
+
   .logout-btn:hover{
     border-color: var(--amber);
     color: var(--amber);
@@ -2134,6 +2226,11 @@
       width: calc(100% - 28px);
       margin: 0 14px 20px;
       padding: 14px 0;
+    }
+    .account-btn{ margin-bottom: 10px; }
+    .account-signed-in{
+      width: calc(100% - 28px);
+      margin: 0 14px 10px;
     }
     .footer-note{
       padding: 12px 14px 16px;
@@ -2148,7 +2245,9 @@
     .app-title,
     .install-banner,
     .update-banner,
-    .panel{
+    .panel,
+    .empty-state,
+    .account-footer{
       max-width: 560px;
     }
     .overview{
@@ -2167,7 +2266,9 @@
     .app-title,
     .install-banner,
     .update-banner,
-    .panel{
+    .panel,
+    .empty-state,
+    .account-footer{
       max-width: 620px;
     }
     .overview{
@@ -2194,13 +2295,50 @@
   <div class="signin-gate" id="signinGate" style="display:none;">
     <div class="signin-card">
       <div class="app-title" style="margin-bottom: 20px; justify-content: center;"><svg class="leaf-mark" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><g transform="translate(256,268)"><path d="M0,-175 C 100,-140 165,-55 150,35 C 138,105 75,165 0,195 C -75,165 -138,105 -150,35 C -165,-55 -100,-140 0,-175 Z" fill="#49B675"/><path d="M0,-160 C 0,-60 0,80 0,185" stroke="#3a8a5a" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.5"/><rect x="-7" y="188" width="14" height="42" rx="6" fill="#3a8a5a"/><g stroke="#E8A33D" stroke-width="7" fill="none" stroke-linecap="round"><path d="M0,-130 L0,-40"/><path d="M0,-40 L-70,-40 L-70,10"/><path d="M0,-40 L70,-40 L70,10"/><path d="M0,-40 L0,60 L-45,60 L-45,110"/><path d="M0,60 L45,60 L45,110"/></g><g fill="#E8A33D"><circle cx="0" cy="-130" r="9"/><circle cx="0" cy="-40" r="9"/><circle cx="-70" cy="-40" r="8"/><circle cx="70" cy="-40" r="8"/><circle cx="-70" cy="10" r="8"/><circle cx="70" cy="10" r="8"/><circle cx="0" cy="60" r="8"/><circle cx="-45" cy="60" r="8"/><circle cx="45" cy="60" r="8"/><circle cx="-45" cy="110" r="8"/><circle cx="45" cy="110" r="8"/></g></g></svg><span class="brand">Furrow</span></div>
-      <p class="signin-copy">Sign in to view and control your devices.</p>
-      <form id="signinForm">
-        <input type="email" id="signinEmail" class="signin-input" placeholder="Email" autocomplete="username" required>
-        <input type="password" id="signinPassword" class="signin-input" placeholder="Password" autocomplete="current-password" required>
-        <button type="submit" class="signin-btn" id="signinSubmitBtn">Sign in</button>
-      </form>
-      <p class="signin-error" id="signinError"></p>
+      <!-- One card, four modes (data-auth-mode on #signinGate): signin,
+           signup, reset, verify. setAuthMode() swaps which pane is
+           visible and the heading copy; only one pane is ever shown. -->
+      <p class="signin-copy" id="signinCopy">Sign in to view and control your devices.</p>
+
+      <div class="auth-pane" data-pane="signin">
+        <form id="signinForm" class="auth-form">
+          <input type="email" id="signinEmail" class="signin-input" placeholder="Email" autocomplete="username" required>
+          <input type="password" id="signinPassword" class="signin-input" placeholder="Password" autocomplete="current-password" required>
+          <button type="submit" class="signin-btn" id="signinSubmitBtn">Sign in</button>
+        </form>
+        <button type="button" class="auth-link auth-link-inline" data-goto="reset">Forgot password?</button>
+        <p class="auth-switch">New to Furrow? <button type="button" class="auth-link" data-goto="signup">Create an account</button></p>
+      </div>
+
+      <div class="auth-pane" data-pane="signup" hidden>
+        <form id="signupForm" class="auth-form">
+          <input type="email" id="signupEmail" class="signin-input" placeholder="Email" autocomplete="username" required>
+          <input type="password" id="signupPassword" class="signin-input" placeholder="Password (at least 8 characters)" autocomplete="new-password" minlength="8" required>
+          <input type="password" id="signupConfirm" class="signin-input" placeholder="Confirm password" autocomplete="new-password" minlength="8" required>
+          <button type="submit" class="signin-btn" id="signupSubmitBtn">Create account</button>
+        </form>
+        <p class="auth-hint">Use the same email that was entered when your device was set up &mdash; that&rsquo;s how Furrow links you to it.</p>
+        <p class="auth-switch">Already have an account? <button type="button" class="auth-link" data-goto="signin">Sign in</button></p>
+      </div>
+
+      <div class="auth-pane" data-pane="reset" hidden>
+        <form id="resetForm" class="auth-form">
+          <input type="email" id="resetEmail" class="signin-input" placeholder="Email" autocomplete="username" required>
+          <button type="submit" class="signin-btn" id="resetSubmitBtn">Send reset link</button>
+        </form>
+        <p class="auth-switch"><button type="button" class="auth-link" data-goto="signin">Back to sign in</button></p>
+      </div>
+
+      <div class="auth-pane" data-pane="verify" hidden>
+        <p class="auth-verify-email" id="verifyEmailAddr"></p>
+        <button type="button" class="signin-btn" id="verifyContinueBtn">I&rsquo;ve verified &mdash; continue</button>
+        <button type="button" class="auth-secondary-btn" id="verifyResendBtn">Resend email</button>
+        <p class="auth-hint">Can&rsquo;t find it? Check your spam or promotions folder.</p>
+        <p class="auth-switch"><button type="button" class="auth-link" id="verifySignOutBtn">Use a different account</button></p>
+      </div>
+
+      <p class="signin-notice" id="signinNotice" role="status" aria-live="polite"></p>
+      <p class="signin-error" id="signinError" role="alert"></p>
       <p style="font-size:12px; color:var(--muted); margin:16px 0 0; text-align:center;">Setting up a new device? <a href="flash.html" style="color:var(--amber);">Flash it here</a></p>
     </div>
   </div>
@@ -2439,11 +2577,6 @@
       </div>
     </div>
 
-    <div class="footer-note">
-      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.4.3</span><br>
-      <a href="flash.html" style="color:var(--muted);">Set up a new device &rarr;</a>
-    </div>
-    <button class="logout-btn" id="logoutBtn">Logout</button>
   </div>
 
   <div class="empty-state" id="emptyState" style="display:none;">
@@ -2455,6 +2588,43 @@
     No devices are registered to your account yet.<br>
     Ask whoever set this up to flash one with your email as the owner.
   </div>
+
+  <!-- Account controls live outside the device panel so they stay
+       reachable when this account has no devices yet (the panel is
+       hidden then, which used to leave no way to log out). -->
+  <div class="account-footer" id="accountFooter">
+    <div class="footer-note">
+      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.5.1</span><br>
+      <a href="flash.html" style="color:var(--muted);">Set up a new device &rarr;</a>
+    </div>
+    <p class="account-signed-in" id="accountSignedIn"></p>
+    <button class="logout-btn account-btn" id="changePasswordBtn">Change password</button>
+    <button class="logout-btn" id="logoutBtn">Logout</button>
+  </div>
+
+  <!-- Change Password Dialog -->
+  <dialog id="changePasswordDialog" class="clock-dialog account-dialog" aria-labelledby="changePasswordTitle">
+    <div class="clock-dialog-shell">
+      <div class="clock-dialog-header">
+        <div class="clock-dialog-title" id="changePasswordTitle">Change password</div>
+        <button type="button" class="clock-dialog-close" id="changePasswordClose" aria-label="Close dialog">
+          <svg viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <form id="changePasswordForm" class="auth-form">
+        <!-- Hidden username field lets password managers attach the new
+             password to the right account. -->
+        <input type="email" id="changePasswordUser" autocomplete="username" hidden>
+        <input type="password" id="currentPasswordInput" class="signin-input" placeholder="Current password" autocomplete="current-password" required>
+        <input type="password" id="newPasswordInput" class="signin-input" placeholder="New password (at least 8 characters)" autocomplete="new-password" minlength="8" required>
+        <input type="password" id="confirmNewPasswordInput" class="signin-input" placeholder="Confirm new password" autocomplete="new-password" minlength="8" required>
+        <button type="submit" class="signin-btn" id="changePasswordSubmitBtn">Update password</button>
+      </form>
+      <button type="button" class="auth-link auth-link-inline" id="changePasswordForgotBtn">Forgot your current password?</button>
+      <p class="signin-notice" id="changePasswordNotice" role="status" aria-live="polite"></p>
+      <p class="signin-error" id="changePasswordError" role="alert"></p>
+    </div>
+  </dialog>
 
   <!-- Clock Picker Dialog Modal -->
   <dialog id="clockPickerDialog" class="clock-dialog">
@@ -2770,21 +2940,261 @@
   const signinError = document.getElementById('signinError');
   const noOwnedDevicesEl = document.getElementById('noOwnedDevicesState');
 
+  const signinCopy = document.getElementById('signinCopy');
+  const signinNotice = document.getElementById('signinNotice');
+  const signupForm = document.getElementById('signupForm');
+  const signupEmail = document.getElementById('signupEmail');
+  const signupPassword = document.getElementById('signupPassword');
+  const signupConfirm = document.getElementById('signupConfirm');
+  const signupSubmitBtn = document.getElementById('signupSubmitBtn');
+  const resetForm = document.getElementById('resetForm');
+  const resetEmail = document.getElementById('resetEmail');
+  const resetSubmitBtn = document.getElementById('resetSubmitBtn');
+  const verifyEmailAddr = document.getElementById('verifyEmailAddr');
+  const verifyContinueBtn = document.getElementById('verifyContinueBtn');
+  const verifyResendBtn = document.getElementById('verifyResendBtn');
+  const verifySignOutBtn = document.getElementById('verifySignOutBtn');
+
+  const AUTH_COPY = {
+    signin: 'Sign in to view and control your devices.',
+    signup: 'Create your account to control your devices.',
+    reset: 'Enter your email and we’ll send you a link to set a new password.',
+    verify: 'We sent a verification link to'
+  };
+
+  let authMode = 'signin';
+
+  function setAuthMessage(error, notice){
+    signinError.textContent = error || '';
+    signinNotice.textContent = notice || '';
+  }
+
+  function setAuthMode(mode){
+    authMode = mode;
+    signinGate.dataset.authMode = mode;
+    signinCopy.textContent = AUTH_COPY[mode];
+    document.querySelectorAll('.auth-pane').forEach((pane) => {
+      pane.hidden = pane.dataset.pane !== mode;
+    });
+    setAuthMessage();
+
+    // Carry a typed email across modes so nobody has to retype it.
+    const typed = [signinEmail, signupEmail, resetEmail]
+      .map((el) => el.value.trim()).find(Boolean) || '';
+    if (mode === 'signup' && !signupEmail.value) signupEmail.value = typed;
+    if (mode === 'reset' && !resetEmail.value) resetEmail.value = typed;
+    if (mode === 'signin' && !signinEmail.value) signinEmail.value = typed;
+  }
+
+  document.querySelectorAll('[data-goto]').forEach((btn) => {
+    btn.addEventListener('click', () => setAuthMode(btn.dataset.goto));
+  });
+
+  // Firebase error codes -> plain-language messages. Anything unmapped
+  // falls back to a generic line (the raw error still goes to console).
+  function authErrorMessage(err){
+    switch (err && err.code) {
+      case 'auth/invalid-credential':
+      case 'auth/wrong-password':
+      case 'auth/user-not-found':
+      case 'auth/invalid-login-credentials':
+        return 'Incorrect email or password.';
+      case 'auth/invalid-email':
+      case 'auth/missing-email':
+        return 'Enter a valid email address.';
+      case 'auth/email-already-in-use':
+        return 'An account with this email already exists. Sign in, or use “Forgot password?”.';
+      case 'auth/weak-password':
+      case 'auth/password-does-not-meet-requirements':
+        return 'That password is too weak. Use at least 8 characters.';
+      case 'auth/user-disabled':
+        return 'This account has been disabled.';
+      case 'auth/too-many-requests':
+        return 'Too many attempts. Please wait a few minutes and try again.';
+      case 'auth/network-request-failed':
+        return 'Couldn’t reach the server. Check your internet connection.';
+      case 'auth/operation-not-allowed':
+      case 'auth/admin-restricted-operation':
+        return 'New accounts can’t be created right now. Contact whoever set up your device.';
+      default:
+        return 'Something went wrong. Please try again.';
+    }
+  }
+
+  // Links in the verification / reset emails bring the person back to
+  // this dashboard afterwards. If this domain isn't on Firebase Auth's
+  // authorized-domains list the call is rejected outright, so retry
+  // once without a continue URL (Firebase's own page still works).
+  function actionCodeSettings(){
+    return { url: window.location.origin + window.location.pathname };
+  }
+
+  function withContinueUrlFallback(send){
+    return send(actionCodeSettings()).catch((err) => {
+      if (err && (err.code === 'auth/unauthorized-continue-uri' || err.code === 'auth/invalid-continue-uri')) {
+        return send(undefined);
+      }
+      throw err;
+    });
+  }
+
   signinForm.addEventListener('submit', (e) => {
     e.preventDefault();
 
-    signinError.textContent = '';
+    setAuthMessage();
     signinSubmitBtn.disabled = true;
 
     auth.signInWithEmailAndPassword(signinEmail.value.trim(), signinPassword.value)
       .catch((err) => {
         console.error('Sign-in failed', err);
-        signinError.textContent = 'Incorrect email or password.';
+        setAuthMessage(authErrorMessage(err));
       })
       .finally(() => {
         signinSubmitBtn.disabled = false;
       });
   });
+
+  signupForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    setAuthMessage();
+
+    if (signupPassword.value !== signupConfirm.value) {
+      setAuthMessage('Passwords don’t match.');
+      signupConfirm.focus();
+      return;
+    }
+
+    signupSubmitBtn.disabled = true;
+
+    auth.createUserWithEmailAndPassword(signupEmail.value.trim(), signupPassword.value)
+      .then(() => withContinueUrlFallback((settings) => auth.sendEmailVerification(settings)))
+      .then(() => {
+        // onAuthStateChanged has already (or will shortly) switch to
+        // the verify pane for this new, unverified user.
+        signupPassword.value = '';
+        signupConfirm.value = '';
+        startResendCooldown();
+        setAuthMessage('', 'Verification email sent.');
+      })
+      .catch((err) => {
+        console.error('Sign-up failed', err);
+        // The account may exist even if only the email send failed -
+        // the verify pane's Resend button covers that case.
+        setAuthMessage(authErrorMessage(err));
+      })
+      .finally(() => {
+        signupSubmitBtn.disabled = false;
+      });
+  });
+
+  resetForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    setAuthMessage();
+    resetSubmitBtn.disabled = true;
+
+    const email = resetEmail.value.trim();
+    // Same message whether or not an account exists for this email, so
+    // the form can't be used to discover who has an account.
+    const sentMsg = 'If an account exists for ' + email + ', a reset link is on its way. Check your inbox (and spam folder).';
+
+    withContinueUrlFallback((settings) => auth.sendPasswordResetEmail(email, settings))
+      .then(() => setAuthMessage('', sentMsg))
+      .catch((err) => {
+        console.error('Password reset failed', err);
+        if (err && err.code === 'auth/user-not-found') {
+          setAuthMessage('', sentMsg);
+        } else {
+          setAuthMessage(authErrorMessage(err));
+        }
+      })
+      .finally(() => {
+        resetSubmitBtn.disabled = false;
+      });
+  });
+
+  // Firebase rate-limits verification sends; a short local cooldown
+  // stops repeated taps from tripping auth/too-many-requests.
+  const RESEND_COOLDOWN_S = 30;
+  let resendTimer = null;
+
+  function startResendCooldown(){
+    clearInterval(resendTimer);
+    let remaining = RESEND_COOLDOWN_S;
+    verifyResendBtn.disabled = true;
+    verifyResendBtn.textContent = 'Resend email (' + remaining + 's)';
+    resendTimer = setInterval(() => {
+      remaining--;
+      if (remaining <= 0) {
+        clearInterval(resendTimer);
+        resendTimer = null;
+        verifyResendBtn.disabled = false;
+        verifyResendBtn.textContent = 'Resend email';
+      } else {
+        verifyResendBtn.textContent = 'Resend email (' + remaining + 's)';
+      }
+    }, 1000);
+  }
+
+  verifyResendBtn.addEventListener('click', () => {
+    setAuthMessage();
+    startResendCooldown();
+    withContinueUrlFallback((settings) => auth.sendEmailVerification(settings))
+      .then(() => setAuthMessage('', 'Verification email sent again.'))
+      .catch((err) => {
+        console.error('Resend verification failed', err);
+        setAuthMessage(authErrorMessage(err));
+      });
+  });
+
+  // Re-checks verification status. Called from the Continue button and
+  // automatically whenever the person comes back to this tab (they
+  // usually click the email link in another tab or their mail app).
+  let verifyCheckInFlight = false;
+
+  function checkVerification(fromButton){
+    if (verifyCheckInFlight || !auth.currentUser) return;
+    verifyCheckInFlight = true;
+    if (fromButton) verifyContinueBtn.disabled = true;
+
+    auth.reloadUser()
+      .then((user) => {
+        if (user && user.emailVerified) {
+          enterApp(user);
+        } else if (fromButton) {
+          setAuthMessage('Not verified yet. Open the link in the email we sent, then try again.');
+        }
+      })
+      .catch((err) => {
+        console.error('Verification check failed', err);
+        if (fromButton) setAuthMessage(authErrorMessage(err));
+      })
+      .finally(() => {
+        verifyCheckInFlight = false;
+        verifyContinueBtn.disabled = false;
+      });
+  }
+
+  verifyContinueBtn.addEventListener('click', () => checkVerification(true));
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && authMode === 'verify' && signinGate.style.display !== 'none') {
+      checkVerification(false);
+    }
+  });
+
+  verifySignOutBtn.addEventListener('click', () => {
+    auth.signOut().catch((err) => console.error('Sign-out failed', err));
+  });
+
+  function enterApp(user){
+    currentUserEmail = user.email;
+    document.getElementById('accountSignedIn').textContent = 'Signed in as ' + (user.email || '');
+    signinGate.style.display = 'none';
+    appContent.style.display = 'flex';
+    authReady = true;
+    startDeviceListener();
+    maybeShowInstallBanner();
+  }
 
   auth.onAuthStateChanged((user) => {
     authResolved = true;
@@ -2793,17 +3203,27 @@
     if (!user) {
       currentUserEmail = null;
       authReady = false;
+      setAuthMode('signin');
       signinGate.style.display = 'flex';
       appContent.style.display = 'none';
       return;
     }
 
-    currentUserEmail = user.email;
-    signinGate.style.display = 'none';
-    appContent.style.display = 'flex';
-    authReady = true;
-    startDeviceListener();
-    maybeShowInstallBanner();
+    // Unverified accounts never reach the dashboard: the database rules
+    // only grant owner access when the email is verified, since
+    // ownership is matched purely by email address. Without this,
+    // anyone could sign up with a device owner's email before they do.
+    if (!user.emailVerified) {
+      currentUserEmail = null;
+      authReady = false;
+      verifyEmailAddr.textContent = user.email || '';
+      setAuthMode('verify');
+      signinGate.style.display = 'flex';
+      appContent.style.display = 'none';
+      return;
+    }
+
+    enterApp(user);
   });
 
   // Tactile haptic feedback helper (safe no-op when unsupported or disabled)
@@ -3034,9 +3454,10 @@
 
     if (ids.length === 0){
       if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => {});
-      if (!overviewEl.querySelector('.chip-empty')) {
-        overviewEl.innerHTML = '<div class="chip-empty">No devices yet\u2026</div>';
-      }
+      // The empty-state card below already explains why there's nothing
+      // here; clearing also removes the initial "Loading devices..."
+      // placeholder, which used to linger because it shares .chip-empty.
+      overviewEl.innerHTML = '';
       return;
     }
 
@@ -3714,9 +4135,10 @@
       const ids = Object.keys(devices);
 
       if (ids.length === 0){
+        const ownerFiltered = userDevicesQuery !== devicesRef;
         panelEl.style.display = 'none';
-        emptyStateEl.style.display = 'block';
-        noOwnedDevicesEl.style.display = 'none';
+        emptyStateEl.style.display = ownerFiltered ? 'none' : 'block';
+        noOwnedDevicesEl.style.display = ownerFiltered ? 'block' : 'none';
 
         renderOverview();
         return;
@@ -3763,6 +4185,105 @@
     if (selectedId) renderDetail();
   }, 1000);
 
+  // ---- Change password ----------------------------------------------
+  const changePasswordBtn = document.getElementById('changePasswordBtn');
+  const changePasswordDialog = document.getElementById('changePasswordDialog');
+  const changePasswordForm = document.getElementById('changePasswordForm');
+  const changePasswordUser = document.getElementById('changePasswordUser');
+  const currentPasswordInput = document.getElementById('currentPasswordInput');
+  const newPasswordInput = document.getElementById('newPasswordInput');
+  const confirmNewPasswordInput = document.getElementById('confirmNewPasswordInput');
+  const changePasswordSubmitBtn = document.getElementById('changePasswordSubmitBtn');
+  const changePasswordForgotBtn = document.getElementById('changePasswordForgotBtn');
+  const changePasswordNotice = document.getElementById('changePasswordNotice');
+  const changePasswordError = document.getElementById('changePasswordError');
+  let changePasswordCloseTimer = null;
+
+  function setChangePasswordMessage(error, notice){
+    changePasswordError.textContent = error || '';
+    changePasswordNotice.textContent = notice || '';
+  }
+
+  function resetChangePasswordForm(){
+    clearTimeout(changePasswordCloseTimer);
+    changePasswordForm.reset();
+    setChangePasswordMessage();
+    changePasswordSubmitBtn.disabled = false;
+  }
+
+  changePasswordBtn.addEventListener('click', () => {
+    resetChangePasswordForm();
+    changePasswordUser.value = currentUserEmail || '';
+    if (typeof changePasswordDialog.showModal === 'function') {
+      changePasswordDialog.showModal();
+    } else {
+      changePasswordDialog.setAttribute('open', '');
+    }
+    currentPasswordInput.focus();
+  });
+
+  // Never leave typed passwords sitting in a closed dialog: clear
+  // directly on every close we trigger, and via the close event for
+  // Escape (that event is queued, so it can't be the only path).
+  function closeChangePasswordDialog(){
+    if (changePasswordDialog.open) changePasswordDialog.close();
+    resetChangePasswordForm();
+  }
+
+  document.getElementById('changePasswordClose').addEventListener('click', closeChangePasswordDialog);
+  changePasswordDialog.addEventListener('close', resetChangePasswordForm);
+
+  changePasswordForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    setChangePasswordMessage();
+
+    if (newPasswordInput.value !== confirmNewPasswordInput.value) {
+      setChangePasswordMessage('New passwords don’t match.');
+      confirmNewPasswordInput.focus();
+      return;
+    }
+    if (newPasswordInput.value === currentPasswordInput.value) {
+      setChangePasswordMessage('Choose a password different from your current one.');
+      newPasswordInput.focus();
+      return;
+    }
+
+    changePasswordSubmitBtn.disabled = true;
+
+    auth.changePassword(currentPasswordInput.value, newPasswordInput.value)
+      .then(() => {
+        changePasswordForm.reset();
+        setChangePasswordMessage('', 'Password updated.');
+        changePasswordCloseTimer = setTimeout(closeChangePasswordDialog, 1500);
+      })
+      .catch((err) => {
+        console.error('Change password failed', err);
+        const code = err && err.code;
+        if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/invalid-login-credentials') {
+          setChangePasswordMessage('Current password is incorrect.');
+          currentPasswordInput.select();
+        } else {
+          setChangePasswordMessage(authErrorMessage(err));
+        }
+        changePasswordSubmitBtn.disabled = false;
+      });
+  });
+
+  changePasswordForgotBtn.addEventListener('click', () => {
+    if (!currentUserEmail) return;
+    setChangePasswordMessage();
+    changePasswordForgotBtn.disabled = true;
+    withContinueUrlFallback((settings) => auth.sendPasswordResetEmail(currentUserEmail, settings))
+      .then(() => setChangePasswordMessage('', 'Reset link sent to ' + currentUserEmail + '. Check your inbox (and spam folder).'))
+      .catch((err) => {
+        console.error('Password reset failed', err);
+        setChangePasswordMessage(authErrorMessage(err));
+      })
+      .finally(() => {
+        changePasswordForgotBtn.disabled = false;
+      });
+  });
+
   logoutBtn.addEventListener('click', () => {
 
   auth.signOut()
@@ -3785,8 +4306,10 @@
       selectedId = null;
       deviceListenerStarted = false;
 
-      signinEmail.value = "";
-      signinPassword.value = "";
+      [signinEmail, signinPassword, signupEmail, signupPassword, signupConfirm, resetEmail]
+        .forEach((el) => { el.value = ''; });
+      closeChangePasswordDialog();
+      document.getElementById('accountSignedIn').textContent = '';
 
       console.log("Logged out");
 

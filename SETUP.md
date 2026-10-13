@@ -129,10 +129,36 @@ Reads stay public (telemetry isn't sensitive); writes are locked to
 the device account and whichever owner a specific device declares -
 see README.md's Secrets section for why this design.
 
-## 4. Create an owner account (per person using the dashboard)
+## 4. Owner accounts (per person using the dashboard)
 
-Authentication → Users → **Add user** → their real email + a password
-you set and hand them directly. Repeat per person.
+Owners create their own account from the dashboard's sign-in screen
+(**Create an account**), using the same email that will be entered as
+the device's owner in step 7. Firebase then emails them a verification
+link; the dashboard won't open until they've clicked it, and the
+database rules only grant owner access to a **verified** email. That
+check matters because ownership is matched purely by email address:
+without it, anyone could sign up with an owner's email before the real
+owner does and take control of their pump.
+
+One-time Console checks for this to work:
+
+- **Authentication → Settings → User actions** → *Enable create
+  (sign-up)* must be on (it is by default).
+- **Authentication → Settings → Authorized domains** must include the
+  domain the dashboard is served from (your `*.web.app` /
+  `*.firebaseapp.com` Hosting domains are added automatically; add any
+  custom domain yourself). If it's missing, the verification and
+  reset emails still work, they just won't link back to the dashboard.
+- Optional: **Authentication → Templates** to customise the wording of
+  the verification and password-reset emails.
+
+You can still create an account by hand (Authentication → Users →
+**Add user**). The person will be asked to verify their email the
+first time they sign in.
+
+Passwords are self-service too: **Forgot password?** on the sign-in
+screen emails a reset link, and signed-in owners can use **Change
+password** (above Logout) to set a new one.
 
 ## 5. Set up secrets.h (per machine that builds firmware locally)
 
@@ -195,8 +221,9 @@ step).
 2. A setup page should pop up automatically; if not, visit `192.168.4.1`
 3. Fill in: your real WiFi network + password, a device name, the
    **owner's email** (must exactly match a Firebase Auth account from
-   step 4 - a mismatch silently locks that person out with no error
-   shown), and optionally a WhatsApp number for alerts
+   step 4, in lowercase - Firebase stores account emails lowercased, so
+   a mismatch, including capital letters, silently locks that person
+   out with no error shown), and optionally a WhatsApp number for alerts
 4. Save - the device restarts and connects to your real network
 
 ## 8. WhatsApp alerts (optional)

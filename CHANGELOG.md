@@ -1,4 +1,17 @@
 
+## [1.5.1] - 2026-10-13
+
+Web dashboard only - no firmware change.
+
+- **Create Account**: Owners can sign up from the dashboard's sign-in screen instead of being added by hand in the Firebase Console.
+- **Email Verification Gate**: New (and existing, not-yet-verified) accounts must verify their email before the dashboard opens. Includes resend with a 30s cooldown, and an automatic re-check when the person returns to the tab after clicking the link.
+- **Change Password**: Signed-in owners can change their password from a dialog next to Logout. Confirms the current password first (Firebase requires a recent sign-in), clears typed passwords whenever the dialog closes, and offers a reset link if the current password is forgotten. The footer now also shows which account is signed in.
+- **Account Controls Always Reachable**: The footer, Change password and Logout moved out of the device panel into their own block, so an account with no devices yet can still log out (the panel is hidden in that case, which previously left no way to sign out). That state now shows "No devices are registered to your account yet" instead of the generic "No devices found" message, and the stale "Loading devices..." placeholder is cleared.
+- **Forgot Password**: Self-service password reset by email. Shows the same confirmation whether or not an account exists, so the form can't be used to discover who has an account.
+- **Security - Database Rules**: All owner read/write rules in `database.rules.example.json` now also require `auth.token.email_verified == true`. Without this, open sign-up would let anyone register with a device owner's email before the owner does and control their pump. Copy these into your real `database.rules.json` and deploy them.
+- **Friendlier Auth Errors**: Firebase error codes are mapped to plain-language messages.
+- **PWA Cache Invalidation**: Bumped service worker cache to `furrow-dashboard-v12` and PWA version to `v1.5.1`.
+
 ## [1.4.3] - 2026-09-12
 
 - **Serial Transmission & Clock Stability**: Added `Serial.flush()` to ensure all bytes leave the hardware UART FIFO before periodic Wi-Fi SSL transmissions occur, and disabled Wi-Fi modem sleep (`WiFi.setSleep(false)`) to eliminate dynamic APB bus clock scaling and RF wake-up jitter that caused serial output corruption.

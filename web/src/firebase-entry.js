@@ -1,7 +1,8 @@
 // Furrow Modular Firebase v11 Client Entrypoint
 // Bundles and tree-shakes only the exact Firebase services required by Furrow:
 // - App initialization
-// - Authentication (email/password & auth state change)
+// - Authentication (email/password sign-in & sign-up, password reset,
+//   email verification, password change, auth state change)
 // - Realtime Database (listeners, writes, updates, server connection status)
 // - Cloud Messaging (Web Push token & foreground messaging)
 // - Cloud Functions (callable HTTPS endpoints)
@@ -11,6 +12,13 @@ import {
   getAuth,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  sendEmailVerification,
+  reload,
+  reauthenticateWithCredential,
+  updatePassword,
+  EmailAuthProvider,
   signOut
 } from 'firebase/auth';
 import {
@@ -220,6 +228,38 @@ const FurrowFirebase = {
       },
       signInWithEmailAndPassword(email, password) {
         return signInWithEmailAndPassword(_auth, email, password);
+      },
+      createUserWithEmailAndPassword(email, password) {
+        return createUserWithEmailAndPassword(_auth, email, password);
+      },
+      sendPasswordResetEmail(email, actionCodeSettings) {
+        return sendPasswordResetEmail(_auth, email, actionCodeSettings);
+      },
+      sendEmailVerification(actionCodeSettings) {
+        if (!_auth.currentUser) return Promise.reject(new Error('Not signed in'));
+        return sendEmailVerification(_auth.currentUser, actionCodeSettings);
+      },
+      // Re-fetches the signed-in user's profile (picking up a fresh
+      // emailVerified flag after the person clicks the link in another
+      // tab/app), then force-refreshes the ID token - the database rules
+      // read email_verified from the token, so without the refresh they
+      // keep seeing the old 'false' claim until it naturally expires.
+      async reloadUser() {
+        const user = _auth.currentUser;
+        if (!user) return null;
+        await reload(user);
+        if (user.emailVerified) await user.getIdToken(true);
+        return _auth.currentUser;
+      },
+      // Firebase only allows a password change on a recent sign-in, so
+      // confirm the current password first (this also proves it's really
+      // the account holder at an unlocked device, not just an open tab).
+      async changePassword(currentPassword, newPassword) {
+        const user = _auth.currentUser;
+        if (!user || !user.email) throw new Error('Not signed in');
+        const credential = EmailAuthProvider.credential(user.email, currentPassword);
+        await reauthenticateWithCredential(user, credential);
+        await updatePassword(user, newPassword);
       },
       signOut() {
         return signOut(_auth);
