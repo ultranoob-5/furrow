@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <!-- Bundled, tree-shaken modular Firebase v11 (replaces 5 legacy CDN compat scripts, saving ~76% payload) -->
-<script src="firebase-bundle.js?v=1.5.2"></script>
+<script src="firebase-bundle.js?v=1.5.3"></script>
 <script src="firebase-config.js"></script>
 <!-- Defines firebaseConfig - generated at deploy time from GitHub
      Actions secrets, or copy web/firebase-config.example.js locally
@@ -2594,7 +2594,7 @@
        hidden then, which used to leave no way to log out). -->
   <div class="account-footer" id="accountFooter">
     <div class="footer-note">
-      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.5.2</span><br>
+      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.5.3</span><br>
       <a href="flash.html" style="color:var(--muted);">Set up a new device &rarr;</a>
     </div>
     <p class="account-signed-in" id="accountSignedIn"></p>
@@ -2806,6 +2806,20 @@
     firebaseConnected = snap.val() === true;
     updateConnectionBanner();
   });
+
+  // status.lastSeen is stamped by Firebase's server clock, so ages must be
+  // measured against server time too, not this browser's clock. Firebase
+  // reports how far the local clock is off; without this, a PC or phone
+  // whose clock runs ~6s+ fast flips Online <-> Updating on every
+  // heartbeat (confirmed: a 13s-fast PC did exactly that).
+  let serverTimeOffsetMs = 0;
+  db.ref('.info/serverTimeOffset').on('value', (snap) => {
+    serverTimeOffsetMs = Number(snap.val()) || 0;
+  });
+
+  function serverNow(){
+    return Date.now() + serverTimeOffsetMs;
+  }
 
   updateConnectionBanner(); // reflect the true starting state immediately, don't wait for the first event
 
@@ -3424,7 +3438,7 @@
     const seen = lastSeenAt(id);
     if (!seen) return 'connecting';
 
-    const age = Date.now() - seen;
+    const age = serverNow() - seen;
 
     if (age <= 16000) return 'online';
     if (age <= 30000) return 'updating';
@@ -4088,11 +4102,17 @@
 
   // ---- Start (called once, right after a successful sign-in) ---------
   let deviceListenerStarted = false;
+  let deviceListenerGeneration = 0;
+  let listenerAuthRetried = false;
 
   function startDeviceListener(){
     if (deviceListenerStarted) return;
     deviceListenerStarted = true;
 
+    // A retry (see the listener's error handler) starts a new generation;
+    // the previous attempt's "still not connected" timer must not fire
+    // over a retry that has since succeeded.
+    const generation = ++deviceListenerGeneration;
     let receivedFirstSnapshot = false;
 
     // If we haven't heard from Firebase at all within a few seconds, the
@@ -4100,7 +4120,7 @@
     // directly from disk (file://) instead of serving it over http(s) -
     // Firebase's SDK is documented to behave unreliably under file://.
     setTimeout(() => {
-      if (receivedFirstSnapshot) return;
+      if (receivedFirstSnapshot || generation !== deviceListenerGeneration) return;
 
       const isFileProtocol = window.location.protocol === 'file:';
 
@@ -4170,6 +4190,23 @@
     }, (err) => {
       console.error('devices listener error', err);
       const isPermDenied = err && err.message && err.message.includes('permission_denied');
+
+      // Right after email verification the dashboard force-refreshes the
+      // ID token and attaches this listener immediately, but the database
+      // connection picks up the new token asynchronously - so the first
+      // query can still be judged against the old email_verified=false
+      // claim and get denied. Refresh once more, give the connection a
+      // moment to re-auth, and retry before showing an error.
+      const user = auth.currentUser;
+      if (isPermDenied && !listenerAuthRetried && user) {
+        listenerAuthRetried = true;
+        deviceListenerStarted = false;
+        user.getIdToken(true)
+          .catch((tokenErr) => console.error('Token refresh failed', tokenErr))
+          .then(() => setTimeout(startDeviceListener, 1500));
+        return;
+      }
+
       overviewEl.innerHTML = `<div class="chip-empty">
         ${isPermDenied
           ? 'Permission denied accessing devices. Ensure your Firebase Database Rules allow authenticated access for your account.'
@@ -4305,6 +4342,7 @@
       devices = {};
       selectedId = null;
       deviceListenerStarted = false;
+      listenerAuthRetried = false;
 
       [signinEmail, signinPassword, signupEmail, signupPassword, signupConfirm, resetEmail]
         .forEach((el) => { el.value = ''; });

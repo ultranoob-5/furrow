@@ -1,3 +1,12 @@
+## [1.5.3] - 2026-10-13
+
+Web dashboard fixes - no firmware or rules change.
+
+- **Online / Updating Flicker on Devices With a Wrong Clock**: Device age was computed as the browser's clock minus the server-stamped `lastSeen`, so a PC or phone whose clock ran ~6s+ fast flipped Online <-> Updating on every heartbeat (confirmed on a PC 13.3s fast while the device's heartbeats were arriving every 10.0s). The dashboard now corrects with Firebase's `.info/serverTimeOffset`.
+- **Device List Denied After Verifying Email**: The first load right after verifying an email could fail with `permission_denied`, because the device listener attached before the database connection had picked up the refreshed (now-verified) token. The dashboard now refreshes the token and retries once before showing an error; the first attempt's "Still not connected" timer no longer fires over a retry that succeeded.
+- **Service Worker Offline Fallback**: When a page request failed and nothing was cached, the service worker handed the browser nothing (`Failed to convert value to 'Response'`). It now falls back to a cached copy ignoring the query string, then a small offline page with a Retry button.
+- **PWA Cache Invalidation**: Service worker cache `furrow-dashboard-v14`, PWA `v1.5.3`.
+
 ## [1.5.2] - 2026-10-13
 
 Security hardening (web, rules, Cloud Functions) - no firmware change.

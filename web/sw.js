@@ -2,7 +2,7 @@
 // Provides an offline-first app shell, intelligent CDN caching for libraries/fonts,
 // background push notifications via FCM, and seamless in-app update workflows.
 
-const CACHE_NAME = 'furrow-dashboard-v13';
+const CACHE_NAME = 'furrow-dashboard-v14';
 
 const APP_SHELL = [
   './dashboard.html',
@@ -45,6 +45,17 @@ self.addEventListener('message', (event) => {
   }
 });
 
+// Last-resort page when the network is down and nothing is cached yet.
+function offlineResponse() {
+  return new Response(
+    '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>Furrow - offline</title>' +
+    '<body style="font-family:system-ui,sans-serif;background:#16181c;color:#e8e8e8;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center;padding:16px">' +
+    '<div><p>You&rsquo;re offline.</p><p><button onclick="location.reload()" style="padding:10px 20px;border-radius:8px;border:0;background:#E8A33D;color:#241804;font-weight:700">Retry</button></p></div>',
+    { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+  );
+}
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') {
     return;
@@ -64,7 +75,11 @@ self.addEventListener('fetch', (event) => {
             return response;
           })
           .catch(() =>
-            caches.match(event.request).then((matched) => matched || caches.match('./dashboard.html'))
+            caches.match(event.request, { ignoreSearch: true })
+              .then((matched) => matched || caches.match('./dashboard.html'))
+              // respondWith() must always get a Response - undefined here
+              // used to surface as "Failed to convert value to 'Response'".
+              .then((matched) => matched || offlineResponse())
           )
       );
       return;
@@ -80,7 +95,7 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => caches.match(event.request).then((matched) => matched || Response.error()))
     );
     return;
   }
