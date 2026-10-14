@@ -1,3 +1,13 @@
+## [1.5.5] - 2026-10-14
+
+Cloud Functions, dashboard text and docs - no firmware or rules change.
+
+- **Safety - No Auto-Start With Auto-Resume Off**: `powerWatchdog` recorded `motor/stateBeforeOutage: "RUNNING"` for every running pump that lost power, and the firmware starts the motor from that value when power returns - so a pump with auto-resume DISABLED started by itself after a power cut. The watchdog now only records it when the device's auto-resume is enabled (otherwise it clears it). Covered by new `functions/test.js` cases. (The matching firmware-side check ships in the next firmware release.)
+- **One Alert Per Power Cut**: The watchdog's `motor/state -> OFF` write also triggered `onMotorStateChanged`, so a power cut sent both "Power Cut Alert" and "turned OFF". The watchdog now tags that write `stoppedVia: "power-loss"` and the motor-change alert skips it. Wording moved into a pure `motorAlertText()` helper with tests.
+- **Docs**: SETUP.md section 3 no longer shows an old inline rules block (it had `".read": true`); it points to `database.rules.example.json` as the single source of truth and summarizes what the rules enforce. Troubleshooting now matches the dashboard (action buttons need the device online) and no longer describes motor state as command-based.
+- **Schedule Text**: The dashboard and SETUP.md now say what's actually true - schedules run on the device even if the internet drops, but after each power-up it needs internet once to set its clock.
+- **PWA Cache Invalidation**: Service worker cache `furrow-dashboard-v16`, PWA `v1.5.5`.
+
 ## [1.5.4] - 2026-10-13
 
 Web only - no firmware or rules change.

@@ -85,9 +85,9 @@ async function main() {
 
   const fakeDevices = {
     "dev-fresh":     { status: { lastSeen: nowMs - 5000,  name: "Fresh",     whatsappPhone: "111", powerAlertSent: false } },
-    "dev-stale-new": { status: { lastSeen: nowMs - 45000, name: "StaleNew",  whatsappPhone: "222", powerAlertSent: false }, motor: { state: "RUNNING" } },
-    "dev-renamed":       { displayName: "Well Pump", status: { lastSeen: nowMs - 45000, name: "Farm Pump", whatsappPhone: "555", powerAlertSent: false }, motor: { state: "RUNNING" } },
-    "dev-cleared-phone": { whatsappPhone: "", status: { lastSeen: nowMs - 45000, name: "ClearedPhone", whatsappPhone: "999", powerAlertSent: false }, motor: { state: "RUNNING" } },
+    "dev-stale-new": { status: { lastSeen: nowMs - 45000, name: "StaleNew",  whatsappPhone: "222", powerAlertSent: false }, motor: { state: "RUNNING" }, autoResume: { enabled: true, delayMinutes: 5 } },
+    "dev-renamed":       { displayName: "Well Pump", status: { lastSeen: nowMs - 45000, name: "Farm Pump", whatsappPhone: "555", powerAlertSent: false }, motor: { state: "RUNNING" }, autoResume: { enabled: true } },
+    "dev-cleared-phone": { whatsappPhone: "", status: { lastSeen: nowMs - 45000, name: "ClearedPhone", whatsappPhone: "999", powerAlertSent: false }, motor: { state: "RUNNING" }, autoResume: { enabled: false } },
     "dev-stale-old":     { status: { lastSeen: nowMs - 90000, name: "StaleOld",  whatsappPhone: "333", powerAlertSent: true } },
     "dev-stale-off":     { status: { lastSeen: nowMs - 55000, name: "StaleOff",  whatsappPhone: "444", powerAlertSent: false }, motor: { state: "OFF" } },
     "dev-no-phone":      { status: { lastSeen: nowMs - 60000, name: "NoPhone",   powerAlertSent: false }, motor: { state: "RUNNING" } },
@@ -166,14 +166,20 @@ async function main() {
   assert(flagsSet.length === 4 && flagsSet.includes("dev-stale-new") && flagsSet.includes("dev-renamed") && flagsSet.includes("dev-cleared-phone") && flagsSet.includes("dev-push-only"),
     "Expected dedup flags set for all alerted devices");
 
+  // stateBeforeOutage is what makes the firmware auto-start the motor
+  // when power returns - it must only be recorded when the owner has
+  // auto-resume ENABLED. Otherwise a pump with auto-resume off would
+  // start by itself after a power cut.
   assert(motorStatesSnapshotted["dev-stale-new"] === "RUNNING",
-    `Expected dev-stale-new's motor state (RUNNING) to be snapshotted at outage detection, got ${motorStatesSnapshotted["dev-stale-new"]}`);
+    `Expected dev-stale-new (auto-resume ON) to record RUNNING, got ${motorStatesSnapshotted["dev-stale-new"]}`);
   assert(motorStatesSnapshotted["dev-renamed"] === "RUNNING",
-    `Expected dev-renamed's motor state (RUNNING) to be snapshotted at outage detection, got ${motorStatesSnapshotted["dev-renamed"]}`);
-  assert(motorStatesSnapshotted["dev-cleared-phone"] === "RUNNING",
-    `Expected dev-cleared-phone's motor state (RUNNING) to be snapshotted at outage detection, got ${motorStatesSnapshotted["dev-cleared-phone"]}`);
-  assert(motorStatesSnapshotted["dev-push-only"] === "RUNNING",
-    `Expected dev-push-only's motor state (RUNNING) to be snapshotted at outage detection, got ${motorStatesSnapshotted["dev-push-only"]}`);
+    `Expected dev-renamed (auto-resume ON) to record RUNNING, got ${motorStatesSnapshotted["dev-renamed"]}`);
+  assert(motorStatesSnapshotted["dev-cleared-phone"] === null,
+    `Expected dev-cleared-phone (auto-resume OFF) to record null, got ${motorStatesSnapshotted["dev-cleared-phone"]}`);
+  assert(motorStatesSnapshotted["dev-push-only"] === null,
+    `Expected dev-push-only (auto-resume never configured) to record null, got ${motorStatesSnapshotted["dev-push-only"]}`);
+
+  testMotorAlertText();
 
   console.log("\nALL ASSERTIONS PASS:");
   console.log("- dev-fresh (5s): correctly skipped, too recent");
@@ -185,6 +191,37 @@ async function main() {
   console.log("- dev-no-phone (60s, motor RUNNING, no WhatsApp AND no push tokens): correctly skipped, no crash");
   console.log("- dev-push-only (70s, motor RUNNING, push only, no WhatsApp phone): correctly alerted via push alone - the whole point of decoupling the two channels");
   console.log("- dev-never (no lastSeen ever): correctly skipped, no crash");
+  console.log("- stateBeforeOutage recorded only when auto-resume is enabled (OFF/unset -> null, so no unexpected auto-start)");
+  console.log("- motorAlertText: power-loss stop sends nothing (powerWatchdog already alerted); other transitions keep their wording");
+}
+
+// onMotorStateChanged's wording/skip decision, as a pure function.
+function testMotorAlertText() {
+  const { motorAlertText } = mod;
+  assert(typeof motorAlertText === "function", "index.js should export motorAlertText for testing");
+
+  // A power cut is already announced by powerWatchdog ("Power Cut
+  // Alert"); the watchdog's own motor/state -> OFF write must not
+  // produce a second "turned OFF" alert.
+  assert(motorAlertText("Pump", false, "power-loss") === null,
+    "Expected no motor alert for a power-loss stop (powerWatchdog already alerted)");
+
+  const remoteOff = motorAlertText("Pump", false, "remote");
+  assert(remoteOff && remoteOff.title.includes("Pump turned OFF") && remoteOff.message.includes("mobile app"),
+    `Expected remote stop wording, got ${JSON.stringify(remoteOff)}`);
+
+  const plainOff = motorAlertText("Pump", false, null);
+  assert(plainOff && plainOff.message.includes("Pump turned OFF."),
+    `Expected plain OFF wording when stoppedVia is unset, got ${JSON.stringify(plainOff)}`);
+
+  const autoOn = motorAlertText("Pump", true, "auto-resume");
+  assert(autoOn && autoOn.title.includes("Pump turned ON") && autoOn.message.includes("power restored"),
+    `Expected auto-resume start wording, got ${JSON.stringify(autoOn)}`);
+
+  // "power-loss" only ever describes a stop; a start is always alerted.
+  const startWithStaleVia = motorAlertText("Pump", true, "power-loss");
+  assert(startWithStaleVia && startWithStaleVia.title.includes("turned ON"),
+    "Expected a start to always alert, regardless of via");
 }
 
 main().catch((err) => {

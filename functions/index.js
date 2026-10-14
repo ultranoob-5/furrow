@@ -136,7 +136,14 @@ async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag,
       // motor actually running right before the outage" needs to be
       // answered from a value that was frozen before recovery could
       // possibly race it.
-      await setDedupFlag(deviceId, motor.state);
+      //
+      // Only recorded when the owner has auto-resume ENABLED: the
+      // firmware (and onPowerRestored's wording) treat a recorded
+      // "RUNNING" as "start the motor once power is back", so recording
+      // it with auto-resume off made the pump start by itself after a
+      // power cut against the owner's setting. null clears any old value.
+      const autoResumeEnabled = !!(data && data.autoResume && data.autoResume.enabled === true);
+      await setDedupFlag(deviceId, autoResumeEnabled ? motor.state : null);
     } catch (err) {
       logger.error(`  Failed to set dedup flag (may re-alert next run): ${err}`);
     }
@@ -256,20 +263,27 @@ exports.powerWatchdog = onSchedule(
       },
       sendWhatsApp: sendWhatsAppReal,
       sendPush: sendPushToDevice,
-      setDedupFlag: async (deviceId, motorStateAtOutage) => {
+      setDedupFlag: async (deviceId, stateBeforeOutage) => {
         // Multi-path update, not two separate .set() calls - all
         // fields land together atomically in one round-trip.
         // Sets motor/state to "OFF" in the database so the dashboard
         // reflects that the pump is no longer running while unpowered,
         // while preserving motor/stateBeforeOutage so autoResume knows
-        // to resume when power is restored.
-        const safeState = (motorStateAtOutage === "RUNNING" || motorStateAtOutage === "OFF")
-          ? motorStateAtOutage
+        // to resume when power is restored (runWatchdog passes null when
+        // auto-resume is off).
+        //
+        // stoppedVia "power-loss" lands in the same atomic write as
+        // state "OFF", so onMotorStateChanged (triggered by that state
+        // change) sees it and skips its own "turned OFF" alert - this
+        // run has already sent the "Power Cut Alert".
+        const safeState = (stateBeforeOutage === "RUNNING" || stateBeforeOutage === "OFF")
+          ? stateBeforeOutage
           : null;
         await db.ref(`devices/${deviceId}`).update({
           "status/powerAlertSent": true,
           "motor/stateBeforeOutage": safeState,
           "motor/state": "OFF",
+          "motor/stoppedVia": "power-loss",
         });
       },
       nowMs: Date.now(),
@@ -360,6 +374,50 @@ async function sendAlertToDevice({ deviceId, name, title, body, whatsappMessage 
 // commands from the web dashboard, physical starter panel button presses,
 // scheduled on/off runs, and auto-resume. Sends both Push and WhatsApp notifications
 // in simple, clear, elder-friendly wording with visual status emojis.
+// Alert wording for a motor state change, or null when no alert should
+// be sent. Pure (no I/O) so functions/test.js can cover it.
+//
+// via "power-loss" is written by powerWatchdog together with its own
+// motor/state -> OFF write; that run already sent the "Power Cut
+// Alert", so the resulting state change must not send a second
+// "turned OFF" message.
+function motorAlertText(name, isRunning, via) {
+  if (isRunning) {
+    const title = `\u{1f7e2} ${name} turned ON`;
+    let message;
+    if (via === "remote") {
+      message = `\u{1f7e2} ${name} turned ON from the mobile app / website.`;
+    } else if (via === "manual") {
+      message = `\u{1f7e2} ${name} turned ON manually at the starter panel.`;
+    } else if (via === "auto-resume") {
+      message = `\u{1f7e2} ${name} turned ON automatically (power restored).`;
+    } else if (via === "schedule") {
+      message = `\u{1f7e2} ${name} turned ON by daily schedule.`;
+    } else {
+      message = `\u{1f7e2} ${name} turned ON.`;
+    }
+    return { title, message };
+  }
+
+  if (via === "power-loss") {
+    return null;
+  }
+
+  const title = `\u{1f534} ${name} turned OFF`;
+  let message;
+  if (via === "remote") {
+    message = `\u{1f534} ${name} turned OFF from the mobile app / website.`;
+  } else if (via === "schedule") {
+    message = `\u{1f534} ${name} turned OFF by daily schedule.`;
+  } else if (via === "manual") {
+    message = `\u{1f534} ${name} turned OFF manually at the starter panel.`;
+  } else {
+    message = `\u{1f534} ${name} turned OFF.`;
+  }
+  return { title, message };
+}
+module.exports.motorAlertText = motorAlertText; // exported for test.js
+
 exports.onMotorStateChanged = onValueWritten(
   { ref: "/devices/{deviceId}/motor/state", region: RTDB_REGION, secrets: [whapiToken] },
   async (event) => {
@@ -374,8 +432,6 @@ exports.onMotorStateChanged = onValueWritten(
     const db = getDatabase();
 
     try {
-      let title = "";
-      let message = "";
       const isRunning = (after === "RUNNING");
       const [name, viaSnap] = await Promise.all([
         resolveDeviceName(db, deviceId),
@@ -383,31 +439,12 @@ exports.onMotorStateChanged = onValueWritten(
       ]);
       const via = viaSnap.val();
 
-      if (isRunning) {
-        title = `\u{1f7e2} ${name} turned ON`;
-        if (via === "remote") {
-          message = `\u{1f7e2} ${name} turned ON from the mobile app / website.`;
-        } else if (via === "manual") {
-          message = `\u{1f7e2} ${name} turned ON manually at the starter panel.`;
-        } else if (via === "auto-resume") {
-          message = `\u{1f7e2} ${name} turned ON automatically (power restored).`;
-        } else if (via === "schedule") {
-          message = `\u{1f7e2} ${name} turned ON by daily schedule.`;
-        } else {
-          message = `\u{1f7e2} ${name} turned ON.`;
-        }
-      } else {
-        title = `\u{1f534} ${name} turned OFF`;
-        if (via === "remote") {
-          message = `\u{1f534} ${name} turned OFF from the mobile app / website.`;
-        } else if (via === "schedule") {
-          message = `\u{1f534} ${name} turned OFF by daily schedule.`;
-        } else if (via === "manual") {
-          message = `\u{1f534} ${name} turned OFF manually at the starter panel.`;
-        } else {
-          message = `\u{1f534} ${name} turned OFF.`;
-        }
+      const text = motorAlertText(name, isRunning, via);
+      if (!text) {
+        logger.info(`[MotorAlert] ${deviceId} (${name}): ${before} -> ${after} via ${via} - skipped (already alerted)`);
+        return;
       }
+      const { title, message } = text;
 
       await sendAlertToDevice({ deviceId, name, title, body: message, whatsappMessage: message });
       logger.info(`[MotorAlert] ${deviceId} (${name}): ${before} -> ${after}`);

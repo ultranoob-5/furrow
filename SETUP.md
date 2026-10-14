@@ -67,7 +67,7 @@ cp database.rules.example.json database.rules.json
 
 Edit `database.rules.json` and replace every
 `device@your-project-id.local` with the real device account email you
-just created in step 2 (all five occurrences need to match). Then:
+just created in step 2 (every occurrence needs to match). Then:
 
 ```
 firebase deploy --only database
@@ -77,57 +77,24 @@ This is the recommended path - it keeps your rules in version control
 and `firebase deploy --only database` will refuse to run at all if
 `database.rules.json` doesn't exist yet, rather than risk deploying
 something wrong. If you'd rather paste rules directly into the
-Firebase Console instead (Realtime Database → Rules), that works too -
-just keep whichever copy you use as the source of truth, since nothing
-keeps the two in sync automatically.
+Firebase Console instead (Realtime Database → Rules), paste the
+contents of your edited `database.rules.json` - never an older copy
+from anywhere else. `database.rules.example.json` is the single source
+of truth for the rules; nothing keeps a Console-pasted copy in sync
+with it automatically.
 
-```json
-{
-  "rules": {
-    "devices": {
-      ".read": true,
-      "$deviceId": {
-        "status": {
-          ".write": "auth.token.email == 'device@your-project-id.local'"
-        },
-        "motor": {
-          ".write": "auth.token.email == 'device@your-project-id.local'",
-          "stateBeforeOutage": {
-            ".write": "auth.token.email == 'device@your-project-id.local' || auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
-          }
-        },
-        "ota": {
-          ".write": "auth.token.email == 'device@your-project-id.local'"
-        },
-        "command": {
-          "action": {
-            ".write": "auth.token.email == 'device@your-project-id.local' || auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
-          },
-          "firmwareUrl": {
-            ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
-          }
-        },
-        "displayName": {
-          ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
-        },
-        "fcmTokens": {
-          ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
-        },
-        "autoResume": {
-          ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
-        },
-        "schedule": {
-          ".write": "auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val()"
-        }
-      }
-    }
-  }
-}
-```
+What the rules enforce, in short:
 
-Reads stay public (telemetry isn't sensitive); writes are locked to
-the device account and whichever owner a specific device declares -
-see README.md's Secrets section for why this design.
+- **Owners** (signed in with a *verified* email matching a device's
+  `status/owner`) can read only their own devices and send them
+  commands and settings.
+- **The device account** can read a device by its id and write its
+  status, motor state and OTA progress - but can only acknowledge
+  commands (write `"none"`), only clear `stateBeforeOutage`, and can't
+  list all devices or change schedules. Its login ships inside the
+  public firmware, so it's deliberately limited to what the firmware
+  actually does.
+- **Nobody else** can read or write anything.
 
 ## 4. Owner accounts (per person using the dashboard)
 
@@ -415,7 +382,10 @@ The schedule engine runs directly on the ESP32 firmware using hardware
 SNTP time synchronization and persists schedule parameters in NVS flash,
 requiring no scheduled Cloud Function cron jobs (saving ~43,200 runs/month).
 Daily schedules run reliably using the ESP32's internal RTC even through
-temporary internet drops.
+temporary internet drops. The one exception is a power cut: the ESP32
+has no battery-backed clock, so after every power-up it needs internet
+once to get the time again - until then, scheduled on/off times are
+skipped.
 
 1. **If you already deployed RTDB rules before this feature existed**,
    redeploy them: `firebase deploy --only database`. The rules include
@@ -496,15 +466,17 @@ want local requests counted as verified.
 - **Device shows offline but should be online** - check Serial Monitor
   for WiFi/Firebase connection errors; the dashboard can only be as
   accurate as what the device last successfully published.
-- **All buttons greyed out / stuck on "Connecting" forever** - this
-  specific symptom happened once from a real process gap: a firmware
-  feature was added without bumping `FIRMWARE_VERSION`, so an
-  already-flashed device was missing a field the dashboard now
-  expected. If you hit something like this, Restart and Update
-  Firmware are deliberately *not* gated behind "online" status
-  specifically so you can recover via OTA rather than needing a USB
-  reflash - try those first.
-- **Motor won't stop / Start seems stuck** - motor state is currently
-  command-based (assumed), not read from real hardware feedback, until
-  the current-sensor-based feedback module lands. See README.md's "Not
-  done yet" section.
+- **All buttons greyed out / stuck on "Connecting" or "No Power"** -
+  every action button, including Restart, Update firmware and Factory
+  reset, is disabled unless the device is currently online. That's
+  deliberate: an offline device can't act on a command, and one left
+  queued (a factory reset especially) would run unexpectedly whenever
+  it next reconnects. "Connecting" means the device has never reported
+  at all - check its WiFi/power and serial log, or reflash it over USB
+  from `flash.html`. Once it's online again, Restart and Update work
+  normally.
+- **Motor won't stop / Start seems stuck** - motor state comes from the
+  current sensor (real feedback), and the device sends a "failed to
+  start/stop" alert if a command doesn't take effect within 30s. If
+  that happens, the starter didn't respond to the relay pulse - check
+  the relay module and the starter wiring.

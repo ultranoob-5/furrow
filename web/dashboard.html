@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <!-- Bundled, tree-shaken modular Firebase v11 (replaces 5 legacy CDN compat scripts, saving ~76% payload) -->
-<script src="firebase-bundle.js?v=1.5.4"></script>
+<script src="firebase-bundle.js?v=1.5.5"></script>
 <script src="firebase-config.js"></script>
 <!-- Defines firebaseConfig - generated at deploy time from GitHub
      Actions secrets, or copy web/firebase-config.example.js locally
@@ -2454,7 +2454,7 @@
 
         <div class="settings-section" id="scheduleZone">
           <div class="settings-label">Scheduled on/off</div>
-          <p class="settings-desc">Automatically starts this pump at a set time every day, and stops it at another. Off (default) means nothing runs on a schedule; you're always in direct control. If you manually stop it during the "on" window, it stays off until tomorrow's cycle - the schedule never overrides a manual stop the same day. Requires an active internet connection to execute.</p>
+          <p class="settings-desc">Automatically starts this pump at a set time every day, and stops it at another. Off (default) means nothing runs on a schedule; you're always in direct control. If you manually stop it during the "on" window, it stays off until tomorrow's cycle - the schedule never overrides a manual stop the same day. The device has no battery-backed clock, so after each power-up it needs internet once to set its time; after that the schedule runs on the device itself, even if the internet drops.</p>
           <button class="notify-toggle-btn state-off" id="scheduleToggleBtn">Enable schedule</button>
           <div id="scheduleTimesRow" style="margin-top:14px;">
             <div class="schedule-grid">
@@ -2594,7 +2594,7 @@
        hidden then, which used to leave no way to log out). -->
   <div class="account-footer" id="accountFooter">
     <div class="footer-note">
-      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.5.4</span><br>
+      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.5.5</span><br>
       <a href="flash.html" style="color:var(--muted);">Set up a new device &rarr;</a>
     </div>
     <p class="account-signed-in" id="accountSignedIn"></p>
@@ -3923,13 +3923,12 @@
       return;
     }
 
-    // Restart/Update/Factory Reset are recovery tools - deliberately
-    // available whenever the device has ever reported any status at
-    // all, not just when it's currently confirmed online. A device
-    // stuck in a bad state (never reaching 'online') still needs a
-    // way to be recovered remotely rather than requiring a USB
-    // reflash every time - that's exactly the situation these exist
-    // to fix.
+    // Every action, including Restart/Update/Factory Reset, needs the
+    // device online: an offline device can't act on a command, and a
+    // command left queued in command/action (a factory reset
+    // especially) would run unexpectedly whenever it next reconnects.
+    // The one exception below keeps the Update button's own progress
+    // state while an OTA is already underway.
     const isOnline = connectionStatus(selectedId) === 'online';
 
     // While device is offline, disable all action buttons:
