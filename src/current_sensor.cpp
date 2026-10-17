@@ -151,7 +151,12 @@ void CurrentSensor::finishSample()
                               " (" + String(irms, 2) + " A RMS)");
     }
 
-    readingReady = true;
+    // The first reading only counts once the state is decided - not while
+    // a running motor is still part-way through RUN_CONFIRM_WINDOWS.
+    // Otherwise main.cpp's baseline sees OFF after a restart/OTA with the
+    // pump running, and publishes a false OFF then a false manual start.
+    if (running || consecutiveAboveRunThreshold == 0)
+        readingReady = true;
     samplesTaken = 0;
     sumI = 0.0;
 }

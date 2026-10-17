@@ -106,18 +106,6 @@ bool Network::isConnected()
     return WiFi.status() == WL_CONNECTED;
 }
 
-bool Network::hasInternet()
-{
-    if (!isConnected())
-        return false;
-
-    IPAddress ip;
-    if (WiFi.hostByName("pool.ntp.org", ip) == 1 && ip != IPAddress(0, 0, 0, 0))
-        return true;
-
-    return (WiFi.hostByName("time.google.com", ip) == 1 && ip != IPAddress(0, 0, 0, 0));
-}
-
 bool Network::consumeReconnectEvent()
 {
     if (!reconnectEvent)

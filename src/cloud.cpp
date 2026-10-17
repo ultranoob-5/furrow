@@ -160,7 +160,13 @@ namespace
             stateBeforeOutage = rtdb.to<String>();
             stateBeforeOutage.replace("\"", "");
             stateBeforeOutage.trim();
-            if (stateBeforeOutage == "RUNNING" && !Automation::isAutoResumePending() && !motor.isRunning())
+            // fetchAutoResume is queued just before this on the same
+            // client, so NVS already holds the current enabled flag.
+            if (stateBeforeOutage == "RUNNING" && !AppStorage::autoResumeEnabled())
+            {
+                Logger::info(TAG, "Cloud watchdog recorded RUNNING before outage, but auto-resume is DISABLED - not starting");
+            }
+            else if (stateBeforeOutage == "RUNNING" && !Automation::isAutoResumePending() && !motor.isRunning())
             {
                 Logger::warn(TAG, "Cloud watchdog recorded RUNNING before outage - triggering local auto-resume delay");
                 Automation::triggerAutoResume(AppStorage::autoResumeDelayMinutes());

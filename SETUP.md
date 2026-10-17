@@ -354,6 +354,11 @@ autonomously without needing an active internet connection. When power returns a
 connectivity is established, the device also sends WhatsApp alerts and triggers push
 notifications (`onPowerRestored`).
 
+If power drops again during the countdown, it starts over after the next
+power-up. Turning auto-resume off cancels a countdown that's already
+running. It tries once per outage - if the pump doesn't start (e.g. a
+tripped overload), it won't try again at the next power-up.
+
 1. **If you already deployed RTDB rules before this feature existed**,
    redeploy them: `firebase deploy --only database`. The rules include
    an `autoResume` field (owner-writable) and `motor/stateBeforeOutage`

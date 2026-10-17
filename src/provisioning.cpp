@@ -28,11 +28,33 @@ namespace
         return "Furrow-Setup-" + suffix;
     }
 
+    // Stored values go into value="..." attributes - a name containing a
+    // quote or < would otherwise break (or inject into) the setup page.
+    String htmlEscape(const String &s)
+    {
+        String out;
+        out.reserve(s.length() + 8);
+        for (size_t i = 0; i < s.length(); i++)
+        {
+            char c = s[i];
+            switch (c)
+            {
+            case '&': out += "&amp;"; break;
+            case '<': out += "&lt;"; break;
+            case '>': out += "&gt;"; break;
+            case '"': out += "&quot;"; break;
+            case '\'': out += "&#39;"; break;
+            default: out += c;
+            }
+        }
+        return out;
+    }
+
     String htmlPage(const String &statusMessage = "")
     {
-        String curName = AppStorage::deviceName();
-        String curOwner = AppStorage::ownerEmail();
-        String curPhone = AppStorage::whatsAppPhone();
+        String curName = htmlEscape(AppStorage::deviceName());
+        String curOwner = htmlEscape(AppStorage::ownerEmail());
+        String curPhone = htmlEscape(AppStorage::whatsAppPhone());
 
         String html = R"HTML(
 <!DOCTYPE html>

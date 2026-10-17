@@ -1,3 +1,16 @@
+## [1.6.0] - 2026-10-17
+
+Firmware only (1.4.4 -> 1.6.0) - update from the dashboard or flash. No rules, Cloud Functions or dashboard change.
+
+- **Safety - Device Checks Auto-Resume Too**: When the cloud watchdog had recorded the pump as running before an outage, the firmware started the auto-resume countdown without checking the device's own auto-resume setting. It now checks first, the device-side half of the 1.5.5 fix.
+- **Turning Auto-Resume Off Cancels a Countdown**: Disabling auto-resume while a countdown was running didn't stop it - the pump still started when it ran out. It now cancels the countdown and forgets the outage.
+- **Auto-Resume Survives a Second Power Cut**: The device cleared its "was running" record as soon as it booted, so if power dropped again during the countdown (common when supply flickers back), the next boot forgot the pump had been running. The record now stays until the start is attempted. One attempt per outage: if the pump doesn't start (tripped overload, no supply), it won't try again at the next power-up.
+- **Running Pump Remembered After a Restart or Update**: A pump that kept running through a device restart or OTA update was never recorded as running, so a power cut afterwards wouldn't auto-resume it. The device now records the real state at startup.
+- **No False Alerts After a Restart With the Pump Running**: The first current reading after boot counted before a running motor had been confirmed (3 readings), so the device published OFF and then a "manual" start - two wrong alerts after every restart or update while pumping. It now waits until the state is decided.
+- **No Relay Blip at Boot**: The relay pins were switched to output before being set to off, driving Start/Stop on for an instant at every boot. They're now set to off first, at the very start of boot.
+- **Setup Page Escaping**: The WiFi setup page escapes the saved device name, email and phone number, so a name containing a quote can't break the page.
+- **Cleanup**: Removed unused `Network::hasInternet()`.
+
 ## [1.5.5] - 2026-10-14
 
 Cloud Functions, dashboard text and docs - no firmware or rules change.

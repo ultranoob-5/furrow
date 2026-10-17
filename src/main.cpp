@@ -1,5 +1,6 @@
 #include <Arduino.h>
 
+#include "relay.h"
 #include "storage.h"
 #include "provisioning.h"
 #include "network.h"
@@ -86,6 +87,10 @@ namespace
 
 void setup()
 {
+    // Relays first: until now the pins float, and the steps below
+    // (provisioning, an 8s WiFi attempt) can take a while.
+    relayInit();
+
     Serial.begin(115200);
 
     delay(1000);
@@ -173,6 +178,13 @@ void loop()
         {
             previousMotorRunning = runningNow;
             baselineEstablished = true;
+
+            // Record the real state - a pump that keeps running through a
+            // restart or OTA never produces a transition below, so a later
+            // power cut wouldn't know it was running. While an auto-resume
+            // counts down, NVS already says "RUNNING" on purpose; keep it.
+            if (runningNow || !Automation::isAutoResumePending())
+                AppStorage::setLastMotorState(runningNow ? "RUNNING" : "OFF");
 
             // The one and only place the FIRST motor-state publish
             // happens - setup() deliberately skips it (see its own

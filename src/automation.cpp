@@ -41,8 +41,8 @@ namespace Automation
                                String(delayMin) + " minute(s)");
             autoResumePending = true;
             autoResumeDueMs = millis() + (delayMin * 60000UL);
-            // Clear last state from NVS so this outage trigger only fires once
-            AppStorage::setLastMotorState("");
+            // NVS keeps "RUNNING" until the start is attempted, so if power
+            // drops again during the countdown the next boot re-arms it.
         }
         else
         {
@@ -77,6 +77,10 @@ namespace Automation
                 autoResumePending = false;
                 autoResumeStartPending = true;
                 Logger::warn(TAG, "Auto-resume delay elapsed - starting motor locally");
+                // One attempt per outage: a confirmed start records
+                // "RUNNING" again; a start that doesn't take (tripped
+                // overload, no supply) won't be retried on the next power-up.
+                AppStorage::setLastMotorState("OFF");
                 motor.start();
             }
         }
@@ -165,6 +169,9 @@ namespace Automation
         if (autoResumePending)
         {
             autoResumePending = false;
+            // Forget the outage too, or the next power cut would resume it.
+            if (!motor.isRunning())
+                AppStorage::setLastMotorState("OFF");
             Logger::info(TAG, "Auto-resume cancelled");
         }
     }
@@ -205,6 +212,10 @@ namespace Automation
         AppStorage::setAutoResumeConfig(enabled, delayMinutes);
         Logger::info(TAG, "Auto-resume updated from cloud: " + String(enabled ? "ENABLED" : "DISABLED") +
                            " (" + String(delayMinutes) + "m)");
+
+        // Turning auto-resume off also stops a countdown already running.
+        if (!enabled)
+            cancelAutoResume();
     }
 
     void triggerAutoResume(uint8_t delayMinutes)
@@ -218,5 +229,7 @@ namespace Automation
         Logger::warn(TAG, "Triggering auto-resume delay: " + String(delayMinutes) + " minute(s)");
         autoResumePending = true;
         autoResumeDueMs = millis() + (delayMinutes * 60000UL);
+        // Same as a boot-time resume: survive another power cut mid-countdown.
+        AppStorage::setLastMotorState("RUNNING");
     }
 }
