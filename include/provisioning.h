@@ -8,11 +8,13 @@
 // Flow: the ESP32 broadcasts its own WiFi network. Connecting to it and
 // opening any website auto-redirects to a small setup page (or the user
 // visits 192.168.4.1 directly). They pick their real WiFi network and
-// enter its password; the device saves it and restarts.
+// enter its password; the device tries it first, and only saves and
+// restarts once it has actually connected - a wrong password shows an
+// error on the page instead of leaving the device stuck off the network.
 namespace Provisioning
 {
     // Starts the AP + captive portal and blocks, handling requests,
-    // until valid credentials have been submitted and saved to Storage.
-    // Restarts the device itself once done - does not return normally.
+    // until working credentials have been submitted, tested and saved to
+    // Storage. Restarts the device itself once done - does not return.
     void run();
 }

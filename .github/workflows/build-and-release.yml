@@ -27,6 +27,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # The dashboard's "Update available" badge compares the device's
+      # FIRMWARE_VERSION with the latest release tag, so they must match.
+      - name: Check the tag matches FIRMWARE_VERSION
+        run: |
+          VERSION=$(awk -F'"' '/FIRMWARE_VERSION =/ { print $2 }' include/config.h)
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match FIRMWARE_VERSION \"$VERSION\" in include/config.h"
+            exit 1
+          fi
+          echo "Tag $GITHUB_REF_NAME matches FIRMWARE_VERSION $VERSION"
+
       - name: Generate secrets.h from repository secrets
         run: |
           cat > include/secrets.h << EOF
@@ -60,7 +71,8 @@ jobs:
             ${{ runner.os }}-pio-
 
       - name: Install PlatformIO
-        run: pip install --upgrade platformio
+        # Pinned like the platform and libraries in platformio.ini.
+        run: pip install platformio==6.2.0
 
       - name: Build firmware
         run: pio run -e esp32dev
@@ -84,9 +96,9 @@ jobs:
           # initializes the OTA-select partition so the bootloader knows
           # to boot the app just written. Its actual location/name isn't
           # as stable across platformio's espressif32 platform versions
-          # as first assumed - platformio.ini doesn't pin a version, so
-          # this build could be on the newer ESP-IDF-based Arduino Core
-          # 3.x, which restructured the whole build system; ESP-IDF's own
+          # as first assumed - platformio.ini pins one now, but a future
+          # bump could move to the ESP-IDF-based Arduino Core 3.x, which
+          # restructured the whole build system; ESP-IDF's own
           # native name for the same file is ota_data_initial.bin, not
           # boot_app0.bin, and newer builds sometimes already copy it
           # straight into the build output directory rather than only

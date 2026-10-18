@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <!-- Bundled, tree-shaken modular Firebase v11 (replaces 5 legacy CDN compat scripts, saving ~76% payload) -->
-<script src="firebase-bundle.js?v=1.6.4"></script>
+<script src="firebase-bundle.js?v=1.6.5"></script>
 <script src="firebase-config.js"></script>
 <!-- Defines firebaseConfig - generated at deploy time from GitHub
      Actions secrets, or copy web/firebase-config.example.js locally
@@ -1746,6 +1746,10 @@
     flex-wrap: wrap;
   }
 
+  .wifi-help{ margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+  .wifi-help summary{ cursor: pointer; padding: 6px 0; }
+  .wifi-help p{ margin: 6px 0 0; line-height: 1.55; }
+
   .readout-row .k{
     color: var(--muted);
     font-weight: 500;
@@ -2416,6 +2420,10 @@
         <span id="rRssiText">&mdash;</span>
       </span></div>
       <div class="readout-row"><span class="k">Last online</span><span class="v" id="rLastOnline">&mdash;</span></div>
+      <details class="wifi-help">
+        <summary>Changing this device&rsquo;s WiFi?</summary>
+        <p>Switch the device on and, within 5 seconds, hold its <strong>BOOT</strong> button for 3 seconds. Then on your phone join the <strong>Furrow-Setup-XXXX</strong> WiFi - a setup page opens. Pick the new network and enter its password; the device checks it works before saving.</p>
+      </details>
     </div>
 
     <div class="advanced-settings">
@@ -2428,7 +2436,7 @@
 
         <div class="settings-section" id="autoResumeZone">
           <div class="settings-label">Auto-resume after power loss</div>
-          <p class="settings-desc">If this pump was running when the power went out, automatically start it again once the device reconnects - after the delay below, so it doesn't restart the instant power returns. Off (default) means nothing restarts on its own; you'd start it yourself from here or the panel.</p>
+          <p class="settings-desc">If this pump was running when the power went out, automatically start it again once power is back - after the delay below, so it doesn't restart the instant power returns. Off (default) means nothing restarts on its own; you'd start it yourself from here or the panel.</p>
           <button class="notify-toggle-btn state-off" id="autoResumeToggleBtn">Enable auto-resume</button>
           <div id="autoResumeDelayRow" style="margin-top:14px;">
             <label style="font-size:11px; color:var(--muted); display:block; margin-bottom:8px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">Delay before restarting</label>
@@ -2596,7 +2604,7 @@
        hidden then, which used to leave no way to log out). -->
   <div class="account-footer" id="accountFooter">
     <div class="footer-note">
-      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.6.4</span><br>
+      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.6.5</span><br>
       <a href="flash.html" style="color:var(--muted);">Set up a new device &rarr;</a>
     </div>
     <p class="account-signed-in" id="accountSignedIn"></p>

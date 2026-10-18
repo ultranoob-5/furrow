@@ -190,12 +190,20 @@ step).
 1. On your phone, connect to the WiFi network **`Furrow-Setup-XXXX`**
    the device is broadcasting
 2. A setup page should pop up automatically; if not, visit `192.168.4.1`
-3. Fill in: your real WiFi network + password, a device name, the
-   **owner's email** (must exactly match a Firebase Auth account from
-   step 4, in lowercase - Firebase stores account emails lowercased, so
-   a mismatch, including capital letters, silently locks that person
-   out with no error shown), and optionally a WhatsApp number for alerts
-4. Save - the device restarts and connects to your real network
+3. Fill in: your real WiFi network (2.4 GHz only - the ESP32 can't use
+   5 GHz) + password, a device name, the **owner's email** (the same
+   address as their Firebase Auth account from step 4; it's stored in
+   lowercase automatically), and optionally a WhatsApp number for alerts.
+   Leave **Advanced -> Development Device** off on a real pump - it
+   ignores the current sensor and is only for bench testing.
+4. Save - the device first tries your WiFi (up to 15 seconds). If it
+   works, it saves everything and restarts. If not (wrong password,
+   network not found), nothing is saved and the page says what went
+   wrong; your phone may briefly drop off the setup WiFi during the test.
+5. To change WiFi later (new router or password): switch the device on
+   and, within 5 seconds, hold its **BOOT** button for 3 seconds - the
+   setup WiFi comes back and the page is filled in with the current
+   details.
 
 ## 8. WhatsApp alerts (optional)
 

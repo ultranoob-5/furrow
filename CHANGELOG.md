@@ -1,3 +1,15 @@
+## [1.6.5] - 2026-10-18
+
+Firmware setup page, pinned builds, dashboard help text. No rules or Cloud Functions change.
+
+- **Setup Page Tests Your WiFi Before Saving**: A mistyped WiFi password used to be saved anyway, leaving the device stuck off the network until someone knew to hold BOOT at power-on. The device now tries the network first (up to 15 seconds): if it connects, it saves and restarts; if not, nothing is saved and the page says why - wrong password, or network not found (wrong name, 5 GHz, out of range).
+- **Setup Page Keeps What You Typed**: An error no longer clears the form; messages show at the top, red for problems and green for success. Your current network is pre-selected.
+- **"Development Device" Hidden**: Moved under "Advanced (bench testing only)" so it isn't ticked by accident on a real pump.
+- **Changing WiFi Later**: The setup page, its success screen and the dashboard (under the device details) now explain how - hold BOOT for 3 seconds within 5 seconds of switching on.
+- **Pinned Firmware Builds**: Releases now build with exactly the versions in use today (PlatformIO 6.2.0, espressif32 platform 7.0.1 / Arduino core 2.0.17, FirebaseClient 2.2.13) instead of whatever was newest that day, and a release fails if its tag doesn't match `FIRMWARE_VERSION`.
+- **Dashboard Text**: The auto-resume description no longer says it needs the device to reconnect - it works from the device itself when power is back.
+- **PWA Cache Invalidation**: Service worker cache `furrow-dashboard-v20`, PWA `v1.6.5`.
+
 ## [1.6.4] - 2026-10-18
 
 Alerts, firmware and small cleanups. No rules change.
