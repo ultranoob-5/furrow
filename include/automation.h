@@ -27,5 +27,4 @@ namespace Automation
     // Synchronization methods called when cloud/dashboard settings arrive
     void updateSchedule(bool enabled, const String &onTime, const String &offTime);
     void updateAutoResume(bool enabled, uint8_t delayMinutes);
-    void triggerAutoResume(uint8_t delayMinutes);
 }

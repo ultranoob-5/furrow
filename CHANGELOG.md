@@ -1,3 +1,15 @@
+## [1.6.1] - 2026-10-18
+
+Firmware only - update from the dashboard or flash. No rules, Cloud Functions or dashboard change.
+
+- **Safety - Internet Drop No Longer Restarts a Stopped Pump**: With auto-resume on, an internet drop of 30s+ while pumping made the cloud watchdog record "was running". If the pump was then stopped at the panel, the device acted on that record when the internet came back and started it again. The device no longer uses the cloud record at all - auto-resume after a real power cut comes from the device's own memory (reliable since 1.6.0).
+- **Auto-Resume Respects the Schedule**: With a schedule enabled, auto-resume no longer restarts the pump outside the schedule's ON window (for example when power returns after the OFF time), which used to leave it running until the next day's OFF time. Needs the clock, so it applies once the device has had internet since power-up.
+- **Restart / Factory Reset / Shutdown Can't Repeat**: These cleared the command and rebooted after a fixed 1s pause, without waiting for the clear to reach the server - if it hadn't, the device ran the same command again after booting. It now waits (up to 5s) for the server to confirm.
+- **WhatsApp Number From Setup Kept**: A number typed on the WiFi setup page was erased the first time the device went online, because the dashboard had never set one. The device now only clears it when it's cleared from the dashboard.
+- **Owner Email Case**: The owner email is stored in lowercase, so a capital letter typed at setup no longer locks the owner out (Firebase emails are lowercase). Also applied to already set-up devices.
+- **Scheduled OFF Always Presses Stop**: At the OFF time the device presses Stop even when it reads the pump as already off, so a wrong reading can't skip it.
+- **Schedule Edits Same Day**: Moving the OFF time to later today now stops the pump today, even if the old OFF time already fired - before, a running pump wasn't stopped until tomorrow. (A changed ON time still waits for tomorrow if today's start already happened, so an edit never adds a surprise start.)
+
 ## [1.6.0] - 2026-10-17
 
 Firmware only (1.4.4 -> 1.6.0) - update from the dashboard or flash. No rules, Cloud Functions or dashboard change.

@@ -20,6 +20,42 @@ namespace
     unsigned long lastScheduleCheckMs = 0;
     String lastOnFiredDate = "";
     String lastOffFiredDate = "";
+
+    // Local time, or false while the clock hasn't been set since power-up.
+    bool localNow(struct tm &timeinfo)
+    {
+        time_t now = time(nullptr);
+        if (now < 1704067200) // Valid time after 2024-01-01 (clock synced)
+            return false;
+        return localtime_r(&now, &timeinfo) != nullptr;
+    }
+
+    // True when a schedule is enabled, the clock is set, and the time is
+    // outside its ON window - the pump is meant to be off right now.
+    bool outsideScheduleWindow()
+    {
+        if (!AppStorage::scheduleEnabled())
+            return false;
+
+        String onTime = AppStorage::scheduleOnTime();
+        String offTime = AppStorage::scheduleOffTime();
+        if (onTime == offTime || onTime.length() != 5 || offTime.length() != 5)
+            return false;
+
+        struct tm timeinfo;
+        if (!localNow(timeinfo))
+            return false; // time unknown (no internet yet) - auto-resume still works offline
+
+        char buf[6];
+        snprintf(buf, sizeof(buf), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+        String now = buf;
+
+        // "HH:MM" compares correctly as text; a window crossing midnight
+        // (e.g. 22:00-02:00) wraps around.
+        bool inWindow = onTime < offTime ? (now >= onTime && now < offTime)
+                                         : (now >= onTime || now < offTime);
+        return !inWindow;
+    }
 }
 
 namespace Automation
@@ -75,13 +111,24 @@ namespace Automation
             else if ((long)(millis() - autoResumeDueMs) >= 0)
             {
                 autoResumePending = false;
-                autoResumeStartPending = true;
-                Logger::warn(TAG, "Auto-resume delay elapsed - starting motor locally");
                 // One attempt per outage: a confirmed start records
                 // "RUNNING" again; a start that doesn't take (tripped
                 // overload, no supply) won't be retried on the next power-up.
                 AppStorage::setLastMotorState("OFF");
-                motor.start();
+
+                if (outsideScheduleWindow())
+                {
+                    // Power came back outside the schedule's ON window (e.g.
+                    // after its OFF time) - resuming would run the pump
+                    // until the next day's OFF time.
+                    Logger::warn(TAG, "Auto-resume skipped - outside the schedule's ON window");
+                }
+                else
+                {
+                    autoResumeStartPending = true;
+                    Logger::warn(TAG, "Auto-resume delay elapsed - starting motor locally");
+                    motor.start();
+                }
             }
         }
 
@@ -93,12 +140,8 @@ namespace Automation
             return;
         lastScheduleCheckMs = millis();
 
-        time_t now = time(nullptr);
-        if (now < 1704067200) // Valid time after 2024-01-01 (clock synced)
-            return;
-
         struct tm timeinfo;
-        if (!localtime_r(&now, &timeinfo))
+        if (!localNow(timeinfo))
             return;
 
         char nowTime[6];
@@ -137,17 +180,13 @@ namespace Automation
         if (offDue)
         {
             lastOffFiredDate = nowDate;
-            if (motor.isRunning())
-            {
-                Logger::warn(TAG, "Schedule: turning OFF at " + String(nowTime));
-                scheduleStopPending = true;
-                scheduleStartPending = false;
-                motor.stop();
-            }
-            else
-            {
-                Logger::info(TAG, "Schedule: stop time reached but motor already OFF");
-            }
+            Logger::warn(TAG, "Schedule: turning OFF at " + String(nowTime));
+            // Press Stop even if the CT reads OFF - a wrong reading must
+            // never skip a stop (same rule as Motor::stop()). Only expect a
+            // tagged OFF transition if it's actually running.
+            scheduleStopPending = motor.isRunning();
+            scheduleStartPending = false;
+            motor.stop();
         }
     }
 
@@ -202,6 +241,13 @@ namespace Automation
 
     void updateSchedule(bool enabled, const String &onTime, const String &offTime)
     {
+        // A changed OFF time must be able to fire today even if the old one
+        // already did, or a running pump isn't stopped until tomorrow. (A
+        // changed ON time still waits for tomorrow if today's start already
+        // fired, so an edit never adds a surprise start.)
+        if (offTime != AppStorage::scheduleOffTime())
+            lastOffFiredDate = "";
+
         AppStorage::setScheduleConfig(enabled, onTime, offTime);
         Logger::info(TAG, "Schedule updated from cloud: " + String(enabled ? "ENABLED" : "DISABLED") +
                            " (" + onTime + " - " + offTime + ")");
@@ -216,20 +262,5 @@ namespace Automation
         // Turning auto-resume off also stops a countdown already running.
         if (!enabled)
             cancelAutoResume();
-    }
-
-    void triggerAutoResume(uint8_t delayMinutes)
-    {
-        if (motor.isRunning())
-        {
-            Logger::info(TAG, "triggerAutoResume: ignored, motor is already running");
-            return;
-        }
-
-        Logger::warn(TAG, "Triggering auto-resume delay: " + String(delayMinutes) + " minute(s)");
-        autoResumePending = true;
-        autoResumeDueMs = millis() + (delayMinutes * 60000UL);
-        // Same as a boot-time resume: survive another power cut mid-countdown.
-        AppStorage::setLastMotorState("RUNNING");
     }
 }

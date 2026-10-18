@@ -359,6 +359,12 @@ power-up. Turning auto-resume off cancels a countdown that's already
 running. It tries once per outage - if the pump doesn't start (e.g. a
 tripped overload), it won't try again at the next power-up.
 
+It only acts on a real power cut (the device itself restarting). A WiFi
+or internet drop never restarts the pump, even if the cloud sent a
+"Power Cut" alert for it. If a schedule (section 13) is enabled, it
+also won't restart the pump outside the schedule's ON window - as long
+as the device has internet to know the time.
+
 1. **If you already deployed RTDB rules before this feature existed**,
    redeploy them: `firebase deploy --only database`. The rules include
    an `autoResume` field (owner-writable) and `motor/stateBeforeOutage`
@@ -382,6 +388,11 @@ normal daily irrigation schedule. Off by default, per device. Manual
 control always wins: stopping it yourself during the "on" window
 keeps it off until tomorrow's cycle - the schedule never re-fires the
 same on-event twice in one calendar day.
+
+At the OFF time the device always presses Stop, even if it reads the
+pump as already off. A new OFF time later today still fires today, even
+if the old one already did; a changed ON time waits for tomorrow if
+today's start already happened.
 
 The schedule engine runs directly on the ESP32 firmware using hardware
 SNTP time synchronization and persists schedule parameters in NVS flash,

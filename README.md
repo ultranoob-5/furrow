@@ -175,7 +175,7 @@ port, relay cables, and serial pins. ~1.2h print time.
   there's no expected outcome to check it against for that case.
 - **Auto-resume after a power loss** (optional, off by default, per
   device): if this pump was actually running right before the power
-  went out, automatically starts it again once the device reconnects -
+  went out, automatically starts it again when the power is back -
   after a delay you set (1-10 minutes), so it doesn't restart the
   instant power returns. Deliberately restores previous state rather
   than always turning on - if it was off before the outage, it stays

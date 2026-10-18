@@ -55,7 +55,6 @@ namespace
     String firmwareUrlPath;
     String otaStatusPath;
     String autoResumePath;
-    String stateBeforeOutagePath;
     String schedulePath;
     String displayNamePath;
 
@@ -66,7 +65,6 @@ namespace
     bool scheduleChecked = false;
     bool whatsAppChecked = false;
     bool displayNameChecked = false;
-    String stateBeforeOutage = "";
     bool remoteStartPending = false;
     bool remoteStopPending = false;
 
@@ -82,6 +80,10 @@ namespace
     // The actual motor action and any follow-up database writes happen
     // from Cloud::loop(), never from inside the async callback.
     String pendingCommand = "";
+
+    // Set by processData once the server has acknowledged a "none" write
+    // to command/action (see clearCommandAndWait()).
+    bool commandClearConfirmed = false;
 
     // Set when an "update" command's firmware URL has been fetched and
     // is ready to download+flash - handled from loop(), not from inside
@@ -129,6 +131,12 @@ namespace
         if (!result.available())
             return;
 
+        if (result.uid() == "clearCommand")
+        {
+            commandClearConfirmed = true;
+            return;
+        }
+
         if (result.uid() == "fetchFirmwareUrl")
         {
             RealtimeDatabaseResult &rtdb = result.to<RealtimeDatabaseResult>();
@@ -151,30 +159,6 @@ namespace
                     delay = val;
             }
             Automation::updateAutoResume(enabled, delay);
-            return;
-        }
-
-        if (result.uid() == "fetchStateBeforeOutage")
-        {
-            RealtimeDatabaseResult &rtdb = result.to<RealtimeDatabaseResult>();
-            stateBeforeOutage = rtdb.to<String>();
-            stateBeforeOutage.replace("\"", "");
-            stateBeforeOutage.trim();
-            // fetchAutoResume is queued just before this on the same
-            // client, so NVS already holds the current enabled flag.
-            if (stateBeforeOutage == "RUNNING" && !AppStorage::autoResumeEnabled())
-            {
-                Logger::info(TAG, "Cloud watchdog recorded RUNNING before outage, but auto-resume is DISABLED - not starting");
-            }
-            else if (stateBeforeOutage == "RUNNING" && !Automation::isAutoResumePending() && !motor.isRunning())
-            {
-                Logger::warn(TAG, "Cloud watchdog recorded RUNNING before outage - triggering local auto-resume delay");
-                Automation::triggerAutoResume(AppStorage::autoResumeDelayMinutes());
-            }
-            if (stateBeforeOutage.length() > 0 && stateBeforeOutage != "null")
-            {
-                database.set<String>(aClientMain, stateBeforeOutagePath, "", processData, "clearStateBeforeOutage");
-            }
             return;
         }
 
@@ -210,9 +194,19 @@ namespace
         {
             RealtimeDatabaseResult &rtdb = result.to<RealtimeDatabaseResult>();
             String phone = rtdb.to<String>();
+
+            // null = never set from the dashboard (e.g. a new device): keep
+            // the number typed on the setup page. The dashboard clears it
+            // by writing "" instead, which is handled below.
+            if (phone == "null")
+            {
+                cloud.publishDevice();
+                return;
+            }
+
             phone.replace("\"", "");
             phone.trim();
-            if (phone.length() > 0 && phone != "null")
+            if (phone.length() > 0)
             {
                 AppStorage::setWhatsAppConfig(phone);
             }
@@ -256,6 +250,27 @@ namespace
             value == "sync_schedule" || value == "sync_auto_resume" || value == "sync_whatsapp_phone" ||
             value == "sync_name")
             pendingCommand = value;
+    }
+
+    // For commands that reboot or power down the device. A queued write
+    // isn't sent while delay() blocks, so keep the client running until
+    // the server confirms command/action is "none" - otherwise the device
+    // can come back up, see the same command, and run it again.
+    void clearCommandAndWait(unsigned long timeoutMs)
+    {
+        commandClearConfirmed = false;
+        database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
+
+        unsigned long start = millis();
+        while (!commandClearConfirmed && millis() - start < timeoutMs)
+        {
+            app.loop();
+            database.loop();
+            delay(10);
+        }
+
+        if (!commandClearConfirmed)
+            Logger::warn(TAG, "Command clear not confirmed - continuing anyway");
     }
 
     void handlePendingCommand()
@@ -312,12 +327,7 @@ namespace
         {
             Logger::warn(TAG, "Remote command: RESTART");
 
-            // Clear the command before rebooting - otherwise, once the
-            // stream reconnects after boot, it'll see the same
-            // "restart" value still sitting there and reboot forever.
-            database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
-
-            delay(1000); // let the clear request actually go out before we reboot
+            clearCommandAndWait(5000);
             ESP.restart();
         }
 
@@ -325,12 +335,9 @@ namespace
         {
             Logger::warn(TAG, "Remote command: SHUTDOWN - deep sleep, no wake source configured");
 
-            // Same reasoning as restart: clear the command first, so it
-            // doesn't immediately shut back down the moment someone
-            // physically powers it back on and it reconnects.
-            database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
-
-            delay(1000);
+            // Clear first, so it doesn't shut straight back down the moment
+            // someone powers it on again and it reconnects.
+            clearCommandAndWait(5000);
 
             // No wake source configured on purpose: this is a genuine
             // "off" state. Recovery requires physically power-cycling
@@ -344,9 +351,8 @@ namespace
             Logger::warn(TAG, "Remote command: FACTORY RESET - clearing RTDB command and resetting to setup mode");
 
             pendingCommand = "";
-            database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
+            clearCommandAndWait(5000);
 
-            delay(500);
             AppStorage::factoryReset();
             delay(500);
             ESP.restart();
@@ -593,7 +599,6 @@ void Cloud::begin()
     firmwareUrlPath = "/devices/" + device.id() + "/command/firmwareUrl";
     otaStatusPath = "/devices/" + device.id() + "/ota";
     autoResumePath = "/devices/" + device.id() + "/autoResume";
-    stateBeforeOutagePath = "/devices/" + device.id() + "/motor/stateBeforeOutage";
     schedulePath = "/devices/" + device.id() + "/schedule";
     displayNamePath = "/devices/" + device.id() + "/displayName";
 
@@ -667,8 +672,11 @@ void Cloud::loop()
     if (!autoResumeChecked)
     {
         autoResumeChecked = true;
+        // The cloud watchdog's motor/stateBeforeOutage is deliberately not
+        // used here. It's also written when only the internet dropped, so
+        // acting on it could restart a pump someone stopped meanwhile.
+        // Auto-resume after a real power cut comes from NVS (Automation).
         database.get(aClientMain, autoResumePath, processData, false, "fetchAutoResume");
-        database.get(aClientMain, stateBeforeOutagePath, processData, false, "fetchStateBeforeOutage");
     }
 
     if (!scheduleChecked)
@@ -916,11 +924,6 @@ void Cloud::cancelAutoResume()
     Automation::cancelAutoResume();
     remoteStartPending = false;
     remoteStopPending = false;
-    if (stateBeforeOutage.length() > 0)
-    {
-        stateBeforeOutage = "";
-        database.set<String>(aClientMain, stateBeforeOutagePath, "", processData, "clearStateBeforeOutage");
-    }
 }
 
 bool Cloud::scheduleStartWasPending()

@@ -80,17 +80,29 @@ namespace AppStorage
         return prefs.getString(KEY_DEV_NAME, "");
     }
 
+    // Firebase Auth emails are lowercase and the database rules compare
+    // them exactly, so "Farmer@Gmail.com" typed at setup would lock the
+    // owner out. Normalised on save and on read (covers older devices).
+    String normalizedEmail(const String &email)
+    {
+        String e = email;
+        e.trim();
+        e.toLowerCase();
+        return e;
+    }
+
     String ownerEmail()
     {
-        return prefs.getString(KEY_OWNER, "");
+        return normalizedEmail(prefs.getString(KEY_OWNER, ""));
     }
 
     void setDeviceConfig(const String &name, const String &owner)
     {
+        String email = normalizedEmail(owner);
         prefs.putString(KEY_DEV_NAME, name);
-        prefs.putString(KEY_OWNER, owner);
+        prefs.putString(KEY_OWNER, email);
 
-        Logger::info(TAG, "Device config saved - name: " + name + ", owner: " + owner);
+        Logger::info(TAG, "Device config saved - name: " + name + ", owner: " + email);
     }
 
     void setDeviceName(const String &name)
