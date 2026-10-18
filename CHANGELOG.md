@@ -1,3 +1,12 @@
+## [1.6.6] - 2026-10-18
+
+Dashboard fixes and a firmware rebuild. No rules or Cloud Functions change.
+
+- **One Motor Button at a Time**: Only Stop shows while the pump is running (or a Start is on its way), and only Start while it is off (or a Stop is on its way). The button fills the row.
+- **Status No Longer Slow After Switching Apps**: Since 1.6.4 the dashboard dropped and rebuilt its live connection every time you came back after more than 3 seconds away, so the status showed "Checking..." or "Updating" for 10 seconds or more each time, even when the connection was fine. It now keeps the connection: if fresh data arrives within 1.5 seconds of coming back it does nothing, and it only reconnects when nothing arrives and what is shown is older than one heartbeat.
+- **Firmware Built on the Same Platform as 1.6.0-1.6.4**: 1.6.5 was pinned to espressif32 platform 7.0.1, which differs from the 7.1.3 that built every earlier 1.6.x release. The pin is now 7.1.3 (Arduino core 2.0.17 either way); firmware 1.6.6 has no code changes.
+- **PWA Cache Invalidation**: Service worker cache `furrow-dashboard-v21`, PWA `v1.6.6`.
+
 ## [1.6.5] - 2026-10-18
 
 Firmware setup page, pinned builds, dashboard help text. No rules or Cloud Functions change.

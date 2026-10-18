@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <!-- Bundled, tree-shaken modular Firebase v11 (replaces 5 legacy CDN compat scripts, saving ~76% payload) -->
-<script src="firebase-bundle.js?v=1.6.5"></script>
+<script src="firebase-bundle.js?v=1.6.6"></script>
 <script src="firebase-config.js"></script>
 <!-- Defines firebaseConfig - generated at deploy time from GitHub
      Actions secrets, or copy web/firebase-config.example.js locally
@@ -1668,7 +1668,7 @@
 
   .controls{
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr; /* one button at a time - see updateButtons() */
     gap: 14px;
     padding: clamp(16px, 5vw, 24px);
     border-bottom: 1px solid var(--border);
@@ -2604,7 +2604,7 @@
        hidden then, which used to leave no way to log out). -->
   <div class="account-footer" id="accountFooter">
     <div class="footer-note">
-      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.6.5</span><br>
+      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.6.6</span><br>
       <a href="flash.html" style="color:var(--muted);">Set up a new device &rarr;</a>
     </div>
     <p class="account-signed-in" id="accountSignedIn"></p>
@@ -2844,18 +2844,25 @@
   // isn't read as "No Power" - see connectionStatus().
   let freshDataExpectedUntil = 0;
   let hiddenAt = 0;
+  let lastSnapshotAt = 0;
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
       hiddenAt = Date.now();
       return;
     }
     freshDataExpectedUntil = Date.now() + 20000;
-    // Reconnect now, so the current pump status arrives in a second or two
-    // instead of after the next heartbeat or the old connection timing out
-    // (the phone may have frozen the page, even for a quick app switch).
-    if (hiddenAt && Date.now() - hiddenAt > 3000 && typeof db.reconnect === 'function') {
+    if (!hiddenAt || Date.now() - hiddenAt < 3000) return;
+
+    // A connection that survived hands over the heartbeats it missed right
+    // away, so only rebuild it if nothing fresh has arrived shortly after
+    // coming back - rebuilding a working one costs a phone several seconds.
+    const returnedAt = Date.now();
+    setTimeout(() => {
+      if (lastSnapshotAt >= returnedAt || typeof db.reconnect !== 'function') return;
+      const seen = selectedId ? lastSeenAt(selectedId) : null;
+      if (seen && serverNow() - seen < 12000) return; // already current
       db.reconnect();
-    }
+    }, 1500);
   });
 
   function phoneIsOnline(){
@@ -3984,6 +3991,12 @@
   }
 
   function updateButtons(state){
+    // One button at a time: Stop while the pump runs (or a Start is on its
+    // way), Start while it is off (or a Stop is on its way).
+    const showStop = pendingAction ? pendingAction === 'start' : state === 'RUNNING';
+    startBtn.style.display = showStop ? 'none' : '';
+    stopBtn.style.display = showStop ? '' : 'none';
+
     if (!authReady || !selectedId) {
       startBtn.disabled = true;
       stopBtn.disabled = true;
@@ -4032,11 +4045,7 @@
       return;
     }
 
-    startBtn.disabled = (state === 'RUNNING');
-    // Stop is always available while the device is online: pressing Stop
-    // on a stopped pump is harmless (the device always pulses it), and
-    // it's the only way to act on a wrong OFF reading or to cancel a
-    // pending auto-resume start.
+    startBtn.disabled = false;
     stopBtn.disabled = false;
     startBtn.title = '';
     stopBtn.title = '';
@@ -4269,6 +4278,7 @@
     userDevicesQuery.on('value', (snap) => {
       receivedFirstSnapshot = true;
       freshDataExpectedUntil = 0;
+      lastSnapshotAt = Date.now();
 
       devices = snap.val() || {};
 

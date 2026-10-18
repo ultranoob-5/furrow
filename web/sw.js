@@ -2,7 +2,7 @@
 // Provides an offline-first app shell, intelligent CDN caching for libraries/fonts,
 // background push notifications via FCM, and seamless in-app update workflows.
 
-const CACHE_NAME = 'furrow-dashboard-v20';
+const CACHE_NAME = 'furrow-dashboard-v21';
 
 const APP_SHELL = [
   './dashboard.html',
