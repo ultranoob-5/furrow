@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <!-- Bundled, tree-shaken modular Firebase v11 (replaces 5 legacy CDN compat scripts, saving ~76% payload) -->
-<script src="firebase-bundle.js?v=1.6.2"></script>
+<script src="firebase-bundle.js?v=1.6.3"></script>
 <script src="firebase-config.js"></script>
 <!-- Defines firebaseConfig - generated at deploy time from GitHub
      Actions secrets, or copy web/firebase-config.example.js locally
@@ -2595,7 +2595,7 @@
        hidden then, which used to leave no way to log out). -->
   <div class="account-footer" id="accountFooter">
     <div class="footer-note">
-      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.6.2</span><br>
+      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.6.3</span><br>
       <a href="flash.html" style="color:var(--muted);">Set up a new device &rarr;</a>
     </div>
     <p class="account-signed-in" id="accountSignedIn"></p>
@@ -2713,6 +2713,10 @@
   // These are the two failure modes actually confirmed to happen, so
   // they're what's guarded here - not a general defensive rewrite of
   // the whole bootstrap.
+  // Declared up here, before anything that can fail during bootstrap, so
+  // the retry timers below can always read it. Set by onAuthStateChanged.
+  let authResolved = false;
+
   function showAuthError(){
     const spinner = document.getElementById('authLoadingSpinner');
     const errorBox = document.getElementById('authLoadingError');
@@ -2738,8 +2742,11 @@
     // out from under someone mid-task elsewhere in the app, which
     // this deliberately doesn't do - see the connection-status banner
     // above for that steady-state case instead).
+    // Both retries stand down once auth has resolved: on a slow link the
+    // app can still come up after this error showed, and reloading it
+    // then would pull it out from under the person using it.
     window.addEventListener('online', () => {
-      if (!errorBox || errorBox.style.display === 'none') return;
+      if (authResolved || !errorBox || errorBox.style.display === 'none') return;
       if (message) message.textContent = 'Back online - reloading\u2026';
       setTimeout(() => location.reload(), 800);
     }, { once: true });
@@ -2753,7 +2760,7 @@
     // again, the person's still looking at a working Reload button
     // and an accurate message either way.
     setTimeout(() => {
-      if (!errorBox || errorBox.style.display === 'none') return;
+      if (authResolved || !errorBox || errorBox.style.display === 'none') return;
       location.reload();
     }, 15000);
   }
@@ -2950,7 +2957,6 @@
   // even though the config itself loaded fine) - same friendly error
   // instead of an indefinite spinner. Cleared as soon as auth state
   // actually resolves, whichever way.
-  let authResolved = false;
   setTimeout(() => {
     if (!authResolved) showAuthError();
   }, 10000);
@@ -3229,6 +3235,7 @@
     authLoading.style.display = 'none';
 
     if (!user) {
+      resetSessionState();
       currentUserEmail = null;
       authReady = false;
       setAuthMode('signin');
@@ -3242,6 +3249,7 @@
     // ownership is matched purely by email address. Without this,
     // anyone could sign up with a device owner's email before they do.
     if (!user.emailVerified) {
+      resetSessionState();
       currentUserEmail = null;
       authReady = false;
       verifyEmailAddr.textContent = user.email || '';
@@ -3384,7 +3392,16 @@
   let latestFirmwareVersion = null; // fetched once from GitHub, e.g. "0.3.0"
   let otaInProgress = false;
   let otaPendingInitiation = false;
+  let otaPendingDeviceId = null;   // the device an Update was just sent to
   let otaInitiationTimer = null;
+  let otaFailureShown = null;      // `${deviceId}|${message}` of the failure last shown
+  let otaFailureTimer = null;
+
+  // "Initializing update..." belongs to the device the Update was sent to,
+  // not to whichever device happens to be selected afterwards.
+  function otaPendingHere(){
+    return otaPendingInitiation && otaPendingDeviceId === selectedId;
+  }
 
   // Real semver comparison, not string inequality - a device running
   // something NEWER than the latest release (e.g. a locally-flashed
@@ -3767,30 +3784,37 @@
 
   function renderOtaProgress(ota){
     const phase = ota.phase || 'idle';
+    const pendingHere = otaPendingHere();
 
     if (phase === 'idle' || !phase) {
-      if (otaPendingInitiation) {
+      otaFailureShown = null;
+      if (pendingHere) {
         // Keep showing initializing state until device responds
         return;
       }
-      if (otaInProgress) {
-        otaInProgress = false;
-        setUpdateBtnState('idle', 0, 'Update firmware');
-      } else {
-        setUpdateBtnState('idle', 0, 'Update firmware');
-      }
+      otaInProgress = false;
+      setUpdateBtnState('idle', 0, 'Update firmware');
       return;
     }
 
-    if (otaInitiationTimer) {
-      clearTimeout(otaInitiationTimer);
-      otaInitiationTimer = null;
+    // The device leaves phase "failed" in place until it next reboots, so
+    // right after a retry it's still the previous attempt's result - keep
+    // showing "Initializing..." until the device reports a new phase.
+    if (phase === 'failed' && pendingHere) return;
+
+    if (pendingHere) {
+      if (otaInitiationTimer) {
+        clearTimeout(otaInitiationTimer);
+        otaInitiationTimer = null;
+      }
+      otaPendingInitiation = false;
+      otaPendingDeviceId = null;
     }
-    otaPendingInitiation = false;
     const percent = typeof ota.percent === 'number' ? ota.percent : 0;
 
     if (phase === 'downloading') {
       otaInProgress = true;
+      otaFailureShown = null;
       if (percent < 80) {
         setUpdateBtnState('downloading', Math.max(percent, 12), `Downloading\u2026 ${percent}%`);
       } else if (percent < 100) {
@@ -3800,16 +3824,27 @@
       }
     } else if (phase === 'restarting') {
       otaInProgress = true;
+      otaFailureShown = null;
       setUpdateBtnState('restarting', 100, '\u2714 Rebooting device\u2026', false);
     } else if (phase === 'failed') {
       otaInProgress = false;
       const failMsg = ota.message || 'Error';
-      setUpdateBtnState('failed', 100, `\u26A0 Update failed: ${failMsg}`, false);
-      setTimeout(() => {
+      const key = `${selectedId}|${failMsg}`;
+      // Show a failure once (4s), then a usable Update button - re-showing
+      // it on every 1s refresh made the button flicker indefinitely.
+      if (otaFailureShown !== key) {
+        otaFailureShown = key;
+        if (otaFailureTimer) clearTimeout(otaFailureTimer);
+        setUpdateBtnState('failed', 100, `\u26A0 Update failed: ${failMsg}`, false);
+        otaFailureTimer = setTimeout(() => {
+          otaFailureTimer = null;
+          setUpdateBtnState('idle', 0, 'Update firmware');
+          const mState = (devices[selectedId] && devices[selectedId].motor) ? devices[selectedId].motor.state : null;
+          updateButtons(mState);
+        }, 4000);
+      } else if (!otaFailureTimer) {
         setUpdateBtnState('idle', 0, 'Update firmware');
-        const mState = (devices[selectedId] && devices[selectedId].motor) ? devices[selectedId].motor.state : null;
-        updateButtons(mState);
-      }, 4000);
+      }
     }
   }
 
@@ -3963,7 +3998,7 @@
       stopBtn.title = why;
       restartBtn.disabled = true;
       restartBtn.title = why;
-      if (!otaInProgress && !otaPendingInitiation) {
+      if (!otaInProgress && !otaPendingHere()) {
         updateBtn.disabled = true;
         updateBtn.title = why;
       }
@@ -3982,7 +4017,7 @@
     stopBtn.title = '';
     restartBtn.disabled = false;
     restartBtn.title = '';
-    updateBtn.disabled = (otaInProgress || otaPendingInitiation);
+    updateBtn.disabled = (otaInProgress || otaPendingHere());
     updateBtn.title = '';
     factoryResetBtn.disabled = false;
     factoryResetBtn.title = '';
@@ -4116,7 +4151,14 @@
 
     if (!ok) return;
 
+    const updatingId = selectedId;
     otaPendingInitiation = true;
+    otaPendingDeviceId = updatingId;
+    otaFailureShown = null;
+    if (otaFailureTimer) {
+      clearTimeout(otaFailureTimer);
+      otaFailureTimer = null;
+    }
     if (otaInitiationTimer) clearTimeout(otaInitiationTimer);
     setUpdateBtnState('initializing', 15, 'Initializing update\u2026', true);
 
@@ -4124,6 +4166,8 @@
     otaInitiationTimer = setTimeout(() => {
       if (otaPendingInitiation) {
         otaPendingInitiation = false;
+        otaPendingDeviceId = null;
+        if (selectedId !== updatingId) return; // a different device is on screen now
         setUpdateBtnState('failed', 100, '\u26A0 Device did not respond', false);
         setTimeout(() => {
           setUpdateBtnState('idle', 0, 'Update firmware');
@@ -4136,9 +4180,11 @@
     db.ref(`devices/${selectedId}/command/firmwareUrl`).set(FIRMWARE_URL)
       .then(() => sendDeviceCommand('update'))
       .catch((err) => {
-        console.error('Failed to set firmware URL', err);
+        console.error('Failed to send update command', err);
         otaPendingInitiation = false;
+        otaPendingDeviceId = null;
         if (otaInitiationTimer) clearTimeout(otaInitiationTimer);
+        if (selectedId !== updatingId) return;
         setUpdateBtnState('failed', 100, '\u26A0 Failed to send command', false);
         setTimeout(() => {
           setUpdateBtnState('idle', 0, 'Update firmware');
@@ -4370,29 +4416,30 @@
       });
   });
 
+  // Firebase's .on('value', ...) listeners are persistent - they never
+  // auto-cleanup on their own. Without this, signing out left the old
+  // listener running underneath, and the next sign-in got no live data
+  // (deviceListenerStarted stayed true) unless it was the Logout button.
+  // Called from onAuthStateChanged, so it covers every sign-out: the
+  // button, an expired session, a password changed on another device.
+  function resetSessionState(){
+    if (userDevicesQuery) {
+      userDevicesQuery.off('value');
+      userDevicesQuery = null;
+    }
+    devicesRef.off('value');
+
+    devices = {};
+    selectedId = null;
+    deviceListenerStarted = false;
+    deviceListenerGeneration++; // stops a pending "still not connected" timer
+    listenerAuthRetried = false;
+  }
+
   logoutBtn.addEventListener('click', () => {
 
   auth.signOut()
     .then(() => {
-
-      // Firebase's .on('value', ...) listeners are persistent - they
-      // never auto-cleanup on their own. Without this, logging out
-      // just reset deviceListenerStarted (letting a future login
-      // register a fresh listener) while the OLD one kept running
-      // forever underneath, silently accumulating one more on every
-      // login/logout cycle in the same browser session - each firing
-      // redundantly on every future device update.
-      if (userDevicesQuery) {
-        userDevicesQuery.off('value');
-        userDevicesQuery = null;
-      }
-      devicesRef.off('value');
-
-      devices = {};
-      selectedId = null;
-      deviceListenerStarted = false;
-      listenerAuthRetried = false;
-
       [signinEmail, signinPassword, signupEmail, signupPassword, signupConfirm, resetEmail]
         .forEach((el) => { el.value = ''; });
       closeChangePasswordDialog();
@@ -4404,6 +4451,12 @@
   });
 
   // ---- PWA: register the service worker & handle background updates ----
+  // Shared by the controllerchange listener below and the banner's Update
+  // button (showUpdateBanner) - they used to be separate variables, so the
+  // button's "user asked for this" never reached the listener.
+  let swRefreshing = false;
+  let userRequestedUpdate = false;
+
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js').then((reg) => {
@@ -4415,11 +4468,15 @@
         // Detect newly installed service worker waiting to activate
         reg.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
-          if (!newWorker) return;
+          // No controller yet = first visit, nothing to update from; the
+          // banner would otherwise sit at "Downloading..." for good.
+          if (!newWorker || !navigator.serviceWorker.controller) return;
           showDownloadingBanner();
           newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            if (newWorker.state === 'installed') {
               showUpdateBanner(newWorker);
+            } else if (newWorker.state === 'redundant') {
+              hideUpdateBanner(); // install failed - try again next visit
             }
           });
         });
@@ -4428,11 +4485,9 @@
       });
 
       // Reload page only when user explicitly confirms the update via the banner
-      let refreshing = false;
-      let userRequestedUpdate = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing && userRequestedUpdate) {
-          refreshing = true;
+        if (!swRefreshing && userRequestedUpdate) {
+          swRefreshing = true;
           const updateProgressBar = document.getElementById('updateProgressBar');
           const updateBannerText = document.getElementById('updateBannerText');
           if (updateProgressBar) updateProgressBar.style.width = '100%';
@@ -4443,6 +4498,14 @@
         }
       });
     });
+  }
+
+  function hideUpdateBanner() {
+    const updateBanner = document.getElementById('updateBanner');
+    if (updateBanner) {
+      updateBanner.style.display = 'none';
+      updateBanner.classList.remove('updating');
+    }
   }
 
   function showDownloadingBanner() {
@@ -4523,7 +4586,10 @@
         }
       }, 650);
 
+      // Fallback if controllerchange hasn't reloaded the page by now.
       setTimeout(() => {
+        if (swRefreshing) return;
+        swRefreshing = true;
         window.location.reload();
       }, 950);
     };
@@ -4576,6 +4642,11 @@
   // periodic renderDetail() call a second or so later still settles
   // back to the generic steady-state text naturally - only the
   // immediate clobber needed fixing.
+  // The steady-state message is only rewritten when the device or its
+  // enabled state changes - the 1s refresh used to wipe "Test sent..."
+  // and similar results about a second after they appeared.
+  let notifyAppliedSig = null;
+
   function refreshNotifyUi(preserveStatus) {
     if (!notifyEnableBtn || !notifyTestBtn || !notifyStatus || notifyBusy) return;
 
@@ -4599,6 +4670,9 @@
     notifyEnableBtn.classList.toggle('state-on', enabled);
     notifyEnableBtn.classList.toggle('state-off', !enabled);
     notifyTestBtn.style.display = enabled ? 'block' : 'none';
+    const sig = `${selectedId}|${enabled}`;
+    if (sig === notifyAppliedSig) return;
+    notifyAppliedSig = sig;
     if (!preserveStatus) {
       notifyStatus.textContent = enabled ? 'This browser will get alerts for this device.' : '';
     }
@@ -4761,12 +4835,14 @@
       const sendTestNotification = firebase.functions().httpsCallable('sendTestNotification');
       const result = await sendTestNotification({ token, deviceId: selectedId });
 
-      notifyStatus.textContent = 'Test sent (id: ' + result.data.messageId + '). Check your notifications.';
+      console.log('Test notification sent', result.data.messageId);
+      notifyStatus.textContent = 'Test sent - check your notifications.';
     } catch (err) {
       console.error('Test send failed', err);
       notifyStatus.textContent = 'Test failed: ' + err.message;
     } finally {
       notifyBusy = false;
+      notifyTestBtn.disabled = false; // was left disabled after the first test
       refreshNotifyUi(true);
     }
   }

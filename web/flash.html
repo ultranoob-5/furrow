@@ -258,6 +258,33 @@
 
   .footer-note a{ color: var(--muted); }
 
+  .back-link{
+    width: 100%;
+    max-width: 480px;
+    margin-bottom: 14px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .back-link a{ color: var(--muted); text-decoration: none; }
+  .back-link a:hover{ color: var(--amber); }
+
+  .next-step{
+    margin-top: 16px;
+    padding: 16px;
+    border-radius: var(--radius-sm);
+    background: rgba(73,182,117,0.08);
+    border: 1px solid rgba(73,182,117,0.3);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+
+  .next-step[hidden]{ display: none; }
+  .next-step strong{ color: var(--text); }
+  .next-step p{ margin: 6px 0 14px; }
+  .next-step .install-btn{ display: inline-block; text-decoration: none; padding: 12px 28px; font-size: 14.5px; }
+
   code{
     font-family: var(--mono);
     font-size: 0.92em;
@@ -271,19 +298,21 @@
     body{
       padding: max(32px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
     }
-    .app-title, .subtitle, .panel, .danger-zone, .footer-note{
+    .back-link, .app-title, .subtitle, .panel, .danger-zone, .footer-note{
       max-width: 560px;
     }
   }
 
   @media (min-width: 900px){
-    .app-title, .subtitle, .panel, .danger-zone, .footer-note{
+    .back-link, .app-title, .subtitle, .panel, .danger-zone, .footer-note{
       max-width: 620px;
     }
   }
 </style>
 </head>
 <body>
+
+  <nav class="back-link"><a href="dashboard.html">&larr; Back to dashboard</a></nav>
 
   <a href="/" style="text-decoration:none; color:inherit;">
   <div class="app-title">
@@ -309,6 +338,12 @@
         </esp-web-install-button>
       </div>
 
+      <div class="next-step" id="afterFlash" hidden>
+        <strong>Finished flashing?</strong>
+        <p>Unplug the ESP32 and power it up where it will be installed. On your phone, join the <strong>Furrow-Setup-XXXX</strong> WiFi it creates - a setup page opens where you enter your WiFi, a device name and your account email. Then open the dashboard to see it.</p>
+        <a class="install-btn" href="dashboard.html">Go to dashboard</a>
+      </div>
+
       <div class="status-banner" id="browserWarning">
         &#9888;&#65039; This needs Chrome or Edge on a computer, connected over USB. Safari, Firefox, and any browser on iPhone/iPad can&rsquo;t do this - it&rsquo;s a platform limitation, not something this page can work around.
       </div>
@@ -323,7 +358,7 @@
         <li>Click <strong>Connect device</strong> above and pick the right serial port when your browser asks.</li>
         <li>Choose <strong>Install</strong> - this erases the chip and writes the selected firmware from scratch, since this is meant for a blank or previously-different device.</li>
         <li>Wait for it to finish. Don&rsquo;t disconnect the cable while it&rsquo;s writing.</li>
-        <li>Once it reboots, follow <a href="https://github.com/ultranoob-5/furrow/blob/main/SETUP.md" target="_blank" rel="noopener">SETUP.md</a> to connect it to WiFi and your Furrow account for the first time.</li>
+        <li>Once it reboots, join its <strong>Furrow-Setup-XXXX</strong> WiFi from your phone to connect it to your WiFi and Furrow account (details in <a href="https://github.com/ultranoob-5/furrow/blob/main/SETUP.md" target="_blank" rel="noopener">SETUP.md</a>), then <a href="dashboard.html">open the dashboard</a>.</li>
       </ol>
 
       <details>
@@ -348,18 +383,18 @@
     Firmware built and published automatically from <a href="https://github.com/ultranoob-5/furrow" target="_blank" rel="noopener">github.com/ultranoob-5/furrow</a> on every tagged release - this page never modifies or stores it, only relays it from GitHub.
   </p>
 
+<script src="firebase-config.js"></script>
 <script>
   const GITHUB_OWNER = 'ultranoob-5';
   const GITHUB_REPO = 'furrow';
 
-  // Deployed region for firmwareProxy - no explicit region was set on
-  // that function (see functions/index.js), so it deploys to Cloud
-  // Functions v2's default, us-central1, same as this project's other
-  // non-RTDB-triggered functions (powerWatchdog, sendTestNotification).
-  // If a future deploy ever changes this, this is the one line to
-  // update - check the actual URL Firebase reports after deploying
-  // functions if this ever stops working.
-  const FIRMWARE_PROXY_BASE = 'https://us-central1-furrow-123098.cloudfunctions.net/firmwareProxy';
+  // Built from the project id in firebase-config.js (generated at deploy
+  // time), so another deployment's flasher points at its own function.
+  // firmwareProxy has no explicit region (see functions/index.js), so it
+  // runs in Cloud Functions v2's default, us-central1.
+  const FIRMWARE_PROXY_BASE = (typeof firebaseConfig !== 'undefined' && firebaseConfig.projectId)
+    ? `https://us-central1-${firebaseConfig.projectId}.cloudfunctions.net/firmwareProxy`
+    : null;
 
   // Every part a full flash of a blank ESP32 needs, and the standard
   // offsets for this chip family - not something that varies per
@@ -427,7 +462,21 @@
 
   let currentManifestUrl = null;
 
+  // ESP Web Tools' install dialog fires a bubbling "closed" event when it's
+  // dismissed (after flashing, or if cancelled) - show the way back to the
+  // dashboard then, instead of leaving people on this page.
+  const afterFlash = document.getElementById('afterFlash');
+  document.addEventListener('closed', (e) => {
+    if (!afterFlash || !e.target || e.target.localName !== 'ewt-install-dialog') return;
+    afterFlash.hidden = false;
+    afterFlash.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+
   function selectVersion(release) {
+    if (!FIRMWARE_PROXY_BASE) {
+      showError('Couldn\u2019t load this site\u2019s settings - reload the page.');
+      return;
+    }
     if (currentManifestUrl) URL.revokeObjectURL(currentManifestUrl);
     currentManifestUrl = buildManifestUrl(release.tag_name);
     installButton.setAttribute('manifest', currentManifestUrl);

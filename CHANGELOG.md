@@ -1,3 +1,18 @@
+## [1.6.3] - 2026-10-18
+
+Dashboard, flasher, hosting headers and a small firmware fix. No rules or Cloud Functions change.
+
+- **No Reload After Signing In**: On a slow connection the "Couldn't reach the server" screen could appear while sign-in was still working; once the app came up, that screen's retry timers still reloaded it about 15 seconds later, and again whenever the phone regained signal. They now stand down as soon as sign-in resolves.
+- **Live Data After Any Sign-Out**: Only the Logout button cleaned up the device listener, so after a session expired (or a password change elsewhere) the next sign-in showed no live data. Every sign-out now does the cleanup.
+- **Update Button**: The device keeps reporting "failed" until it reboots, so the button flipped between "Update failed" and normal every second, and a retry was immediately shown as failed again. A failure now shows once, a retry waits for the device's new progress, and "Initializing update..." stays with the device it was sent to when you switch devices.
+- **Notifications**: "Send test notification" is no longer disabled forever after one use, and its result ("Test sent - check your notifications") no longer disappears after a second.
+- **App Update Banner**: No longer stuck on "Downloading update in background..." on a first visit or after a failed install; the Update button and the reload logic now share the same state.
+- **Firmware 1.6.3 - Commands Can't Push Each Other Out**: The device kept one pending command, so a settings sync arriving right after a Start (a quick second action, or saving a setting) replaced the Start. Settings syncs now have their own flags; Start/Stop/Restart/Update are never replaced by them.
+- **Flasher - Way Back to the Dashboard**: A "Back to dashboard" link at the top, and when the flashing window closes, a "Finished flashing?" box with the next steps (power it up, join its Furrow-Setup WiFi from your phone) and a Go to dashboard button. The last step now points to the dashboard too, not just SETUP.md.
+- **Flasher**: The firmware download address is built from the site's own Firebase config instead of a hard-coded project id.
+- **Content-Security-Policy (Report-Only)**: A full policy is now sent in report-only mode - nothing is blocked; any violations show in the browser console so it can be enforced later.
+- **PWA Cache Invalidation**: Service worker cache `furrow-dashboard-v18`, PWA `v1.6.3`.
+
 ## [1.6.2] - 2026-10-18
 
 Dashboard, database rules, Cloud Functions and a small firmware fix. **Publish the new rules before this dashboard goes live** (the `command/issuedAt` rule) - without it, Start/Stop are rejected.

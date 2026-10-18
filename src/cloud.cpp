@@ -85,6 +85,14 @@ namespace
     // to command/action (see clearCommandAndWait()).
     bool commandClearConfirmed = false;
 
+    // sync_* only ask the device to re-read a setting, so they get flags of
+    // their own: one arriving right after a Start/Stop (a quick second tap,
+    // or a settings save) must not replace it in pendingCommand.
+    bool syncAutoResumeRequested = false;
+    bool syncScheduleRequested = false;
+    bool syncWhatsAppRequested = false;
+    bool syncNameRequested = false;
+
     // Set when an "update" command's firmware URL has been fetched and
     // is ready to download+flash - handled from loop(), not from inside
     // the async callback, same reasoning as pendingCommand above (and
@@ -245,11 +253,53 @@ namespace
 
         String value = rtdb.to<String>();
 
-        if (value == "start" || value == "stop" || value == "restart" || value == "shutdown" ||
-            value == "update" || value == "factory_reset" || value == "cancel_auto_resume" ||
-            value == "sync_schedule" || value == "sync_auto_resume" || value == "sync_whatsapp_phone" ||
-            value == "sync_name")
+        if (value == "sync_auto_resume")
+            syncAutoResumeRequested = true;
+        else if (value == "sync_schedule")
+            syncScheduleRequested = true;
+        else if (value == "sync_whatsapp_phone")
+            syncWhatsAppRequested = true;
+        else if (value == "sync_name")
+            syncNameRequested = true;
+        else if (value == "start" || value == "stop" || value == "restart" || value == "shutdown" ||
+                 value == "update" || value == "factory_reset" || value == "cancel_auto_resume")
             pendingCommand = value;
+    }
+
+    void handleSyncRequests()
+    {
+        if (!(syncAutoResumeRequested || syncScheduleRequested || syncWhatsAppRequested || syncNameRequested))
+            return;
+
+        if (syncAutoResumeRequested)
+        {
+            syncAutoResumeRequested = false;
+            Logger::info(TAG, "Remote command: SYNC_AUTO_RESUME");
+            database.get(aClientMain, autoResumePath, processData, false, "fetchAutoResume");
+        }
+        if (syncScheduleRequested)
+        {
+            syncScheduleRequested = false;
+            Logger::info(TAG, "Remote command: SYNC_SCHEDULE");
+            database.get(aClientMain, schedulePath, processData, false, "fetchSchedule");
+        }
+        if (syncWhatsAppRequested)
+        {
+            syncWhatsAppRequested = false;
+            Logger::info(TAG, "Remote command: SYNC_WHATSAPP_PHONE");
+            database.get(aClientMain, "/devices/" + device.id() + "/whatsappPhone", processData, false, "fetchWhatsAppPhone");
+        }
+        if (syncNameRequested)
+        {
+            syncNameRequested = false;
+            Logger::info(TAG, "Remote command: SYNC_NAME");
+            database.get(aClientMain, displayNamePath, processData, false, "fetchDisplayName");
+        }
+
+        // Acknowledge, unless a real command is also waiting - its own
+        // handler clears command/action once it has acted.
+        if (pendingCommand.length() == 0)
+            database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
     }
 
     // For commands that reboot or power down the device. A queued write
@@ -275,6 +325,8 @@ namespace
 
     void handlePendingCommand()
     {
+        handleSyncRequests();
+
         if (pendingCommand.length() == 0)
             return;
 
@@ -287,41 +339,6 @@ namespace
             return;
         }
 
-        if (pendingCommand == "sync_auto_resume")
-        {
-            Logger::info(TAG, "Remote command: SYNC_AUTO_RESUME");
-            pendingCommand = "";
-            database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
-            database.get(aClientMain, autoResumePath, processData, false, "fetchAutoResume");
-            return;
-        }
-
-        if (pendingCommand == "sync_schedule")
-        {
-            Logger::info(TAG, "Remote command: SYNC_SCHEDULE");
-            pendingCommand = "";
-            database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
-            database.get(aClientMain, schedulePath, processData, false, "fetchSchedule");
-            return;
-        }
-
-        if (pendingCommand == "sync_whatsapp_phone")
-        {
-            Logger::info(TAG, "Remote command: SYNC_WHATSAPP_PHONE");
-            pendingCommand = "";
-            database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
-            database.get(aClientMain, "/devices/" + device.id() + "/whatsappPhone", processData, false, "fetchWhatsAppPhone");
-            return;
-        }
-
-        if (pendingCommand == "sync_name")
-        {
-            Logger::info(TAG, "Remote command: SYNC_NAME");
-            pendingCommand = "";
-            database.set<String>(aClientMain, commandPath, "none", processData, "clearCommand");
-            database.get(aClientMain, displayNamePath, processData, false, "fetchDisplayName");
-            return;
-        }
 
         if (pendingCommand == "restart")
         {
