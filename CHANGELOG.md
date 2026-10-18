@@ -1,3 +1,17 @@
+## [1.6.4] - 2026-10-18
+
+Alerts, firmware and small cleanups. No rules change.
+
+- **Honest Offline Alert**: When a running pump's device goes silent, the alert now says "Farm Pump went offline while the pump was running - power cut or internet down" instead of "Power Cut Alert! ... Motor is OFF" - it can't tell the two apart. When it comes back: "Farm Pump is back online" (was "Power is back!").
+- **No Alert During a Firmware Update**: The watchdog no longer sends an offline alert while the device reports a firmware update in progress, for up to 5 minutes (after that it alerts, in case the update never came back).
+- **No False "Turned ON" After an Internet Drop**: The device tags its first report after a WiFi reconnect as "reconnect", so a pump that kept running isn't announced as turned ON (firmware 1.6.4).
+- **Removed "Will Turn ON in N min"**: It was wrong after an internet-only drop (the pump never stopped) and almost never sent. The watchdog no longer records `motor/stateBeforeOutage`; nothing reads it any more. An auto-resume start still gets its own "turned ON (power restored)" alert.
+- **Device No Longer Sends WhatsApp for Boot/Reconnect**: "connected and ready" and "was offline for Ns" came from the device itself, froze it for a few seconds each, and duplicated the cloud's alerts. Firmware-update results are still sent.
+- **Fresh Status When You Switch Back to the App**: After even a quick switch to another app, the phone could freeze the page and its live connection could be dead without anyone noticing, so it showed "Updating" for up to ten seconds or more. Coming back after more than 3 seconds away it now reconnects straight away, so the current pump status arrives in a second or two, and that short wait shows a grey "Checking..." instead of an amber "Updating" (which means the device itself is late).
+- **Flasher**: Shows a short "What's new" list of each release's headlines instead of the raw developer changelog.
+- **Removed**: The report-only Content-Security-Policy header (it only wrote to the browser console, which nobody reads) and the now-unused `Network::lastDisconnectDurationMs()`.
+- **PWA Cache Invalidation**: Service worker cache `furrow-dashboard-v19`, PWA `v1.6.4`.
+
 ## [1.6.3] - 2026-10-18
 
 Dashboard, flasher, hosting headers and a small firmware fix. No rules or Cloud Functions change.

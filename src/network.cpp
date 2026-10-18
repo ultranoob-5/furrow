@@ -115,10 +115,6 @@ bool Network::consumeReconnectEvent()
     return true;
 }
 
-unsigned long Network::lastDisconnectDurationMs()
-{
-    return lastDisconnectDuration;
-}
 
 String Network::ipAddress()
 {

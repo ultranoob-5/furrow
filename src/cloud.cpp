@@ -68,6 +68,12 @@ namespace
     bool remoteStartPending = false;
     bool remoteStopPending = false;
 
+    // Set on a WiFi reconnect. While the device was unreachable the cloud
+    // watchdog may have marked the pump OFF; if it's actually still
+    // running, the next publish is tagged "reconnect" so the cloud doesn't
+    // announce it as "turned ON" (motorAlertText() in functions/index.js).
+    bool tagNextMotorPublish = false;
+
     unsigned long lastHeartbeat = 0;
     constexpr unsigned long HEARTBEAT_INTERVAL_MS = 10000;
 
@@ -656,14 +662,7 @@ void Cloud::loop()
         scheduleChecked = false;
         whatsAppChecked = false;
         displayNameChecked = false;
-
-        unsigned long downtimeMs = Network::lastDisconnectDurationMs();
-
-        if (downtimeMs >= 30000)
-        {
-            Notify::sendWhatsApp("\u26a0\ufe0f " + device.name() + " was offline for " +
-                                  String(downtimeMs / 1000) + "s - just reconnected");
-        }
+        tagNextMotorPublish = true;
     }
 
     if (!app.ready())
@@ -755,7 +754,13 @@ void Cloud::loop()
         // fact. Once hasReading() is true this is never false again
         // for the rest of this boot.
         if (motor.hasReading())
-            publishMotor();
+        {
+            if (tagNextMotorPublish && motor.isRunning())
+                publishMotor("reconnect", nullptr);
+            else
+                publishMotor();
+            tagNextMotorPublish = false;
+        }
     }
 }
 

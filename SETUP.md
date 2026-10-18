@@ -364,8 +364,8 @@ running. It tries once per outage - if the pump doesn't start (e.g. a
 tripped overload), it won't try again at the next power-up.
 
 It only acts on a real power cut (the device itself restarting). A WiFi
-or internet drop never restarts the pump, even if the cloud sent a
-"Power Cut" alert for it. If a schedule (section 13) is enabled, it
+or internet drop never restarts the pump, even if the cloud sent an
+"offline" alert for it. If a schedule (section 13) is enabled, it
 also won't restart the pump outside the schedule's ON window - as long
 as the device has internet to know the time.
 

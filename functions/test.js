@@ -94,19 +94,20 @@ async function main() {
     "dev-no-phone":      { status: { lastSeen: nowMs - 60000, name: "NoPhone",   powerAlertSent: false }, motor: { state: "RUNNING" } },
     "dev-push-only":     { status: { lastSeen: nowMs - 70000, name: "PushOnly",  powerAlertSent: false }, motor: { state: "RUNNING" } },
     "dev-never":         { status: { name: "Never" } },
+    "dev-ota-quiet":     { status: { lastSeen: nowMs - 90000, name: "OtaQuiet", powerAlertSent: false }, motor: { state: "RUNNING" }, ota: { phase: "downloading", percent: 40 } },
+    "dev-ota-stuck":     { status: { lastSeen: nowMs - 400000, name: "OtaStuck", powerAlertSent: false }, motor: { state: "RUNNING" }, ota: { phase: "downloading", percent: 40 } },
   };
 
   const sent = [];
   const pushSent = [];
   const flagsSet = [];
-  const motorStatesSnapshotted = {};
   const commandsExpired = [];
 
   // Devices that "have push tokens registered" in this fake - everyone
   // except dev-no-phone (whose whole point is testing "neither channel
   // configured" still gets skipped safely) and the ones that shouldn't
   // reach the send stage at all (dev-fresh, dev-stale-old, dev-stale-off, dev-never).
-  const hasPushTokens = new Set(["dev-stale-new", "dev-renamed", "dev-cleared-phone", "dev-push-only", "dev-stale-off"]);
+  const hasPushTokens = new Set(["dev-stale-new", "dev-renamed", "dev-cleared-phone", "dev-push-only", "dev-stale-off", "dev-ota-quiet", "dev-ota-stuck"]);
 
   const alerted = await runWatchdog({
     fetchDevices: async () => fakeDevices,
@@ -120,9 +121,8 @@ async function main() {
       pushSent.push([deviceId, title, body]);
       return { sent: 1, pruned: 0 };
     },
-    setDedupFlag: async (deviceId, motorStateAtOutage) => {
+    setDedupFlag: async (deviceId) => {
       flagsSet.push(deviceId);
-      motorStatesSnapshotted[deviceId] = motorStateAtOutage;
     },
     expireCommand: async (deviceId) => {
       commandsExpired.push(deviceId);
@@ -136,7 +136,9 @@ async function main() {
   console.log("Push sent:", pushSent);
   console.log("Flags set:", flagsSet);
 
-  assert(alerted.length === 4, `Expected exactly 4 alerts, got ${alerted.length}`);
+  assert(alerted.length === 5, `Expected exactly 5 alerts, got ${alerted.length}`);
+  assert(!alerted.includes("dev-ota-quiet"), "Expected dev-ota-quiet to NOT be alerted (silent 90s during a firmware update)");
+  assert(alerted.includes("dev-ota-stuck"), "Expected dev-ota-stuck to be alerted (still silent after the update grace period)");
   assert(alerted.includes("dev-stale-new"), "Expected dev-stale-new to be alerted (has both WhatsApp and push)");
   assert(alerted.includes("dev-renamed"), "Expected dev-renamed to be alerted (has both WhatsApp and push)");
   assert(alerted.includes("dev-cleared-phone"), "Expected dev-cleared-phone to be alerted (push only, WhatsApp was cleared)");
@@ -147,6 +149,9 @@ async function main() {
   assert(sent.length === 2, `Expected exactly 2 WhatsApp messages, got ${sent.length}`);
   const staleNewWa = sent.find(([phone]) => phone === "222");
   assert(staleNewWa && staleNewWa[1].includes("StaleNew"), "Expected WhatsApp message to mention StaleNew for phone 222");
+  // It can't tell a power cut from an internet drop, so it must not claim either.
+  assert(staleNewWa[1].includes("power cut or internet down") && !staleNewWa[1].includes("Motor is OFF"),
+    `Expected the offline wording, got: ${staleNewWa[1]}`);
 
   const renamedWa = sent.find(([phone]) => phone === "555");
   assert(renamedWa, "Expected WhatsApp message to phone 555 for dev-renamed");
@@ -156,7 +161,7 @@ async function main() {
   // dev-cleared-phone must NOT have sent to phone "999"
   assert(!sent.some(([phone]) => phone === "999"), "Expected phone 999 to NOT receive WhatsApp message because whatsappPhone was cleared");
 
-  assert(pushSent.length === 4, `Expected exactly 4 push sends, got ${pushSent.length}`);
+  assert(pushSent.length === 5, `Expected exactly 5 push sends, got ${pushSent.length}`);
   assert(pushSent.some(([id]) => id === "dev-stale-new"), "Expected a push send for dev-stale-new");
   assert(pushSent.some(([id]) => id === "dev-renamed"), "Expected a push send for dev-renamed");
   assert(pushSent.some(([id]) => id === "dev-cleared-phone"), "Expected a push send for dev-cleared-phone");
@@ -168,21 +173,8 @@ async function main() {
   assert(renamedPush[2].includes("Well Pump") && !renamedPush[2].includes("Farm Pump"),
     `Expected push notification body to use displayName 'Well Pump', got: ${renamedPush[2]}`);
 
-  assert(flagsSet.length === 4 && flagsSet.includes("dev-stale-new") && flagsSet.includes("dev-renamed") && flagsSet.includes("dev-cleared-phone") && flagsSet.includes("dev-push-only"),
+  assert(flagsSet.length === 5 && flagsSet.includes("dev-stale-new") && flagsSet.includes("dev-renamed") && flagsSet.includes("dev-cleared-phone") && flagsSet.includes("dev-push-only") && flagsSet.includes("dev-ota-stuck"),
     "Expected dedup flags set for all alerted devices");
-
-  // stateBeforeOutage is what makes the firmware auto-start the motor
-  // when power returns - it must only be recorded when the owner has
-  // auto-resume ENABLED. Otherwise a pump with auto-resume off would
-  // start by itself after a power cut.
-  assert(motorStatesSnapshotted["dev-stale-new"] === "RUNNING",
-    `Expected dev-stale-new (auto-resume ON) to record RUNNING, got ${motorStatesSnapshotted["dev-stale-new"]}`);
-  assert(motorStatesSnapshotted["dev-renamed"] === "RUNNING",
-    `Expected dev-renamed (auto-resume ON) to record RUNNING, got ${motorStatesSnapshotted["dev-renamed"]}`);
-  assert(motorStatesSnapshotted["dev-cleared-phone"] === null,
-    `Expected dev-cleared-phone (auto-resume OFF) to record null, got ${motorStatesSnapshotted["dev-cleared-phone"]}`);
-  assert(motorStatesSnapshotted["dev-push-only"] === null,
-    `Expected dev-push-only (auto-resume never configured) to record null, got ${motorStatesSnapshotted["dev-push-only"]}`);
 
   // A command the device never picked up must not wait in the database
   // to run whenever it reconnects; a fresh one must be left alone.
@@ -202,7 +194,8 @@ async function main() {
   console.log("- dev-no-phone (60s, motor RUNNING, no WhatsApp AND no push tokens): correctly skipped, no crash");
   console.log("- dev-push-only (70s, motor RUNNING, push only, no WhatsApp phone): correctly alerted via push alone - the whole point of decoupling the two channels");
   console.log("- dev-never (no lastSeen ever): correctly skipped, no crash");
-  console.log("- stateBeforeOutage recorded only when auto-resume is enabled (OFF/unset -> null, so no unexpected auto-start)");
+  console.log("- dev-ota-quiet (90s silent during a firmware update): correctly not alerted; dev-ota-stuck (400s): alerted");
+  console.log("- offline alert says 'power cut or internet down', never 'Motor is OFF'");
   console.log("- motorAlertText: power-loss stop sends nothing (powerWatchdog already alerted); other transitions keep their wording");
   console.log("- stale commands: an unclaimed command older than 60s is cleared; fresh ones and 'none' are left alone");
 }
@@ -248,6 +241,10 @@ function testMotorAlertText() {
   const autoOn = motorAlertText("Pump", true, "auto-resume");
   assert(autoOn && autoOn.title.includes("Pump turned ON") && autoOn.message.includes("power restored"),
     `Expected auto-resume start wording, got ${JSON.stringify(autoOn)}`);
+
+  // Back online after an internet-only drop with the pump still running.
+  assert(motorAlertText("Pump", true, "reconnect") === null,
+    "Expected no 'turned ON' alert for a reconnect (the pump never stopped)");
 
   // "power-loss" only ever describes a stop; a start is always alerted.
   const startWithStaleVia = motorAlertText("Pump", true, "power-loss");

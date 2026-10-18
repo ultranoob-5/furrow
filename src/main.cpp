@@ -8,7 +8,6 @@
 #include "motor.h"
 #include "cloud.h"
 #include "automation.h"
-#include "notify.h"
 
 namespace
 {
@@ -135,8 +134,6 @@ void setup()
     // takes (see current_sensor.h's SAMPLES comment - no longer a fixed
     // ~400ms guarantee). loop() publishes the real state itself, the
     // moment baselineEstablished actually becomes true.
-
-    Notify::sendWhatsApp("\u2705 " + device.name() + " is connected and ready.");
 }
 
 void loop()

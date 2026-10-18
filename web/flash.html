@@ -462,6 +462,19 @@
 
   let currentManifestUrl = null;
 
+  // A release's body is the developer changelog (markdown, notes for the
+  // maintainer). Show just each change's headline ("- **Title**: ...").
+  function releaseHeadlines(body) {
+    return String(body || '').split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith('- **'))
+      .map((line) => {
+        const end = line.indexOf('**', 4);
+        return end > 4 ? line.slice(4, end) : '';
+      })
+      .filter((h) => h && !/cache invalidation/i.test(h));
+  }
+
   // ESP Web Tools' install dialog fires a bubbling "closed" event when it's
   // dismissed (after flashing, or if cancelled) - show the way back to the
   // dashboard then, instead of leaving people on this page.
@@ -482,8 +495,9 @@
     installButton.setAttribute('manifest', currentManifestUrl);
     installActivateBtn.disabled = false;
 
-    if (release.body && release.body.trim()) {
-      releaseNotes.textContent = release.body.trim();
+    const headlines = releaseHeadlines(release.body);
+    if (headlines.length) {
+      releaseNotes.textContent = 'What\u2019s new:\n' + headlines.map((h) => '\u2022 ' + h).join('\n');
       releaseNotes.style.display = 'block';
     } else {
       releaseNotes.style.display = 'none';

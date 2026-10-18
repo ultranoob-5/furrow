@@ -24,6 +24,10 @@ const whapiToken = defineSecret("WHAPI_TOKEN");
 
 const OFFLINE_THRESHOLD_MS = 30000;
 
+// A firmware update goes quiet for a minute or two while it downloads and
+// reboots. Silence during an update only counts as an outage after this.
+const OTA_GRACE_MS = 5 * 60000;
+
 // A command the device hasn't picked up within this long is cleared, so
 // it can't run whenever the device next reconnects - possibly hours later.
 // The dashboard stamps start/stop/restart/update/factory_reset with
@@ -97,6 +101,12 @@ async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag,
       continue; // still within normal heartbeat range
     }
 
+    const otaPhase = data && data.ota && data.ota.phase;
+    if ((otaPhase === "downloading" || otaPhase === "restarting") && ageMs < OTA_GRACE_MS) {
+      logger.info(`${deviceId} (${name}): silent ${Math.floor(ageMs / 1000)}s during a firmware update - not alerting yet`);
+      continue;
+    }
+
     const offlineSeconds = Math.floor(ageMs / 1000);
     const motor = (data && data.motor) || {};
     const wasRunning = (motor.state === "RUNNING");
@@ -116,7 +126,7 @@ async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag,
         return false;
       }
       try {
-        await sendWhatsApp(phone, `⚠️ Power Cut Alert! Electricity lost at ${name}. Motor is OFF.`);
+        await sendWhatsApp(phone, `⚠️ ${name} went offline while the pump was running - power cut or internet down. Please check the pump.`);
         return true;
       } catch (err) {
         logger.error(`  WhatsApp send failed: ${err}`);
@@ -127,7 +137,7 @@ async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag,
     const pushPromise = (async () => {
       if (!sendPush) return false;
       try {
-        const pushResult = await sendPush(deviceId, `⚠️ ${name}: Power Cut`, `Power lost at ${name}. Motor is OFF.`);
+        const pushResult = await sendPush(deviceId, `⚠️ ${name}: Offline`, `${name} went offline while the pump was running - power cut or internet down.`);
         return !!(pushResult && pushResult.sent > 0);
       } catch (err) {
         logger.error(`  Push send failed: ${err}`);
@@ -146,27 +156,7 @@ async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag,
     logger.info(`${deviceId} (${name}): offline ${offlineSeconds}s - alerted (WhatsApp: ${waSent}, PWA Push: ${pwaSent})`);
 
     try {
-      // Snapshot motor state HERE, at first detection - not later, at
-      // recovery time. This is the one moment that's actually safe to
-      // read it: the device has been silently offline for a while
-      // already, so there's no race with its own reconnect sequence
-      // the way reading motor/state at recovery time would have (the
-      // device republishes its own fresh state within a few seconds
-      // of reconnecting - see main.cpp's baselineEstablished gating -
-      // so a read at THAT point could easily land after the fresh
-      // value overwrote the real pre-outage one). Powers the
-      // auto-resume feature (onPowerRestored below) - "was this
-      // motor actually running right before the outage" needs to be
-      // answered from a value that was frozen before recovery could
-      // possibly race it.
-      //
-      // Only recorded when the owner has auto-resume ENABLED: the
-      // firmware (and onPowerRestored's wording) treat a recorded
-      // "RUNNING" as "start the motor once power is back", so recording
-      // it with auto-resume off made the pump start by itself after a
-      // power cut against the owner's setting. null clears any old value.
-      const autoResumeEnabled = !!(data && data.autoResume && data.autoResume.enabled === true);
-      await setDedupFlag(deviceId, autoResumeEnabled ? motor.state : null);
+      await setDedupFlag(deviceId);
     } catch (err) {
       logger.error(`  Failed to set dedup flag (may re-alert next run): ${err}`);
     }
@@ -286,25 +276,16 @@ exports.powerWatchdog = onSchedule(
       },
       sendWhatsApp: sendWhatsAppReal,
       sendPush: sendPushToDevice,
-      setDedupFlag: async (deviceId, stateBeforeOutage) => {
-        // Multi-path update, not two separate .set() calls - all
-        // fields land together atomically in one round-trip.
-        // Sets motor/state to "OFF" in the database so the dashboard
-        // reflects that the pump is no longer running while unpowered,
-        // while preserving motor/stateBeforeOutage so autoResume knows
-        // to resume when power is restored (runWatchdog passes null when
-        // auto-resume is off).
-        //
-        // stoppedVia "power-loss" lands in the same atomic write as
-        // state "OFF", so onMotorStateChanged (triggered by that state
-        // change) sees it and skips its own "turned OFF" alert - this
-        // run has already sent the "Power Cut Alert".
-        const safeState = (stateBeforeOutage === "RUNNING" || stateBeforeOutage === "OFF")
-          ? stateBeforeOutage
-          : null;
+      setDedupFlag: async (deviceId) => {
+        // One atomic multi-path update. motor/state "OFF" means that after
+        // a real power cut the device's first report after rebooting (OFF)
+        // isn't a change, so no extra "turned OFF" alert. stoppedVia
+        // "power-loss" in the same write makes onMotorStateChanged skip
+        // this OFF itself - the offline alert has already gone out. (After
+        // an internet-only drop the device reports RUNNING again tagged
+        // "reconnect", which is skipped too - see motorAlertText().)
         await db.ref(`devices/${deviceId}`).update({
           "status/powerAlertSent": true,
-          "motor/stateBeforeOutage": safeState,
           "motor/state": "OFF",
           "motor/stoppedVia": "power-loss",
         });
@@ -409,6 +390,12 @@ async function sendAlertToDevice({ deviceId, name, title, body, whatsappMessage 
 // Alert", so the resulting state change must not send a second
 // "turned OFF" message.
 function motorAlertText(name, isRunning, via) {
+  // The device back online after an internet-only drop, pump still running:
+  // not a start. The offline alert and "back online" already covered it.
+  if (isRunning && via === "reconnect") {
+    return null;
+  }
+
   if (isRunning) {
     const title = `\u{1f7e2} ${name} turned ON`;
     let message;
@@ -498,21 +485,13 @@ exports.onPowerRestored = onValueWritten(
     const db = getDatabase();
 
     try {
-      const [name, autoResumeSnap, stateBeforeSnap] = await Promise.all([
-        resolveDeviceName(db, deviceId),
-        db.ref(`devices/${deviceId}/autoResume`).once("value"),
-        db.ref(`devices/${deviceId}/motor/stateBeforeOutage`).once("value"),
-      ]);
+      const name = await resolveDeviceName(db, deviceId);
 
-      const autoResume = autoResumeSnap.val() || {};
-      const stateBefore = stateBeforeSnap.val();
-
-      let title = `\u26a1 ${name}: Power Restored`;
-      let message = `\u26a1 Power is back! ${name} is connected and ready.`;
-      if (autoResume.enabled === true && stateBefore === "RUNNING") {
-        const delay = autoResume.delayMinutes || 5;
-        message = `\u26a1 Power is back! ${name} motor will turn ON in ${delay} min.`;
-      }
+      // The outage may have been a power cut or only the internet, so this
+      // only says it's back. If auto-resume restarts the pump, that start
+      // gets its own "turned ON (power restored)" alert.
+      const title = `\u2705 ${name}: Back online`;
+      const message = `\u2705 ${name} is back online.`;
 
       await sendAlertToDevice({ deviceId, name, title, body: message, whatsappMessage: message });
       logger.info(`[PowerRestoredAlert] ${deviceId} (${name}): alert sent`);

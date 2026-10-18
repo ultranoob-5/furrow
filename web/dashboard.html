@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <!-- Bundled, tree-shaken modular Firebase v11 (replaces 5 legacy CDN compat scripts, saving ~76% payload) -->
-<script src="firebase-bundle.js?v=1.6.3"></script>
+<script src="firebase-bundle.js?v=1.6.4"></script>
 <script src="firebase-config.js"></script>
 <!-- Defines firebaseConfig - generated at deploy time from GitHub
      Actions secrets, or copy web/firebase-config.example.js locally
@@ -417,6 +417,7 @@
   .chip-state.running{ color: var(--green); font-weight: 600; }
   .chip-state.no-power{ color: var(--red); font-weight: 600; }
   .chip-state.updating{ color: var(--amber); font-weight: 600; }
+  .chip-state.checking{ color: var(--muted); font-weight: 600; }
 
   .chip-state-icon{
     display: inline-flex;
@@ -2595,7 +2596,7 @@
        hidden then, which used to leave no way to log out). -->
   <div class="account-footer" id="accountFooter">
     <div class="footer-note">
-      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.6.3</span><br>
+      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.6.4</span><br>
       <a href="flash.html" style="color:var(--muted);">Set up a new device &rarr;</a>
     </div>
     <p class="account-signed-in" id="accountSignedIn"></p>
@@ -2834,8 +2835,19 @@
   // side. Until a fresh update arrives (or this window passes), old data
   // isn't read as "No Power" - see connectionStatus().
   let freshDataExpectedUntil = 0;
+  let hiddenAt = 0;
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') freshDataExpectedUntil = Date.now() + 20000;
+    if (document.visibilityState === 'hidden') {
+      hiddenAt = Date.now();
+      return;
+    }
+    freshDataExpectedUntil = Date.now() + 20000;
+    // Reconnect now, so the current pump status arrives in a second or two
+    // instead of after the next heartbeat or the old connection timing out
+    // (the phone may have frozen the page, even for a quick app switch).
+    if (hiddenAt && Date.now() - hiddenAt > 3000 && typeof db.reconnect === 'function') {
+      db.reconnect();
+    }
   });
 
   function phoneIsOnline(){
@@ -3475,8 +3487,11 @@
     const age = serverNow() - seen;
 
     if (age <= 16000) return 'online';
+    // Just back from the background: the data may only be old because this
+    // phone hasn't heard the latest heartbeat yet - not the device being late.
+    if (Date.now() < freshDataExpectedUntil) return 'stale';
     if (age <= 30000) return 'updating';
-    if (!phoneIsOnline() || Date.now() < freshDataExpectedUntil) return 'stale';
+    if (!phoneIsOnline()) return 'stale';
     return 'offline';
   }
 
@@ -3607,7 +3622,9 @@
           stateKey = 'no-power';
         } else if (running) {
           stateKey = 'running';
-        } else if (status === 'updating' || status === 'connecting' || status === 'stale') {
+        } else if (status === 'stale') {
+          stateKey = 'checking';
+        } else if (status === 'updating' || status === 'connecting') {
           stateKey = 'updating';
         }
 
@@ -5132,8 +5149,7 @@
       if (currentlyEnabled) {
         await Promise.all([
           db.ref(`devices/${selectedId}/autoResume/enabled`).set(false),
-          db.ref(`devices/${selectedId}/command/action`).set('sync_auto_resume'),
-          db.ref(`devices/${selectedId}/motor/stateBeforeOutage`).remove().catch(() => {})
+          db.ref(`devices/${selectedId}/command/action`).set('sync_auto_resume')
         ]);
         autoResumeStatus.textContent = 'Auto-resume disabled.';
       } else {

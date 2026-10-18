@@ -41,7 +41,9 @@ import {
   limitToFirst,
   limitToLast,
   startAt,
-  endAt
+  endAt,
+  goOffline,
+  goOnline
 } from 'firebase/database';
 import {
   getMessaging,
@@ -298,6 +300,13 @@ const FurrowFirebase = {
     return {
       ref(path) {
         return new DatabaseReferenceWrapper(path ? ref(_db, path) : ref(_db));
+      },
+      // Drops and reopens the live connection. After the phone has frozen
+      // the page in the background, the old socket can be dead without the
+      // SDK noticing for a while; reconnecting gets current data at once.
+      reconnect() {
+        goOffline(_db);
+        goOnline(_db);
       }
     };
   },
