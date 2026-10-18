@@ -24,6 +24,19 @@ const whapiToken = defineSecret("WHAPI_TOKEN");
 
 const OFFLINE_THRESHOLD_MS = 30000;
 
+// A command the device hasn't picked up within this long is cleared, so
+// it can't run whenever the device next reconnects - possibly hours later.
+// The dashboard stamps start/stop/restart/update/factory_reset with
+// command/issuedAt; anything without a stamp counts as old.
+const COMMAND_MAX_AGE_MS = 60000;
+
+function isStaleCommand(command, nowMs) {
+  const action = command && command.action;
+  if (typeof action !== "string" || action === "" || action === "none") return false;
+  const issuedAt = Number(command.issuedAt) || 0;
+  return nowMs - issuedAt > COMMAND_MAX_AGE_MS;
+}
+
 // Pure decision + action logic, separated from the scheduled trigger so
 // it can be unit tested with fake fetchDevices/sendWhatsApp/sendPush/
 // setDedupFlag functions instead of needing the Firebase emulator -
@@ -36,11 +49,21 @@ const OFFLINE_THRESHOLD_MS = 30000;
 // channel actually succeeded, so a device with neither configured
 // just keeps logging and retrying harmlessly every run, same as
 // before this existed.
-async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag, nowMs }) {
+async function runWatchdog({ fetchDevices, sendWhatsApp, sendPush, setDedupFlag, expireCommand, nowMs }) {
   const devices = (await fetchDevices()) || {};
   const results = [];
 
   for (const [deviceId, data] of Object.entries(devices)) {
+    const command = (data && data.command) || {};
+    if (expireCommand && isStaleCommand(command, nowMs)) {
+      try {
+        await expireCommand(deviceId);
+        logger.info(`${deviceId}: cleared unclaimed command "${command.action}"`);
+      } catch (err) {
+        logger.error(`${deviceId}: failed to clear stale command: ${err}`);
+      }
+    }
+
     const status = (data && data.status) || {};
     const lastSeen = status.lastSeen;
     const name = (data && data.displayName && typeof data.displayName === "string" && data.displayName.trim()) ||
@@ -286,12 +309,16 @@ exports.powerWatchdog = onSchedule(
           "motor/stoppedVia": "power-loss",
         });
       },
+      expireCommand: async (deviceId) => {
+        await db.ref(`devices/${deviceId}/command/action`).set("none");
+      },
       nowMs: Date.now(),
     });
   }
 );
 
 module.exports.runWatchdog = runWatchdog; // exported for test.js
+module.exports.isStaleCommand = isStaleCommand; // exported for test.js
 
 // Fires a push whenever a device's motor actually changes state - see
 // src/cloud.cpp's publishMotor(), which writes devices/{id}/motor/state

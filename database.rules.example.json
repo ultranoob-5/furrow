@@ -26,6 +26,10 @@
           },
           "firmwareUrl": {
             ".write": "auth != null && (auth.token.email_verified == true && auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val())"
+          },
+          "issuedAt": {
+            ".write": "auth != null && (auth.token.email_verified == true && auth.token.email == root.child('devices').child($deviceId).child('status').child('owner').val())",
+            ".validate": "newData.isNumber() && newData.val() > now - 60000 && newData.val() < now + 60000"
           }
         },
         "displayName": {

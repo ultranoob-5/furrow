@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <!-- Bundled, tree-shaken modular Firebase v11 (replaces 5 legacy CDN compat scripts, saving ~76% payload) -->
-<script src="firebase-bundle.js?v=1.5.5"></script>
+<script src="firebase-bundle.js?v=1.6.2"></script>
 <script src="firebase-config.js"></script>
 <!-- Defines firebaseConfig - generated at deploy time from GitHub
      Actions secrets, or copy web/firebase-config.example.js locally
@@ -1585,6 +1585,7 @@
   .conn-text.online{ color: var(--green); font-weight: 600; }
   .conn-text.offline{ color: var(--red); font-weight: 600; }
   .conn-text.updating, .conn-text.connecting{ color: var(--amber); font-weight: 600; }
+  .conn-text.stale{ color: var(--muted); font-weight: 600; }
 
   /* ---- Status block, with a soft leaf-glow signature ------------------ */
 
@@ -2594,7 +2595,7 @@
        hidden then, which used to leave no way to log out). -->
   <div class="account-footer" id="accountFooter">
     <div class="footer-note">
-      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.5.5</span><br>
+      Furrow &middot; Agriculture IoT Platform &middot; <span class="pwa-version-pill" id="pwaVersionTag" style="display:inline-block; font-weight:600; font-size:11px; padding:2px 7px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; color:var(--text); vertical-align:middle; margin:0 2px;">PWA v1.6.2</span><br>
       <a href="flash.html" style="color:var(--muted);">Set up a new device &rarr;</a>
     </div>
     <p class="account-signed-in" id="accountSignedIn"></p>
@@ -2819,6 +2820,19 @@
 
   function serverNow(){
     return Date.now() + serverTimeOffsetMs;
+  }
+
+  // Back from the background, the live connection can be dead without the
+  // SDK having noticed yet, so data looks old for reasons on this phone's
+  // side. Until a fresh update arrives (or this window passes), old data
+  // isn't read as "No Power" - see connectionStatus().
+  let freshDataExpectedUntil = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') freshDataExpectedUntil = Date.now() + 20000;
+  });
+
+  function phoneIsOnline(){
+    return navigator.onLine && firebaseConnected;
   }
 
   updateConnectionBanner(); // reflect the true starting state immediately, don't wait for the first event
@@ -3429,6 +3443,9 @@
   //    dropped WiFi connection - the ESP32 can't report anything about
   //    why it went dark if it's actually powered off, so this is
   //    inferred from silence rather than anything the device sends.
+  //  - "stale" (shown as "Checking…"): old data, but this phone is
+  //    offline or just back from the background, so the silence may be
+  //    on our side - never shown as "No Power".
   function lastSeenAt(id){
     const data = devices[id];
     return (data && data.status && data.status.lastSeen) ? data.status.lastSeen : null;
@@ -3442,6 +3459,7 @@
 
     if (age <= 16000) return 'online';
     if (age <= 30000) return 'updating';
+    if (!phoneIsOnline() || Date.now() < freshDataExpectedUntil) return 'stale';
     return 'offline';
   }
 
@@ -3453,7 +3471,8 @@
     online: 'Online',
     updating: 'Updating',
     connecting: 'Connecting',
-    offline: 'No Power'
+    offline: 'No Power',
+    stale: 'Checking\u2026'
   };
 
   function deviceLabelFor(id, data){
@@ -3571,7 +3590,7 @@
           stateKey = 'no-power';
         } else if (running) {
           stateKey = 'running';
-        } else if (status === 'updating' || status === 'connecting') {
+        } else if (status === 'updating' || status === 'connecting' || status === 'stale') {
           stateKey = 'updating';
         }
 
@@ -3889,7 +3908,7 @@
       }
       motorStatus.className = 'status-value running';
       if (statusBlock) statusBlock.className = 'status-block is-running';
-      motorSub.textContent = 'pump is on';
+      motorSub.textContent = connStatus === 'stale' ? 'last known - no live data on this phone' : 'pump is on';
     } else {
       const targetKey = 'off';
       if (motorStatus.dataset.statusKey !== targetKey) {
@@ -3898,7 +3917,7 @@
       }
       motorStatus.className = 'status-value off';
       if (statusBlock) statusBlock.className = 'status-block';
-      motorSub.textContent = 'pump is idle';
+      motorSub.textContent = connStatus === 'stale' ? 'last known - no live data on this phone' : 'pump is idle';
     }
 
     updateButtons(state);
@@ -3914,43 +3933,51 @@
       return;
     }
 
-    if (pendingAction) {
-      startBtn.disabled = true;
-      stopBtn.disabled = true;
-      restartBtn.disabled = true;
-      updateBtn.disabled = true;
-      factoryResetBtn.disabled = true;
-      return;
-    }
-
     // Every action, including Restart/Update/Factory Reset, needs the
     // device online: an offline device can't act on a command, and a
     // command left queued in command/action (a factory reset
     // especially) would run unexpectedly whenever it next reconnects.
     // The one exception below keeps the Update button's own progress
     // state while an OTA is already underway.
-    const isOnline = connectionStatus(selectedId) === 'online';
+    const connStatus = connectionStatus(selectedId);
+    const isOnline = connStatus === 'online';
+
+    if (pendingAction) {
+      startBtn.disabled = true;
+      // Stop stays usable while a Start is on its way - the device lets
+      // Stop interrupt Start, so a mistaken tap can be undone at once.
+      stopBtn.disabled = !(pendingAction === 'start' && isOnline);
+      restartBtn.disabled = true;
+      updateBtn.disabled = true;
+      factoryResetBtn.disabled = true;
+      return;
+    }
 
     // While device is offline, disable all action buttons:
     // motor controls, restart, firmware update, and factory reset
     if (!isOnline) {
+      const why = connStatus === 'stale' ? 'Waiting for live data' : 'Device is offline (No Power)';
       startBtn.disabled = true;
-      startBtn.title = 'Device is offline (No Power)';
+      startBtn.title = why;
       stopBtn.disabled = true;
-      stopBtn.title = 'Device is offline (No Power)';
+      stopBtn.title = why;
       restartBtn.disabled = true;
-      restartBtn.title = 'Device is offline (No Power)';
+      restartBtn.title = why;
       if (!otaInProgress && !otaPendingInitiation) {
         updateBtn.disabled = true;
-        updateBtn.title = 'Device is offline (No Power)';
+        updateBtn.title = why;
       }
       factoryResetBtn.disabled = true;
-      factoryResetBtn.title = 'Device is offline (No Power)';
+      factoryResetBtn.title = why;
       return;
     }
 
     startBtn.disabled = (state === 'RUNNING');
-    stopBtn.disabled = (state !== 'RUNNING');
+    // Stop is always available while the device is online: pressing Stop
+    // on a stopped pump is harmless (the device always pulses it), and
+    // it's the only way to act on a wrong OFF reading or to cancel a
+    // pending auto-resume start.
+    stopBtn.disabled = false;
     startBtn.title = '';
     stopBtn.title = '';
     restartBtn.disabled = false;
@@ -3961,17 +3988,33 @@
     factoryResetBtn.title = '';
   }
 
+  const PHONE_OFFLINE_MSG = 'This phone has no internet right now - nothing was sent.';
+  const COMMAND_FAILED_MSG = 'That didn\u2019t reach the device - please try again.';
+
+  // Commands carry the time they were sent. The database rules reject a
+  // stamp more than a minute old, so a tap this phone queued while it had
+  // no signal can't arrive later and act; the cloud watchdog clears any
+  // command the device hasn't picked up within a minute (device offline).
+  function writeCommand(action){
+    return db.ref(`devices/${selectedId}/command`).update({ action, issuedAt: serverNow() });
+  }
+
   function sendCommand(action){
     if (!selectedId) return;
+    if (!phoneIsOnline()) {
+      alert(PHONE_OFFLINE_MSG);
+      return;
+    }
 
     pendingAction = action;
     pendingActionSince = Date.now();
     renderMotor((devices[selectedId] && devices[selectedId].motor) ? devices[selectedId].motor.state : null);
 
-    db.ref(`devices/${selectedId}/command/action`).set(action).catch((err) => {
+    writeCommand(action).catch((err) => {
       console.error('Failed to send command', err);
       pendingAction = null;
       renderDetail();
+      alert(COMMAND_FAILED_MSG);
     });
   }
 
@@ -3979,10 +4022,12 @@
   // they're not motor commands, so there's nothing for renderMotor to
   // confirm back. Just send-and-disable-until-next-heartbeat.
   function sendDeviceCommand(action){
-    if (!selectedId) return;
+    if (!selectedId) return Promise.reject(new Error('No device selected.'));
+    if (!phoneIsOnline()) return Promise.reject(new Error(PHONE_OFFLINE_MSG));
 
-    db.ref(`devices/${selectedId}/command/action`).set(action).catch((err) => {
+    return writeCommand(action).catch((err) => {
       console.error(`Failed to send ${action} command`, err);
+      throw new Error(COMMAND_FAILED_MSG);
     });
   }
 
@@ -4007,7 +4052,7 @@
       `10-20 seconds. Any motor start/stop commands sent during that ` +
       `window will be missed.`
     );
-    if (ok) sendDeviceCommand('restart');
+    if (ok) sendDeviceCommand('restart').catch((err) => alert(err.message));
   });
 
   factoryResetBtn.addEventListener('click', () => {
@@ -4041,7 +4086,7 @@
       return;
     }
 
-    sendDeviceCommand('factory_reset');
+    sendDeviceCommand('factory_reset').catch((err) => alert(err.message));
   });
 
   // Fixed - always installs whatever was published most recently, no
@@ -4051,6 +4096,10 @@
   updateBtn.addEventListener('click', () => {
     if (connectionStatus(selectedId) !== 'online') {
       alert('Cannot update firmware while device is offline.');
+      return;
+    }
+    if (!phoneIsOnline()) {
+      alert(PHONE_OFFLINE_MSG);
       return;
     }
 
@@ -4148,6 +4197,7 @@
 
     userDevicesQuery.on('value', (snap) => {
       receivedFirstSnapshot = true;
+      freshDataExpectedUntil = 0;
 
       devices = snap.val() || {};
 
@@ -4743,13 +4793,29 @@
   const waPhoneStatus = document.getElementById('waPhoneStatus');
   const waBadge = document.getElementById('waBadge');
 
+  // The box is only refilled when the saved number (or the device) changes,
+  // not on every 1s refresh - otherwise it wipes a number still being typed.
+  let waAppliedKey = null;
+
+  // Digits only. A bare 10-digit Indian mobile (or one written with a
+  // leading 0) gets 91 added - WhatsApp needs the country code.
+  function normalizeWhatsAppNumber(raw){
+    let digits = String(raw || '').replace(/[^0-9]/g, '');
+    if (digits.startsWith('00')) digits = digits.slice(2);
+    if (/^0[6-9]\d{9}$/.test(digits)) digits = digits.slice(1);
+    if (/^[6-9]\d{9}$/.test(digits)) digits = '91' + digits;
+    return digits;
+  }
+
   function refreshWhatsAppUi(data){
     if (!waPhoneInput) return;
     const phone = (data && typeof data.whatsappPhone === 'string')
       ? data.whatsappPhone
       : (data && data.status && data.status.whatsappPhone) || '';
-    if (document.activeElement !== waPhoneInput) {
-      waPhoneInput.value = phone;
+    const key = selectedId + '|' + phone;
+    if (key !== waAppliedKey) {
+      waAppliedKey = key;
+      if (document.activeElement !== waPhoneInput) waPhoneInput.value = phone;
     }
     if (waBadge) {
       if (phone) {
@@ -4769,13 +4835,14 @@
     waPhoneSaveBtn.addEventListener('click', async () => {
       if (!selectedId) return;
       const raw = waPhoneInput.value.trim();
-      const cleanPhone = raw.replace(/[^0-9]/g, '');
+      const cleanPhone = normalizeWhatsAppNumber(raw);
 
-      if (raw.length > 0 && cleanPhone.length < 8) {
+      if (raw.length > 0 && (cleanPhone.length < 11 || cleanPhone.length > 15)) {
         waPhoneStatus.className = 'wa-status-msg error';
-        waPhoneStatus.textContent = 'Please enter a valid phone number with country code (e.g. 919876543210).';
+        waPhoneStatus.textContent = 'Please enter a valid mobile number - a 10-digit Indian number, or the full number with country code (e.g. 919876543210).';
         return;
       }
+      waPhoneInput.value = cleanPhone;
 
       waPhoneSaveBtn.disabled = true;
       if (waPhoneClearBtn) waPhoneClearBtn.disabled = true;
@@ -4857,9 +4924,9 @@
   // setting) always means "do nothing," never "assume yes." Restores
   // to the pump's previous state, not an unconditional "always turn
   // on" - only auto-starts if it was genuinely running right before
-  // the outage (decided on-device by ESP32 firmware upon reconnect,
-  // using a snapshot the watchdog took at outage detection - this
-  // dashboard only ever writes the enabled/delay settings).
+  // the outage (decided on-device by the ESP32 firmware from its own
+  // stored state when power returns - this dashboard only ever writes the
+  // enabled/delay settings).
   let autoResumeBusy = false;
 
   const autoResumeDelayMinus = document.getElementById('autoResumeDelayMinus');
@@ -4892,23 +4959,31 @@
       });
     }
 
+    // Saved even while auto-resume is off, so the choice sticks and
+    // Enable uses it; the device only needs telling when it's on.
     if (shouldSave && selectedId && !autoResumeBusy) {
       const data = devices[selectedId] || {};
-      if (data.autoResume && data.autoResume.enabled === true) {
-        Promise.all([
-          db.ref(`devices/${selectedId}/autoResume/delayMinutes`).set(clamped),
-          db.ref(`devices/${selectedId}/command/action`).set('sync_auto_resume')
-        ])
-          .then(() => {
-            autoResumeStatus.textContent = `Delay updated to ${clamped} minute${clamped === 1 ? '' : 's'}.`;
-          })
-          .catch(err => {
-            console.error('Failed to update auto-resume delay', err);
-            autoResumeStatus.textContent = 'Failed to save delay: ' + err.message;
-          });
-      }
+      const enabled = !!(data.autoResume && data.autoResume.enabled === true);
+      const writes = [db.ref(`devices/${selectedId}/autoResume/delayMinutes`).set(clamped)];
+      if (enabled) writes.push(db.ref(`devices/${selectedId}/command/action`).set('sync_auto_resume'));
+      const minutes = `${clamped} minute${clamped === 1 ? '' : 's'}`;
+      Promise.all(writes)
+        .then(() => {
+          autoResumeStatus.textContent = enabled
+            ? `Delay updated to ${minutes}.`
+            : `Delay set to ${minutes} - used when auto-resume is on.`;
+        })
+        .catch(err => {
+          console.error('Failed to update auto-resume delay', err);
+          autoResumeStatus.textContent = 'Failed to save delay: ' + err.message;
+        });
     }
   }
+
+  // Signature of the stored settings last pushed into the controls. The
+  // 1s refresh only re-applies them (and clears the message) when they
+  // actually change, not on every tick.
+  let autoResumeAppliedSig = null;
 
   if (autoResumeDelayMinus) {
     autoResumeDelayMinus.addEventListener('click', () => {
@@ -4952,6 +5027,10 @@
     autoResumeToggleBtn.classList.toggle('state-off', !enabled);
 
     const delay = settings.delayMinutes || 5;
+    const sig = `${selectedId}|${enabled}|${delay}`;
+    if (sig === autoResumeAppliedSig) return;
+    autoResumeAppliedSig = sig;
+
     setAutoResumeDelay(delay, false);
 
     if (!preserveStatus) {
@@ -5333,14 +5412,16 @@
       updateScheduleDisplay(otherStr, newTimeStr);
     }
 
+    // Saved even while the schedule is off, so the time sticks and Enable
+    // uses it; the device only needs telling when it's on.
     if (selectedId && !scheduleBusy) {
       const data = devices[selectedId] || {};
-      if (!(data.schedule && data.schedule.enabled === true)) return;
+      const enabled = !!(data.schedule && data.schedule.enabled === true);
 
       try {
         await db.ref(`devices/${selectedId}/schedule/${clockPickerTarget}`).set(newTimeStr);
-        await db.ref(`devices/${selectedId}/command/action`).set('sync_schedule');
-        if (scheduleStatus) scheduleStatus.textContent = 'Schedule updated.';
+        if (enabled) await db.ref(`devices/${selectedId}/command/action`).set('sync_schedule');
+        if (scheduleStatus) scheduleStatus.textContent = enabled ? 'Schedule updated.' : 'Time saved - used when the schedule is on.';
       } catch (err) {
         console.error('Failed to update schedule time', err);
         if (scheduleStatus) scheduleStatus.textContent = 'Failed to save: ' + err.message;
@@ -5474,6 +5555,9 @@
     });
   }
 
+  // Same idea as autoResumeAppliedSig.
+  let scheduleAppliedSig = null;
+
   function refreshScheduleUi(schedule, preserveStatus){
     if (!scheduleToggleBtn || scheduleBusy) return;
 
@@ -5497,6 +5581,10 @@
 
     const onTime = schedule.onTime || '06:00';
     const offTime = schedule.offTime || '08:00';
+    const sig = `${selectedId}|${enabled}|${onTime}|${offTime}`;
+    if (sig === scheduleAppliedSig) return;
+    scheduleAppliedSig = sig;
+
     updateScheduleDisplay(onTime, offTime);
 
     if (!preserveStatus) {

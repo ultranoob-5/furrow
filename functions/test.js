@@ -84,7 +84,8 @@ async function main() {
   const nowMs = Date.now();
 
   const fakeDevices = {
-    "dev-fresh":     { status: { lastSeen: nowMs - 5000,  name: "Fresh",     whatsappPhone: "111", powerAlertSent: false } },
+    "dev-fresh":     { status: { lastSeen: nowMs - 5000,  name: "Fresh",     whatsappPhone: "111", powerAlertSent: false }, command: { action: "stop", issuedAt: nowMs - 5000 } },
+    "dev-stale-cmd": { status: { lastSeen: nowMs - 5000,  name: "StaleCmd",  powerAlertSent: false }, command: { action: "start", issuedAt: nowMs - 120000 } },
     "dev-stale-new": { status: { lastSeen: nowMs - 45000, name: "StaleNew",  whatsappPhone: "222", powerAlertSent: false }, motor: { state: "RUNNING" }, autoResume: { enabled: true, delayMinutes: 5 } },
     "dev-renamed":       { displayName: "Well Pump", status: { lastSeen: nowMs - 45000, name: "Farm Pump", whatsappPhone: "555", powerAlertSent: false }, motor: { state: "RUNNING" }, autoResume: { enabled: true } },
     "dev-cleared-phone": { whatsappPhone: "", status: { lastSeen: nowMs - 45000, name: "ClearedPhone", whatsappPhone: "999", powerAlertSent: false }, motor: { state: "RUNNING" }, autoResume: { enabled: false } },
@@ -99,6 +100,7 @@ async function main() {
   const pushSent = [];
   const flagsSet = [];
   const motorStatesSnapshotted = {};
+  const commandsExpired = [];
 
   // Devices that "have push tokens registered" in this fake - everyone
   // except dev-no-phone (whose whole point is testing "neither channel
@@ -121,6 +123,9 @@ async function main() {
     setDedupFlag: async (deviceId, motorStateAtOutage) => {
       flagsSet.push(deviceId);
       motorStatesSnapshotted[deviceId] = motorStateAtOutage;
+    },
+    expireCommand: async (deviceId) => {
+      commandsExpired.push(deviceId);
     },
     nowMs,
   });
@@ -179,7 +184,13 @@ async function main() {
   assert(motorStatesSnapshotted["dev-push-only"] === null,
     `Expected dev-push-only (auto-resume never configured) to record null, got ${motorStatesSnapshotted["dev-push-only"]}`);
 
+  // A command the device never picked up must not wait in the database
+  // to run whenever it reconnects; a fresh one must be left alone.
+  assert(commandsExpired.length === 1 && commandsExpired[0] === "dev-stale-cmd",
+    `Expected only dev-stale-cmd's 2-minute-old start to be cleared, got ${JSON.stringify(commandsExpired)}`);
+
   testMotorAlertText();
+  testIsStaleCommand(nowMs);
 
   console.log("\nALL ASSERTIONS PASS:");
   console.log("- dev-fresh (5s): correctly skipped, too recent");
@@ -193,6 +204,26 @@ async function main() {
   console.log("- dev-never (no lastSeen ever): correctly skipped, no crash");
   console.log("- stateBeforeOutage recorded only when auto-resume is enabled (OFF/unset -> null, so no unexpected auto-start)");
   console.log("- motorAlertText: power-loss stop sends nothing (powerWatchdog already alerted); other transitions keep their wording");
+  console.log("- stale commands: an unclaimed command older than 60s is cleared; fresh ones and 'none' are left alone");
+}
+
+function testIsStaleCommand(nowMs) {
+  const { isStaleCommand } = mod;
+  assert(typeof isStaleCommand === "function", "index.js should export isStaleCommand for testing");
+
+  const cases = [
+    [{ action: "start", issuedAt: nowMs - 120000 }, true, "start sent 2 minutes ago"],
+    [{ action: "start", issuedAt: nowMs - 5000 }, false, "start sent 5 seconds ago"],
+    [{ action: "factory_reset", issuedAt: nowMs - 61000 }, true, "factory reset just past 60s"],
+    [{ action: "sync_schedule" }, true, "unstamped command (counts as old)"],
+    [{ action: "none", issuedAt: 0 }, false, "already cleared"],
+    [{ action: "" }, false, "empty action"],
+    [{}, false, "no command at all"],
+    [null, false, "null command"],
+  ];
+  for (const [command, expected, description] of cases) {
+    assert(isStaleCommand(command, nowMs) === expected, `isStaleCommand: ${description} - expected ${expected}`);
+  }
 }
 
 // onMotorStateChanged's wording/skip decision, as a pure function.

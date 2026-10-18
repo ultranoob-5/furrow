@@ -1,3 +1,15 @@
+## [1.6.2] - 2026-10-18
+
+Dashboard, database rules, Cloud Functions and a small firmware fix. **Publish the new rules before this dashboard goes live** (the `command/issuedAt` rule) - without it, Start/Stop are rejected.
+
+- **Safety - Old Commands Can't Run Later**: A Start/Stop/Restart/Update/Factory reset tapped while the phone or the device was offline used to wait and run whenever both reconnected - possibly hours later. Commands now carry the time they were sent: the database rules reject one that's more than a minute old (a tap the phone queued without signal), and `powerWatchdog` clears any command the device hasn't picked up within a minute (device offline). The dashboard also refuses to send while the phone has no internet, and says so.
+- **"No Power" Only When It's True**: When the phone itself was offline, or the app had just come back from the background, old data made the dashboard say "No Power - electricity cut at starter panel". It now shows "Checking…" and the last known pump state until live data arrives.
+- **Settings No Longer Snap Back**: A schedule time or auto-resume delay picked while the feature was off reset within a second, so Enable saved the old values. They're now saved straight away (and used when the feature is turned on), and the settings' messages are no longer wiped every second.
+- **WhatsApp Number**: The number box no longer gets overwritten while you edit it. A 10-digit Indian mobile number (or one starting with 0 or +91) is saved with the 91 country code - before, it was accepted without it and alerts never arrived.
+- **Stop Always Available**: Stop is enabled whenever the device is online, even if the pump reads OFF (a wrong reading, or a pending auto-resume start), and while a Start is still on its way.
+- **Firmware 1.6.2**: A Stop sent to an already-stopped pump no longer makes the next stop at the panel get reported as "from the app".
+- **PWA Cache Invalidation**: Service worker cache `furrow-dashboard-v17`, PWA `v1.6.2`.
+
 ## [1.6.1] - 2026-10-18
 
 Firmware only - update from the dashboard or flash. No rules, Cloud Functions or dashboard change.

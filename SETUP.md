@@ -87,7 +87,11 @@ What the rules enforce, in short:
 
 - **Owners** (signed in with a *verified* email matching a device's
   `status/owner`) can read only their own devices and send them
-  commands and settings.
+  commands and settings. Start/Stop/Restart/Update/Factory reset carry
+  a `command/issuedAt` timestamp that must be within a minute of the
+  server's clock, so a tap a phone queued while it had no signal can't
+  arrive later and act. The `powerWatchdog` Cloud Function also clears
+  any command the device hasn't picked up within a minute.
 - **The device account** can read a device by its id and write its
   status, motor state and OTA progress - but can only acknowledge
   commands (write `"none"`), only clear `stateBeforeOutage`, and can't

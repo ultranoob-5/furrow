@@ -383,7 +383,10 @@ namespace
             Logger::info(TAG, "Remote command: STOP");
             Automation::cancelAutoResume(); // Stop cancels any active auto-resume timer
             remoteStartPending = false;
-            remoteStopPending = true;
+            // Only expect a tagged OFF transition if it's running. Stop on a
+            // stopped pump (the dashboard allows it) changes nothing, and a
+            // lingering flag would tag some later, unrelated stop "remote".
+            remoteStopPending = motor.isRunning();
             commandConfirmPending = "stop";
             commandConfirmSince = millis();
             motor.stop();
