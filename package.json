@@ -13,6 +13,6 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
-    "esp-web-tools": "10.4.0"
+    "esp-web-tools": "10.5.2"
   }
 }
